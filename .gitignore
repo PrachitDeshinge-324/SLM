@@ -1,0 +1,56 @@
+# Byte-compiled / optimized / Python files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments & Virtualenv
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# macOS files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Model weights & Checkpoint artifacts (avoid pushing huge files to GitHub)
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+checkpoints/
+
+# Temporary / Zip archives
+temp.zip
+*.zip
+*.tar.gz
+*.tar
+
+# Caches & Hugging Face caches
+.cache/
+**/.cache/
+hf_cache/
+wandb/
+
+# Experiment outputs (keep folder structure via .gitkeep, ignore data dumps if needed)
+# Uncomment the line below if you don't want to track generated JSONL results in git:
+results/*.jsonl
+results/*.png
+results/*.jpg
+
+# IDE settings
+.vscode/
+.idea/

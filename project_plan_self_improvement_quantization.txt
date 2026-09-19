@@ -1,0 +1,588 @@
+================================================================================
+PROJECT PLAN: DOES QUANTIZATION BREAK SELF-IMPROVEMENT IN SMALL
+LANGUAGE MODELS?
+================================================================================
+
+A note on how to read this document: this is a scoping document, not a
+finished research plan. It lays out the problem, the background needed to
+understand it, what appears to already be known (based on literature search
+carried out in September 2026), and what appears to still be open. Literature
+moves fast in this area. Before committing serious time to any single
+sub-question below, re-search it -- a paper may have appeared in the weeks
+since this was written. Nothing here should be taken as a guarantee that a
+gap still exists by the time you read it.
+
+================================================================================
+PART 1: THE PROBLEM, IN SIMPLE WORDS
+================================================================================
+
+Large language models can sometimes "teach themselves" -- get better at a
+task by looking at their own attempts, deciding which ones seem good, and
+training on those. This is called self-improvement. It works because models
+are often better at judging an answer than at producing one in the first
+place: it's easier to recognize a good essay than to write one from scratch.
+Self-improvement tries to squeeze out that judging ability and turn it into
+better answers.
+
+Two things are true at the same time in the current research landscape:
+
+1. Small models appear to be worse at judging their own answers than very
+   large models. Several papers (listed below) have found this, though the
+   picture is mixed rather than uniformly bad, and the exact point where
+   this weakness shows up or goes away has not been mapped out carefully.
+
+2. Models that are deployed for real use are almost never run at full
+   precision. They are shrunk ("quantized") to save memory and run faster --
+   this is standard practice for anything running on-device.
+
+The open question this project explores is: NOBODY APPEARS TO HAVE STUDIED
+WHAT HAPPENS WHEN YOU COMBINE THESE TWO THINGS. Does shrinking a model make
+its self-judgment worse, better, or unaffected? And if a model is shrunk
+and then asked to improve itself using only its own judgment (no outside
+teacher, no ground-truth answers), does that process work, quietly fail, or
+actively make the model worse?
+
+This matters practically: if compressed, on-device models are increasingly
+expected to personalize or improve themselves from usage (a real, emerging
+deployment pattern), and if compression breaks the self-judgment this
+depends on, that is a genuine and currently undocumented risk.
+
+================================================================================
+PART 2: BACKGROUND -- HOW SELF-IMPROVEMENT IN LANGUAGE MODELS WORKS
+================================================================================
+
+Below are the main mechanisms in roughly the order they appeared in the
+literature. Read at least the first four before designing any experiment --
+they define the vocabulary the rest of the field uses.
+
+--------------------------------------------------------------------------
+2.1 STaR (Self-Taught Reasoner)
+--------------------------------------------------------------------------
+Title:  "STaR: Bootstrapping Reasoning With Reasoning"
+Venue:  NeurIPS 2022
+Link:   https://arxiv.org/abs/2203.14465
+
+What it does, simply: show the model a question, have it write out its
+reasoning and an answer. If the answer is correct, keep that reasoning as
+training data. If it's wrong, give the model the correct answer and ask it
+to explain backward how it could have gotten there ("rationalization"),
+and use that explanation as training data too. Fine-tune on all of this,
+repeat.
+
+Model tested: GPT-J, 6B parameters. The paper explicitly notes GPT-2 (much
+smaller) could NOT bootstrap even simple arithmetic reasoning this way --
+an early, direct signal that this class of method needs a minimum amount
+of base capability to get started.
+
+--------------------------------------------------------------------------
+2.2 LMSI / "Large Language Models Can Self-Improve"
+--------------------------------------------------------------------------
+Title:  "Large Language Models Can Self-Improve"
+Venue:  EMNLP 2023 (arXiv 2022)
+Link:   https://arxiv.org/abs/2210.11610
+
+What it does, simply: instead of using the correct answer to check itself,
+ask the model the same question many times with some randomness, and treat
+the most common ("majority vote") answer as probably correct. Fine-tune on
+the reasoning that led to that majority answer. No ground truth needed at
+all.
+
+Model tested: PaLM, 540 billion parameters. Also tested distilling the
+self-improved 540B model's knowledge down to 8B and 62B models (a
+different thing from those smaller models self-improving on their own).
+
+--------------------------------------------------------------------------
+2.3 The Sharpening Mechanism (the main theory paper)
+--------------------------------------------------------------------------
+Title:  "Self-Improvement in Language Models: The Sharpening Mechanism"
+Venue:  ICLR 2025 (arXiv 2412.01951)
+Link:   https://arxiv.org/abs/2412.01951
+
+What it does, simply: this is the theoretical explanation for why
+self-improvement can work at all, given that a model supposedly "can't
+create information it doesn't already have." The answer: models are often
+better at judging (verifying) a response than generating one, so
+self-improvement works by using the model's own judgment to pick its best
+outputs, then training on those picks -- "sharpening" the model toward
+what it already secretly knows was good.
+
+The math, in plain words:
+  - "Coverage": a model can only be sharpened successfully if, somewhere
+    in the wide range of things it could say, it does sometimes produce
+    the right answer. If it never does, even by chance, there's nothing
+    to sharpen.
+  - They compare simple fine-tuning on your own best guesses (SFT) against
+    reinforcement-learning-style training (RLHF). Plain fine-tuning is
+    proven to be as good as any method can be, GIVEN enough coverage. RL-
+    style training can do better than plain fine-tuning specifically
+    because it can actively explore, which can work even when coverage is
+    weak.
+
+Models tested: Phi-3 (Mini/Small/Medium), Phi-3.5-Mini, Mistral-7B,
+Llama-3.2-3B, GPT-3.5.
+
+--------------------------------------------------------------------------
+2.4 "Large Language Models Cannot Self-Correct Reasoning Yet"
+--------------------------------------------------------------------------
+Title:  "Large Language Models Cannot Self-Correct Reasoning Yet"
+Venue:  ICLR 2024
+Link:   https://arxiv.org/abs/2310.01798
+
+What it does, simply: tests whether asking a model to "double check your
+answer" without giving it the correct answer actually helps. Finding: no
+-- performance usually gets WORSE. Models flip more correct answers to
+wrong than they fix wrong answers to correct, because they can't reliably
+judge their own correctness without help. Also shows several earlier
+"self-correction works" papers were secretly using the ground-truth answer
+to know when to stop, which is a form of cheating.
+
+Models tested: GPT-3.5, GPT-4, GPT-4-Turbo, Llama-2-70B.
+
+--------------------------------------------------------------------------
+2.5 rStar-Math
+--------------------------------------------------------------------------
+Title:  "rStar-Math: Small LLMs Can Master Math Reasoning with
+        Self-Evolved Deep Thinking"
+Venue:  arXiv 2501.04519 (2025)
+Link:   https://arxiv.org/abs/2501.04519
+
+What it does, simply: shows small models (as small as 1.5B) CAN
+self-improve strongly at math -- but only with heavy scaffolding: a
+structured tree-search process (Monte Carlo Tree Search) plus a separate,
+purpose-built model whose only job is scoring reasoning steps (a "Process
+Reward Model"). The paper does not test whether the model can self-improve
+using ONLY its own judgment, without this external scaffolding -- that
+specific narrower question is not answered here.
+
+Models tested: Qwen2.5-Math-1.5B, Phi3-mini-Instruct (3.8B),
+Qwen2-Math-7B, Qwen2.5-Math-7B.
+
+================================================================================
+PART 3: BACKGROUND -- HOW QUANTIZATION WORKS FOR LLMs, IN SIMPLE WORDS
+================================================================================
+
+A language model is, at its core, hundreds of millions or billions of
+numbers (called weights). Normally these numbers are stored with high
+precision (e.g., 16-bit floating point). Quantization means storing those
+same numbers with less precision (e.g., 8-bit, 4-bit, or even fewer bits) --
+similar to rounding 3.14159265 down to 3.14. This makes the model smaller
+in memory and faster to run, at some cost to accuracy.
+
+--------------------------------------------------------------------------
+3.1 When quantization happens in a model's lifecycle
+--------------------------------------------------------------------------
+
+(a) BEFORE serious training -- rare, only done by a few well-resourced
+    labs: build the model to be "quantization-friendly" from the very
+    first training step, so it survives shrinking better later
+    ("quantization-aware pretraining").
+
+(b) AFTER training, before deployment -- BY FAR the most common case:
+    train the model normally at full precision, and once it's finished and
+    working well, shrink it as a final step so it fits on a phone or runs
+    cheaper on a server. This is called Post-Training Quantization (PTQ).
+    Nothing about the training process changes; you are compressing a
+    finished product. Common tools/methods: GPTQ, AWQ, bitsandbytes,
+    HQQ, FP8.
+
+(c) DURING a smaller follow-up training step -- fairly common in practice:
+    take an already-shrunk model and do a bit more training on top of it
+    (to specialize it, or to fix damage quantization caused), using a
+    technique called QLoRA that lets you train without needing the full-
+    size version in memory at the same time.
+
+In one sentence: quantization almost always happens AFTER the main
+training is finished, as a last step before deployment -- and only
+sometimes is there a further, smaller round of training done on top of the
+already-shrunk model afterward.
+
+--------------------------------------------------------------------------
+3.2 What is already known about quantization's effects on LLM behavior
+--------------------------------------------------------------------------
+
+Quantization degrading reasoning accuracy is well established:
+
+Title:  "Quantization Meets Reasoning: Exploring LLM Low-Bit Quantization
+        Degradation for Mathematical Reasoning"
+Venue:  arXiv 2501.03035 (2025)
+Link:   https://arxiv.org/abs/2501.03035
+Finding: aggressive quantization (AWQ, GPTQ) causes up to 32% accuracy loss
+on math reasoning for Llama-3 models. Also shows that fine-tuning the
+quantized model on a small set of examples where the FULL-PRECISION
+model's correct answers are used as an answer key can restore most of the
+lost performance. This is supervised repair using an external reference
+(the uncompressed model), not self-improvement.
+
+Quantization degrading confidence/calibration is also established:
+
+Title:  "Reliability Scaling Laws for Quantized Large Language Models"
+Venue:  arXiv 2607.10855 (2026)
+Link:   https://arxiv.org/abs/2607.10855
+Finding: comprehensive reliability study (predictive uncertainty,
+calibration, robustness to typos/perturbations) across 1B-70B models and
+six quantization methods. Finds 4-bit is generally the best trade-off
+point. This is about single-answer confidence, not about whether AGREEMENT
+across multiple sampled answers still predicts correctness.
+
+Quantization can quietly break things standard metrics don't catch (a
+recurring pattern across several 2025-2026 papers):
+
+Title:  "Quantization Undoes Alignment: Bias Emergence in Compressed LLMs
+        Across Models and Precision Levels"
+Venue:  arXiv 2605.15208 (2026), presented at IEEE Cloud Summit
+Link:   https://arxiv.org/abs/2605.15208
+Finding: 3-bit quantization causes 6-21% of previously-unbiased test items
+to develop new stereotyped behavior, even though perplexity (the standard
+quality metric) barely moves. The pattern this paper established --
+"quantization looks harmless on the usual metric, but secretly breaks
+something else nobody checked" -- has now been repeated for several other
+properties (see below), but not yet for self-improvement / self-judgment.
+
+Title:  "The Illusion of Equivalency: Statistical Characterization of
+        Quantization Effects in LLMs"
+Venue:  arXiv 2607.08734 (2026)
+Link:   https://arxiv.org/abs/2607.08734
+Finding: introduces "Correctness Agreement" -- whether a quantized model
+gets the same items right as the full-precision one. Finds behavioral
+divergence even when overall accuracy looks unchanged. Studies attention-
+weight structure, not self-judgment or self-consistency.
+
+Title:  "Can Large Language Models Still Explain Themselves?
+        Investigating the Impact of Quantization on Self-Explanations"
+Venue:  arXiv 2601.00282 (2026)
+Link:   https://arxiv.org/abs/2601.00282
+Finding: quantization causes moderate declines in the quality and
+faithfulness of a model's explanations of its own reasoning. This is the
+closest existing paper in SPIRIT to what this project proposes -- but it
+studies EXPLANATION quality (can the model describe its reasoning
+faithfully), not self-IMPROVEMENT (can the model use its own judgment to
+get measurably better through training).
+
+Quantization combined with test-time strategies (closest existing paper
+to the framing in this project, IMPORTANT TO READ FIRST):
+
+Title:  "Not All Bits Are Equal: Scale-Dependent Memory Optimization
+        Strategies for Reasoning Models"
+Venue:  ICLR 2026
+Link:   (search title on arXiv / ICLR 2026 proceedings)
+Finding: massive study (1,700+ configurations) of how to spend a fixed
+memory budget across model size, weight precision (4/8/16-bit), how long
+the model is allowed to "think," and how many times you sample-and-vote
+(majority voting / self-consistency), across Qwen3 (0.6B to 32B),
+DeepSeek-R1-Distill, and OpenReasoning-Nemotron.
+KEY FINDING: below a certain effective size (their threshold: roughly
+"8-bit-4B"), sampling multiple answers and voting is NOT memory-efficient
+-- you get more accuracy per gigabyte by using a bigger/less-shrunk model
+instead of voting. Above that threshold, voting starts to pay off, and the
+optimal number of votes increases with available memory.
+IMPORTANT CAVEAT: this paper explicitly limits itself to INFERENCE ONLY --
+no fine-tuning of any kind is performed. It also does not check whether,
+when the model's sampled answers agree, that agreement still means the
+answer is actually correct -- it only checks whether voting is worth the
+memory cost for improving raw accuracy. Those are two different questions.
+This paper explicitly lists quantization-aware training and other
+training-time approaches as future work, not something it covers.
+
+Title:  "QuantLRM: Quantization of Large Reasoning Models via Fine-Tuning
+        Signals"
+Venue:  arXiv 2602.02581 (2026)
+Link:   https://arxiv.org/abs/2602.02581
+Finding: uses signals FROM a fine-tuning process (SFT/DPO/RL) to decide
+which parts of the model to protect (keep at higher precision) when
+quantizing. This is a quantization TECHNIQUE informed by training, not
+self-improvement running on top of an already-quantized model. Opposite
+direction from what this project explores.
+
+================================================================================
+PART 4: SELF-JUDGMENT RELIABILITY IN SMALL/MID-SIZED MODELS (full
+        precision) -- WHAT'S ALREADY BEEN MEASURED
+================================================================================
+
+These papers establish that model self-judgment reliability is a real,
+already-documented concern at full precision, and that it does not appear
+to be a simple, fully solved question at any size tested so far. This
+project asks whether quantization makes it better, worse, or unaffected;
+these papers are the full-precision baseline you would be extending.
+
+Title:  "When Should a Language Model Trust Itself? Same-Model
+        Self-Verification as a Conditional Confidence Signal"
+Venue:  arXiv 2605.02915 (2026)
+Link:   https://arxiv.org/abs/2605.02915
+Finding: tests self-verification (does the model's own judgment of
+correctness track actual correctness) across TinyLlama-1.1B, Qwen-1.5B,
+Phi-2 (2.7B), Qwen-7B, DeepSeek-R1-Distill-8B. Result: "clear but narrow"
+-- works well on some benchmarks (ARC-Challenge), much less reliably on
+others (TruthfulQA-MC). EXPLICITLY FLAGS AS OPEN QUESTION (their own
+wording, paraphrased): whether reasoning-native models escape this
+unreliability is not tested and is left open.
+
+Title:  "More Yap Less Meaning: Uncovering Self-Improvement Behavior in
+        SLMs"
+Venue:  arXiv 2606.08471 (2026)
+Link:   https://arxiv.org/abs/2606.08471
+Finding: even when GIVEN the correct answer and asked to explain what went
+wrong, small-to-mid models (1.5B-8B, including Qwen2.5-Math-1.5B,
+DeepSeek-R1-Distill-Qwen-1.5B, Gemma-2-2B, Llama-3.1-8B, Phi-4-mini)
+improve only 4.4% on average. Longer self-generated explanations correlate
+with WORSE outcomes, not better.
+
+Title:  "When Self-Consistency Backfires: Majority Vote Hurts the Majority
+        of Hard Science Problems for Small LLMs"
+Venue:  arXiv 2608.11403 (2026)
+Link:   https://arxiv.org/abs/2608.11403
+Finding: on hard science questions (GPQA Diamond), majority voting --
+the core mechanism LMSI (section 2.2 above) relies on -- REDUCES accuracy
+on the majority of problems for Qwen2.5-7B and Llama-3-8B, at full
+precision. Confidence (how much samples agree) does not reliably track
+correctness on hard problems. EXPLICITLY FLAGS AS OPEN QUESTION (their own
+wording, paraphrased): "whether reasoning-native models escape this is the
+key open question" -- they deliberately did not test reasoning-specialized
+models, and note this as the natural next step for someone else.
+
+Title:  "Do Self-Evolving Agents Forget? Capability Degradation and
+        Preservation in Lifelong LLM Agent Adaptation"
+Venue:  arXiv 2605.09315 (2026)
+Link:   https://arxiv.org/abs/2605.09315
+Finding: self-evolving agents lose old capabilities as they gain new ones
+("capability erosion"), consistently across workflow, skill, model, and
+memory-based self-evolution. For the MODEL self-evolution dimension
+specifically (STaR-style fine-tuning), tested on Qwen3-0.6B and
+Llama3.2-3B. Proposes a fix (Capability-Preserving Evolution, based on an
+older anti-forgetting technique called Elastic Weight Consolidation) that
+improves retention on both sizes tested. Does not test quantization at
+all.
+
+Title:  "On the Generalization Gap in Self-Evolving Language Model
+        Reasoning"
+Venue:  arXiv 2606.01075 (2026)
+Link:   https://arxiv.org/abs/2606.01075
+Finding: whether models in the 1.5B-4B range can self-evolve successfully
+is INCONSISTENT across different research groups' results -- some find it
+works fine, others find it doesn't. EXPLICITLY STATES (own wording,
+paraphrased): "this suggests self-improvement may be highly sensitive to
+the domain or model family" -- treats this inconsistency itself as an
+open, unresolved question rather than claiming a clean answer either way.
+
+================================================================================
+PART 5: THE PROPOSED EXPERIMENTS
+================================================================================
+
+These are ordered by cost and by how directly they test the gap. Model
+size in both experiments below should be chosen based on what is actually
+available and runnable on the student's hardware -- there is no reason to
+restrict this project to any particular narrow parameter range. Reasonable
+candidates span roughly 0.5B up to 8B (e.g., Qwen3 0.6B/1.7B/4B/8B,
+Llama-3.2 1B/3B alongside Llama-3.1-8B, Qwen2.5-Math or DeepSeek-R1-
+Distill-Qwen at 1.5B/7B). Testing across several sizes within whatever
+range is feasible is more informative than testing a single size, since it
+lets you look for a trend rather than one data point -- but the specific
+sizes chosen should be driven by hardware availability, not by an assumed
+boundary in the literature.
+
+--------------------------------------------------------------------------
+EXPERIMENT D (start here): Does compression break the reliability of
+self-judgment, with NO training involved?
+--------------------------------------------------------------------------
+Question: as you shrink a model from full precision down through 8-bit and
+4-bit, does "how often its sampled answers agree with each other" still
+mean "the answer is actually correct" -- or does the model become falsely
+confident (agreeing a lot, but wrongly) under compression?
+
+Why start here: this is inference-only. No fine-tuning is needed. It is
+the cheapest possible test of the core idea and gives a fast go/no-go
+signal before investing in training experiments.
+
+Suggested setup:
+  - Models: pick 2-4 sizes from whatever is available and runnable, ideally
+    spanning as wide a range as your hardware allows (see note above).
+  - Quantization: GPTQ or bitsandbytes 8-bit/4-bit are the most standard,
+    well-documented, easy-to-set-up choices. AWQ is a reasonable
+    alternative; the "Not All Bits Are Equal" paper found GPTQ, AWQ, and
+    FP8 give very similar accuracy-memory curves, so the specific method
+    likely matters less than the precision level.
+  - Precision levels to test: at minimum, full precision (16-bit), 8-bit,
+    4-bit. Add 3-bit only if the model still functions at all at that
+    level (see "floor effect" note in Part 6).
+  - Task/benchmark: GSM8K or a subset of MATH for math reasoning (widely
+    used, easy to auto-grade); ARC-Challenge or CommonsenseQA if you want
+    a non-math angle.
+  - Procedure: for each (model, precision) pair, sample N answers per
+    question (N=8 to 16 is a reasonable range used elsewhere in this
+    literature), compute the majority-vote answer and its "confidence"
+    (fraction of samples agreeing), and separately record whether that
+    majority answer is actually correct. Plot: does the relationship
+    between confidence and correctness change as precision drops?
+  - This closely follows the calibration/reliability methodology used in
+    "Reliability Scaling Laws for Quantized LLMs" (Part 3.2) and the
+    self-verification methodology in "When Should a Language Model Trust
+    Itself?" (Part 4) -- both can be used as methodological templates.
+
+--------------------------------------------------------------------------
+EXPERIMENT B (the main event): Self-improve a model that starts already
+quantized
+--------------------------------------------------------------------------
+Question: if you start from an already-shrunk model (the realistic
+deployment scenario -- an on-device model only ever exists in its
+compressed form) and run an actual self-improvement loop -- generate
+answers, keep/train on the ones the model judges as good (via majority
+vote or self-reward, no ground truth, no external teacher) -- does the
+model actually improve, stay flat, or get worse?
+
+Why this is the most useful of the two: this matches how self-improving
+on-device models would really be used. There is no full-precision copy
+available in that scenario, so this is the scenario that matters most for
+real deployment risk.
+
+Suggested setup:
+  - Take a model, quantize it (as in Experiment D).
+  - Fine-tune the quantized model using a parameter-efficient method that
+    is compatible with quantized weights (QLoRA is the standard, widely-
+    used choice for this -- training on top of a quantized base without
+    needing the full-precision weights in memory).
+  - Self-improvement loop options (pick one to start, based on what's
+    feasible in your time/compute budget):
+      (i) LMSI-style: generate multiple samples, keep the ones matching
+          the majority-vote answer, fine-tune on those, repeat.
+      (ii) STaR-style: generate reasoning + answer; for wrong answers,
+           optionally regenerate with the correct answer as a hint
+           (only if you have ground-truth labels for training questions,
+           e.g. GSM8K's training set answers -- this is standard in the
+           STaR paper and not "cheating" for training purposes, since
+           STaR uses training-set ground truth, only test-time evaluation
+           is unsupervised).
+  - Compare the resulting model's accuracy after 1-3 iterations against
+    the quantized model with no self-improvement applied (baseline).
+  - Run across the same 2-4 sizes used in Experiment D so you can look for
+    a size-dependent trend in whether self-improvement helps, does
+    nothing, or hurts once the model starts out quantized.
+
+================================================================================
+PART 6: POSSIBLE OUTCOMES AND HOW TO PIVOT
+================================================================================
+
+Below are outcome scenarios specifically for Experiment D (the cheapest,
+first experiment), since it determines what to do next.
+
+Outcome 1 -- Clean breakdown: agreement/confidence stays high while actual
+correctness drops as the model is shrunk.
+  -> This is the strongest possible result for this project. Proceed
+  directly to Experiment B, using this calibration gap as the explanation
+  for whatever you find there.
+
+Outcome 2 -- No real change: self-judgment reliability looks about the
+same at every precision level tested.
+  -> Report this honestly; it corrects an intuitive assumption and is
+  still a valid, reportable finding. IMPORTANT: do not treat this as a
+  reason to skip Experiment B. A self-improvement loop runs many rounds,
+  and a small, invisible-at-single-measurement bias can compound after
+  several rounds of training a model on its own outputs (this compounding
+  failure mode is documented, without quantization, in "Progress or
+  Regress? Self-Improvement Reversal in Post-training," ICLR 2025,
+  arXiv 2407.05013, and in "Self-Improvement Can Self-Regress: The Rise-
+  and-Collapse Failure Mode of LLM Self-Training," arXiv 2606.21090).
+  Proceed to B, but treat it as more exploratory since you no longer have
+  an early warning sign predicting the outcome.
+
+Outcome 3 -- Non-monotonic: reliability holds up or even improves at
+moderate compression (e.g. 8-bit), then collapses sharply at aggressive
+compression (4-bit or below).
+  -> This is the most scientifically interesting outcome, and matches a
+  pattern seen in other quantization papers (moderate compression can
+  sometimes sharpen a model's output distribution in a way that briefly
+  looks like more confidence). Pin down exactly where the cliff occurs,
+  and focus Experiment B narrowly on the precision levels just before and
+  after that cliff, to test whether the training loop breaks at the same
+  point.
+
+Outcome 4 -- Messy / inconsistent across models or tasks, no single clean
+trend.
+  -> Also not a dead end. Several papers in this space (e.g. "On the
+  Generalization Gap in Self-Evolving Language Model Reasoning," Part 4)
+  made exactly this kind of inconsistency itself the main finding, rather
+  than forcing a false clean narrative. If this happens, pick the 1-2
+  model/precision combinations with the clearest effect (in either
+  direction) as focused case studies for Experiment B, rather than trying
+  to claim a universal rule.
+
+Outcome 5 -- Floor effect: at aggressive quantization (e.g. 3-bit or
+below) the model's task performance collapses so completely that there is
+nothing meaningful left to measure.
+  -> This is a methods issue, not a scientific dead end. Simply restrict
+  the comparison to the precision range where the model still functions
+  well enough to produce meaningful answers (commonly 16-bit vs 8-bit vs
+  moderate 4-bit) -- this range is also the one actually used in most
+  real deployments, so it does not weaken the practical relevance of the
+  work.
+
+General note: quantization is a secondary axis layered on top of a
+question (does self-judgment/self-improvement break down at any given
+model scale) that is independently real and already partially open
+regardless of quantization. If quantization turns out to add nothing
+interesting on top of that core question, the fallback is simply to
+report the model-size finding on its own and drop the quantization angle
+-- not to abandon the project.
+
+================================================================================
+PART 7: RISK ASSESSMENT
+================================================================================
+
+Overall field crowdedness: HIGH. Self-improvement, self-verification, and
+quantization are each, on their own, extremely active research areas in
+2025-2026, with multiple dedicated surveys and dozens of papers per year.
+A student should expect to be competing for attention within a busy
+literature, even if the specific intersection studied here is not yet
+covered.
+
+Crowdedness of the specific intersection (quantization x self-improvement
+training): appears LOW based on three separate rounds of literature search
+in September 2026 using varied search terms. No paper was found that runs
+an actual self-improvement training loop (generate -> self-judge ->
+fine-tune -> repeat, without an external teacher or ground-truth oracle)
+on a quantized model. This should be treated as "not found," not as
+"proven not to exist" -- it is possible a very recent or differently-
+worded paper was missed, and the field is moving fast enough that this
+could change within weeks. RE-CHECK THIS BEFORE COMMITTING SIGNIFICANT
+TIME, and again before submitting any resulting paper.
+
+Specific risks:
+  - Being scooped: real, given how active the adjacent literatures are.
+    Mitigation: do the cheap Experiment D first; it can be run quickly
+    enough to get an early result even if a competing paper appears.
+  - Model/compute availability: Experiment D requires only inference and
+    is runnable on modest hardware for models up to several billion
+    parameters once quantized. Experiment B requires fine-tuning, which is
+    more demanding, but QLoRA-style training on a quantized model is
+    specifically designed to be lightweight -- this is one of the reasons
+    it is a realistic choice for a student project.
+  - Messy/negative results: addressed directly in Part 6 above; every
+    outcome has a documented next step.
+  - Reviewer skepticism that a "diagnostic" paper (measuring a problem)
+    without a proposed fix is insufficient for a strong venue: worth
+    keeping in mind when deciding how to frame results, and worth
+    discussing with an advisor once initial results from Experiment D/B
+    are in hand.
+
+================================================================================
+PART 8: SUGGESTED PRACTICAL NOTES
+================================================================================
+
+- Compute: Experiment D can plausibly be run with modest cloud GPU credits
+  or a single high-end consumer GPU, since it is inference-only across a
+  handful of quantized models. Experiment B needs GPU time for QLoRA-style
+  fine-tuning; scope the number of self-improvement iterations (start with
+  1-3 rounds, not the 20-40 rounds sometimes used in the original STaR
+  paper) to keep this tractable.
+- Tools: standard, well-documented open-source options exist for every
+  step here -- Hugging Face Transformers for models, GPTQ/AWQ/bitsandbytes
+  libraries for quantization, and standard PEFT/QLoRA libraries for
+  fine-tuning on quantized weights. None of this requires building new
+  infrastructure from scratch.
+- Suggested order of work: (1) re-verify the literature gap is still open,
+  (2) run Experiment D across a few model sizes and 3 precision levels on
+  one benchmark, (3) based on the outcome (see Part 6), decide how to
+  proceed to Experiment B, (4) run Experiment B and compare against the
+  no-self-improvement quantized baseline.
+
+================================================================================
+END OF DOCUMENT
+================================================================================
