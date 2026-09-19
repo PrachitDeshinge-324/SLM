@@ -41,7 +41,7 @@ def get_gsm8k_messages(question: str) -> list[dict]:
 
 CQA_SYSTEM = (
     "You are a logical reasoning assistant. Read the question and the 5 choices. "
-    "Reason step-by-step, and output the correct option letter at the very end "
+    "Provide concise step-by-step reasoning (2-3 sentences), and output the correct option letter at the very end "
     "in the format: Answer: <Letter>."
 )
 

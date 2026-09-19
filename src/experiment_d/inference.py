@@ -47,6 +47,7 @@ def load_model_and_tokenizer(model_id: str, precision: str = "16bit"):
             bnb_4bit_use_double_quant=True,
         )
         model_kwargs["quantization_config"] = bnb_config
+        model_kwargs["torch_dtype"] = torch.bfloat16  # For unquantized layers (LM head, embeds)
     elif precision == "8bit":
         if device != "cuda":
             print("Warning: 8-bit quantization usually requires CUDA. Attempting anyway...")
@@ -54,6 +55,7 @@ def load_model_and_tokenizer(model_id: str, precision: str = "16bit"):
             load_in_8bit=True,
         )
         model_kwargs["quantization_config"] = bnb_config
+        model_kwargs["torch_dtype"] = torch.float16  # Native float16 avoids MatMul8bitLt casting warning
     else:
         # 16bit / bfloat16
         if device == "mps":

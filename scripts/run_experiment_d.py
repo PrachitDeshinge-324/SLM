@@ -1,9 +1,19 @@
 import argparse
 import json
 import os
+import sys
+from pathlib import Path
 import datetime
+import hashlib
 from tqdm import tqdm
 from dotenv import load_dotenv
+
+import warnings
+warnings.filterwarnings("ignore", message=".*torch_dtype.*")
+warnings.filterwarnings("ignore", message=".*MatMul8bitLt.*")
+
+# Ensure the repository root directory is in sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 load_dotenv()
 
@@ -15,6 +25,14 @@ from src.experiment_d.prompts import get_gsm8k_messages, get_cqa_messages, build
 from src.experiment_d.inference import load_model_and_tokenizer, generate_n_samples, generate_batch_prompts
 from src.experiment_d.extractors import extract_gsm8k_answer, extract_cqa_answer
 from src.experiment_d.metrics import compute_metrics
+
+
+def _qid_seed(base_seed: int, qid: str) -> int:
+    """Derive a deterministic per-question seed so resumed runs
+    produce the same samples for any given question regardless of
+    how many questions were processed before it."""
+    h = hashlib.md5(qid.encode()).hexdigest()
+    return (base_seed + int(h[:8], 16)) % (2**31)
 
 
 def main():
@@ -30,15 +48,11 @@ def main():
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of questions per dataset (0 for all)")
     parser.add_argument("--output_dir", type=str, default="results", help="Directory to save JSONL logs")
+    parser.add_argument("--max_new_tokens_gsm8k", type=int, default=512, help="Max new tokens for GSM8K")
+    parser.add_argument("--max_new_tokens_cqa", type=int, default=384, help="Max new tokens for CQA (384 avoids mid-reasoning cutoffs)")
 
     args = parser.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
-
-    # Fix #9: Set seed for reproducibility
-    hf_set_seed(args.seed)
-    torch.manual_seed(args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
 
     # Load datasets
     datasets_to_run = []
@@ -59,13 +73,15 @@ def main():
 
         # Check existing to resume
         processed_ids = set()
+        has_config_header = False
         if os.path.exists(output_file):
             with open(output_file, 'r') as f:
                 for line in f:
                     try:
                         record = json.loads(line)
                         if record.get("type") == "run_config":
-                            continue  # skip config header
+                            has_config_header = True
+                            continue
                         processed_ids.add(record['qid'])
                     except Exception:
                         pass
@@ -73,8 +89,8 @@ def main():
         print(f"Starting {dataset_name}. Found {len(processed_ids)} already processed items.")
 
         with open(output_file, 'a') as f:
-            # Fix #6: Write run-level metadata header if file is new
-            if len(processed_ids) == 0:
+            # Only write config if file doesn't already have one
+            if not has_config_header:
                 run_config = {
                     "type": "run_config",
                     "model": args.model,
@@ -86,6 +102,8 @@ def main():
                     "top_k": args.top_k,
                     "top_p": args.top_p,
                     "seed": args.seed,
+                    "max_new_tokens_gsm8k": args.max_new_tokens_gsm8k,
+                    "max_new_tokens_cqa": args.max_new_tokens_cqa,
                     "total_questions": len(data),
                     "timestamp": datetime.datetime.now().isoformat(),
                 }
@@ -97,12 +115,17 @@ def main():
             
             # Determine how many questions to process together (so total sequences = batch_size roughly)
             questions_per_batch = max(1, args.batch_size // args.n_samples)
-            if questions_per_batch < 1:
-                questions_per_batch = 1
                 
             # Process in chunks of questions
             for i in tqdm(range(0, len(unprocessed_data), questions_per_batch), desc=f"Processing {dataset_name}"):
                 chunk = unprocessed_data[i:i + questions_per_batch]
+                
+                # Set per-chunk seed for reproducibility across resumes
+                chunk_seed = _qid_seed(args.seed, chunk[0]['qid'])
+                hf_set_seed(chunk_seed)
+                torch.manual_seed(chunk_seed)
+                if torch.cuda.is_available():
+                    torch.cuda.manual_seed_all(chunk_seed)
                 
                 prompts = []
                 extractors = []
@@ -112,27 +135,64 @@ def main():
                     if dataset_name == "gsm8k":
                         messages = get_gsm8k_messages(item['question'])
                         extractors.append(extract_gsm8k_answer)
-                        max_news.append(512)
+                        max_news.append(args.max_new_tokens_gsm8k)
                     else:
                         messages = get_cqa_messages(item['question'], item['choices'])
                         extractors.append(extract_cqa_answer)
-                        max_news.append(256)
+                        max_news.append(args.max_new_tokens_cqa)
                         
                     prompts.append(build_prompt(tokenizer, messages))
                 
                 # We use the max of max_news for the whole batch
                 batch_max_new = max(max_news)
                 
-                # Generate samples for the entire chunk of questions at once
-                grouped_responses, tps, latency, grouped_lengths = generate_batch_prompts(
-                    model, tokenizer, prompts,
-                    n_samples=args.n_samples,
-                    temperature=args.temperature,
-                    top_k=args.top_k,
-                    top_p=args.top_p,
-                    max_new_tokens=batch_max_new,
-                    batch_size=args.batch_size,
-                )
+                # OOM-safe generation: catch CUDA OOM, clear cache, retry with batch_size=1
+                try:
+                    grouped_responses, tps, latency, grouped_lengths = generate_batch_prompts(
+                        model, tokenizer, prompts,
+                        n_samples=args.n_samples,
+                        temperature=args.temperature,
+                        top_k=args.top_k,
+                        top_p=args.top_p,
+                        max_new_tokens=batch_max_new,
+                        batch_size=args.batch_size,
+                    )
+                except RuntimeError as e:
+                    if "out of memory" in str(e).lower():
+                        print(f"\n⚠️  OOM on chunk starting at {chunk[0]['qid']}. "
+                              f"Clearing cache and retrying one-by-one...")
+                        torch.cuda.empty_cache()
+                        # Fall back to processing each question individually
+                        grouped_responses = []
+                        grouped_lengths = []
+                        total_latency = 0
+                        total_tps = 0
+                        for p in prompts:
+                            try:
+                                resps, t, lat, lens = generate_n_samples(
+                                    model, tokenizer, p,
+                                    n_samples=args.n_samples,
+                                    temperature=args.temperature,
+                                    top_k=args.top_k,
+                                    top_p=args.top_p,
+                                    max_new_tokens=batch_max_new,
+                                    batch_size=min(args.n_samples, 4),  # small batch
+                                )
+                                grouped_responses.append(resps)
+                                grouped_lengths.append(lens)
+                                total_latency += lat
+                                total_tps += t
+                            except RuntimeError:
+                                print(f"⚠️  OOM even on single question. Skipping chunk.")
+                                torch.cuda.empty_cache()
+                                grouped_responses = None
+                                break
+                        if grouped_responses is None:
+                            continue
+                        tps = total_tps / len(prompts) if prompts else 0
+                        latency = total_latency
+                    else:
+                        raise  # Re-raise non-OOM errors
                 
                 # Process metrics and log for each question
                 for q_idx, item in enumerate(chunk):
@@ -147,7 +207,6 @@ def main():
                     cutoffs = [l >= max_new for l in gen_lengths]
                     metrics["cutoff_rate"] = sum(cutoffs) / len(cutoffs) if len(cutoffs) > 0 else 0.0
 
-                    # We divide the total latency by the number of questions in the chunk to get per-question latency approx
                     record = {
                         "qid": item['qid'],
                         "dataset": dataset_name,
@@ -155,7 +214,7 @@ def main():
                         "ground_truth": item['ground_truth'],
                         "metrics": metrics,
                         "performance": {
-                            "tokens_per_sec": tps,  # Overall TPS for the batch
+                            "tokens_per_sec": tps,
                             "latency_sec": latency / len(chunk),
                         },
                         "raw_samples": [

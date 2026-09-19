@@ -111,28 +111,32 @@ def main():
         # ── Calibration plot ──────────────────────────────────────────────
         df = res['raw_df']
         if 'metrics.confidence' in df and 'metrics.correctness' in df:
-            df['conf_bin'] = pd.cut(
-                df['metrics.confidence'], bins=10, labels=False, right=True
-            ) / 10.0
-            calibration = (
-                df.groupby('conf_bin')['metrics.correctness'].mean().reset_index()
-            )
+            try:
+                df['conf_bin'] = pd.cut(
+                    df['metrics.confidence'], bins=10, labels=False, right=True,
+                    duplicates='drop'
+                ) / 10.0
+                calibration = (
+                    df.groupby('conf_bin')['metrics.correctness'].mean().reset_index()
+                )
 
-            short_model = model.split("/")[-1] if "/" in model else model
+                short_model = model.split("/")[-1] if "/" in model else model
 
-            plt.figure(figsize=(6, 5))
-            sns.lineplot(data=calibration, x='conf_bin', y='metrics.correctness', marker='o')
-            plt.plot([0, 1], [0, 1], 'k--', label="Perfect Calibration")
-            plt.title(f"Calibration: {short_model} ({precision}) on {dataset}")
-            plt.xlabel("Confidence (Agreement Fraction)")
-            plt.ylabel("Actual Accuracy")
-            plt.legend()
+                plt.figure(figsize=(6, 5))
+                sns.lineplot(data=calibration, x='conf_bin', y='metrics.correctness', marker='o')
+                plt.plot([0, 1], [0, 1], 'k--', label="Perfect Calibration")
+                plt.title(f"Calibration: {short_model} ({precision}) on {dataset}")
+                plt.xlabel("Confidence (Agreement Fraction)")
+                plt.ylabel("Actual Accuracy")
+                plt.legend()
 
-            plot_name = f"{short_model}_{precision}_{dataset}_calibration.png"
-            plot_path = os.path.join(args.results_dir, plot_name)
-            plt.savefig(plot_path, dpi=150, bbox_inches="tight")
-            plt.close()
-            print(f"  Saved: {plot_path}")
+                plot_name = f"{short_model}_{precision}_{dataset}_calibration.png"
+                plot_path = os.path.join(args.results_dir, plot_name)
+                plt.savefig(plot_path, dpi=150, bbox_inches="tight")
+                plt.close()
+                print(f"  Saved: {plot_path}")
+            except Exception as e:
+                print(f"  Warning: Could not generate calibration plot: {e}")
 
     # ── Summary ───────────────────────────────────────────────────────────
     summary_df = pd.DataFrame(summary_stats)
