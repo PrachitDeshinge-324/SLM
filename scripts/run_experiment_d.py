@@ -69,7 +69,7 @@ def main():
         if args.limit > 0:
             data = data[:args.limit]
 
-        output_file = os.path.join(args.output_dir, f"{safe_model_name}_{args.precision}_{dataset_name}.jsonl")
+        output_file = os.path.join(args.output_dir, f"{safe_model_name}_{args.precision}_{dataset_name}_n{args.n_samples}.jsonl")
 
         # Check existing to resume
         processed_ids = set()
