@@ -146,53 +146,34 @@ def main():
                 # We use the max of max_news for the whole batch
                 batch_max_new = max(max_news)
                 
-                # OOM-safe generation: catch CUDA OOM, clear cache, retry with batch_size=1
-                try:
-                    grouped_responses, tps, latency, grouped_lengths = generate_batch_prompts(
-                        model, tokenizer, prompts,
-                        n_samples=args.n_samples,
-                        temperature=args.temperature,
-                        top_k=args.top_k,
-                        top_p=args.top_p,
-                        max_new_tokens=batch_max_new,
-                        batch_size=args.batch_size,
-                    )
-                except RuntimeError as e:
-                    if "out of memory" in str(e).lower():
-                        print(f"\n⚠️  OOM on chunk starting at {chunk[0]['qid']}. "
-                              f"Clearing cache and retrying one-by-one...")
-                        torch.cuda.empty_cache()
-                        # Fall back to processing each question individually
-                        grouped_responses = []
-                        grouped_lengths = []
-                        total_latency = 0
-                        total_tps = 0
-                        for p in prompts:
-                            try:
-                                resps, t, lat, lens = generate_n_samples(
-                                    model, tokenizer, p,
-                                    n_samples=args.n_samples,
-                                    temperature=args.temperature,
-                                    top_k=args.top_k,
-                                    top_p=args.top_p,
-                                    max_new_tokens=batch_max_new,
-                                    batch_size=min(args.n_samples, 4),  # small batch
-                                )
-                                grouped_responses.append(resps)
-                                grouped_lengths.append(lens)
-                                total_latency += lat
-                                total_tps += t
-                            except RuntimeError:
-                                print(f"⚠️  OOM even on single question. Skipping chunk.")
-                                torch.cuda.empty_cache()
-                                grouped_responses = None
+                # OOM-safe generation: catch CUDA OOM, clear cache, adapt batch size
+                grouped_responses = None
+                while args.batch_size > 0:
+                    try:
+                        grouped_responses, tps, latency, grouped_lengths = generate_batch_prompts(
+                            model, tokenizer, prompts,
+                            n_samples=args.n_samples,
+                            temperature=args.temperature,
+                            top_k=args.top_k,
+                            top_p=args.top_p,
+                            max_new_tokens=batch_max_new,
+                            batch_size=args.batch_size,
+                        )
+                        break  # Success!
+                    except RuntimeError as e:
+                        if "out of memory" in str(e).lower():
+                            torch.cuda.empty_cache()
+                            if args.batch_size == 1:
+                                print(f"\n⚠️  OOM even with batch_size=1 on chunk starting at {chunk[0]['qid']}. Skipping chunk.")
                                 break
-                        if grouped_responses is None:
-                            continue
-                        tps = total_tps / len(prompts) if prompts else 0
-                        latency = total_latency
-                    else:
-                        raise  # Re-raise non-OOM errors
+                            args.batch_size = max(1, args.batch_size // 2)
+                            print(f"\n⚠️  OOM on chunk starting at {chunk[0]['qid']}. "
+                                  f"Reducing batch_size to {args.batch_size} and retrying...")
+                        else:
+                            raise  # Re-raise non-OOM errors
+                            
+                if grouped_responses is None:
+                    continue
                 
                 # Process metrics and log for each question
                 for q_idx, item in enumerate(chunk):
