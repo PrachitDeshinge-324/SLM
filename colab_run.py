@@ -60,7 +60,7 @@ REPO_URL              = os.environ.get("REPO_URL",    "https://github.com/Prachi
 REPO_DIR              = os.environ.get("REPO_DIR",    "/content/SLM")
 REPO_BRANCH           = os.environ.get("REPO_BRANCH", "")  # auto-detect if empty
 DRIVE_DIR             = os.environ.get("DRIVE_DIR",   "/content/drive/MyDrive/Experiment_D_Results")
-RESOURCE_LOG_INTERVAL = int(os.environ.get("RESOURCE_LOG_INTERVAL", "60"))
+RESOURCE_LOG_INTERVAL = int(os.environ.get("RESOURCE_LOG_INTERVAL", "300"))
 EXTRA_PIP_PACKAGES    = os.environ.get("EXTRA_PIP_PACKAGES", "flash-linear-attention").split()
 
 _LOGGER_FAIL_CAP = 5
@@ -137,38 +137,51 @@ def _collect_resource_snapshot() -> dict:
     except Exception as e:
         snapshot["gpu_torch_error"] = str(e)
 
-    # RAM via /proc/meminfo
+    # System RAM
     try:
-        meminfo: dict = {}
-        with open("/proc/meminfo") as fh:
-            for line in fh:
-                parts = line.split()
-                if len(parts) >= 2:
-                    try:
-                        meminfo[parts[0].rstrip(":")] = int(parts[1])
-                    except ValueError:
-                        pass
-        total_kb = meminfo.get("MemTotal", 0)
-        avail_kb = meminfo.get("MemAvailable", 0)
-        used_kb  = total_kb - avail_kb
-        snapshot["ram_used_gb"]  = round(used_kb  / 1e6, 2)
-        snapshot["ram_total_gb"] = round(total_kb / 1e6, 2)
-        snapshot["ram_pct"]      = round(used_kb / total_kb * 100, 1) if total_kb else 0.0
-    except Exception as e:
-        snapshot["ram_error"] = str(e)
+        import psutil
+        vm = psutil.virtual_memory()
+        snapshot["ram_used_gb"]  = round(vm.used / 1e9, 2)
+        snapshot["ram_total_gb"] = round(vm.total / 1e9, 2)
+        snapshot["ram_pct"]      = vm.percent
+    except ImportError:
+        try:
+            meminfo: dict = {}
+            with open("/proc/meminfo") as fh:
+                for line in fh:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        try: meminfo[parts[0].rstrip(":")] = int(parts[1])
+                        except ValueError: pass
+            total_kb = meminfo.get("MemTotal", 0)
+            avail_kb = meminfo.get("MemAvailable", meminfo.get("MemFree", 0) + meminfo.get("Buffers", 0) + meminfo.get("Cached", 0))
+            used_kb  = total_kb - avail_kb
+            snapshot["ram_used_gb"]  = round(used_kb  / 1e6, 2)
+            snapshot["ram_total_gb"] = round(total_kb / 1e6, 2)
+            snapshot["ram_pct"]      = round(used_kb / total_kb * 100, 1) if total_kb else 0.0
+        except Exception as e:
+            snapshot["ram_error"] = str(e)
 
-    # GPU util/temp/power via nvidia-smi (per-field guarded for MIG VMs)
+    # GPU util/temp/power/VRAM via nvidia-smi (per-field guarded for MIG VMs)
     try:
         smi_out = subprocess.check_output(
-            ["nvidia-smi", "--query-gpu=utilization.gpu,temperature.gpu,power.draw,power.limit",
+            ["nvidia-smi", "--query-gpu=utilization.gpu,temperature.gpu,power.draw,power.limit,memory.used,memory.total",
              "--format=csv,noheader,nounits"],
             text=True, timeout=5,
         ).strip().split(", ")
-        for name, val in zip(["gpu_util_pct", "gpu_temp_c", "gpu_power_w", "gpu_power_limit_w"], smi_out):
+        fields = ["gpu_util_pct", "gpu_temp_c", "gpu_power_w", "gpu_power_limit_w", "gpu_vram_used_mb", "gpu_vram_total_mb"]
+        for name, val in zip(fields, smi_out):
             v = val.strip()
             if v and v != "[N/A]":
                 try: snapshot[name] = float(v)
                 except ValueError: pass
+                
+        # Override PyTorch VRAM with true system VRAM if nvidia-smi returned it
+        if "gpu_vram_used_mb" in snapshot:
+            snapshot["gpu_vram_used_gb"] = round(snapshot["gpu_vram_used_mb"] / 1024, 2)
+        if "gpu_vram_total_mb" in snapshot:
+            snapshot["gpu_vram_total_gb"] = round(snapshot["gpu_vram_total_mb"] / 1024, 2)
+            
     except Exception as e:
         snapshot["smi_error"] = str(e)
 
@@ -240,10 +253,15 @@ def _open_with_retry(path: str, mode: str, retries: int = 5, delay: float = 3.0)
 
 def _tee_output(proc_stream, log_file, terminal_stream) -> None:
     """Mirror experiment stdout to terminal (with \r for tqdm) and log file (with \r→\n)."""
+    import os
     warned = False
     try:
-        for raw_line in iter(proc_stream.readline, b""):
-            text = raw_line.decode("utf-8", errors="replace")
+        while True:
+            # Read in chunks (unbuffered) so tqdm's \r doesn't hang readline()
+            chunk = os.read(proc_stream.fileno(), 1024)
+            if not chunk:
+                break
+            text = chunk.decode("utf-8", errors="replace")
             try:
                 terminal_stream.write(text)
                 terminal_stream.flush()
@@ -252,7 +270,7 @@ def _tee_output(proc_stream, log_file, terminal_stream) -> None:
                     print(f"[TEE WARN] terminal write failed: {e}", flush=True)
                     warned = True
             try:
-                log_file.write(text.replace("\r", "\n"))
+                log_file.write(text)
                 log_file.flush()
             except Exception as e:
                 if not warned:
@@ -374,6 +392,7 @@ def main() -> int:
     cmd = [sys.executable, script_path, "--output_dir", output_dir] + experiment_args
     env = os.environ.copy()
     env["PYTHONPATH"] = REPO_DIR
+    env["PYTHONUNBUFFERED"] = "1"
 
     print(f"Command    : {' '.join(cmd)}")
     print(f"PYTHONPATH : {REPO_DIR}")

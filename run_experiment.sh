@@ -5,7 +5,7 @@
 set -uo pipefail
 
 SESSION="${SESSION:-exp}"
-GPU="${GPU:-T4}"
+GPU="${GPU:-A100}"
 EXPERIMENT_ARGS="${EXPERIMENT_ARGS:---model Qwen/Qwen3.5-0.8B --precision 8bit --dataset gsm8k --n_samples 16 --batch_size 196}"
 HF_TOKEN="${HF_TOKEN:-}"
 
