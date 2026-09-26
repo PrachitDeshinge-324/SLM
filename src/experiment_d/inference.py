@@ -67,6 +67,7 @@ def load_model_and_tokenizer(model_id: str, precision: str = "16bit"):
         model_kwargs["torch_dtype"] = best_dtype
 
     model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
+    model.eval()
 
     return model, tokenizer
 
@@ -179,12 +180,9 @@ def generate_batch_prompts(
     
     inputs = tokenizer(prompts, return_tensors="pt", padding=True).to(device)
     
-    # Repeat each prompt n_samples times
-    # If prompts=[P1, P2], n_samples=2 -> [P1, P1, P2, P2]
-    input_ids = torch.repeat_interleave(inputs["input_ids"], repeats=n_samples, dim=0)
-    attention_mask = torch.repeat_interleave(inputs["attention_mask"], repeats=n_samples, dim=0)
-    
-    total_sequences = input_ids.shape[0]
+    # Expand prompts lazily per generation mini-batch. Materializing every
+    # repeated prompt up front can waste substantial VRAM at large batch sizes.
+    total_sequences = len(prompts) * n_samples
     
     all_responses_flat = []
     generation_lengths_flat = []
@@ -195,8 +193,9 @@ def generate_batch_prompts(
     for i in range(0, total_sequences, batch_size):
         end = min(i + batch_size, total_sequences)
         
-        batch_input_ids = input_ids[i:end]
-        batch_attention_mask = attention_mask[i:end]
+        prompt_indices = torch.arange(i, end, device=inputs["input_ids"].device) // n_samples
+        batch_input_ids = inputs["input_ids"].index_select(0, prompt_indices)
+        batch_attention_mask = inputs["attention_mask"].index_select(0, prompt_indices)
         
         with torch.no_grad():
             outputs = model.generate(
@@ -228,7 +227,7 @@ def generate_batch_prompts(
     latency = end_time - start_time
     tokens_per_sec = total_new_tokens / latency if latency > 0 else 0
     
-    # Restore padding side
+    # Restore the caller's padding preference after successful generation.
     tokenizer.padding_side = original_padding_side
     
     # Group responses back by prompt

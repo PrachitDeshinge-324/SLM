@@ -3,6 +3,31 @@ import random
 import os
 import argparse
 import sys
+import re
+from fractions import Fraction
+
+
+def answers_match(predicted, expected):
+    """Compare choice letters exactly and numeric answers mathematically."""
+    if predicted is None:
+        return False
+    left, right = str(predicted).strip(), str(expected).strip()
+    if left.casefold() == right.casefold():
+        return True
+
+    def as_fraction(value):
+        value = value.replace(',', '').replace('$', '').strip()
+        mixed = re.fullmatch(r'([+-]?\d+)\s+(\d+)\s*/\s*(\d+)', value)
+        if mixed:
+            whole, numerator, denominator = map(int, mixed.groups())
+            sign = -1 if whole < 0 else 1
+            return Fraction(whole) + sign * Fraction(numerator, denominator)
+        return Fraction(value)
+
+    try:
+        return as_fraction(left) == as_fraction(right)
+    except (ValueError, ZeroDivisionError):
+        return False
 
 def main():
     parser = argparse.ArgumentParser(description="Extract seeded traces for verifier benchmark.")
@@ -29,9 +54,9 @@ def main():
         print(f"Error: No files matching {pattern} found in {args.directory}")
         sys.exit(1)
         
-    filepath = matching_files[0]
     if len(matching_files) > 1:
-        print(f"Warning: Multiple files matched. Using {filepath}")
+        raise RuntimeError(f"Ambiguous input pattern {pattern}: found {len(matching_files)} files. Specify a directory containing exactly one matching run.")
+    filepath = matching_files[0]
         
     input_basename = os.path.basename(filepath)
         
@@ -50,7 +75,9 @@ def main():
     
     # Reset the seed right before sampling so each run gets the exact same 200 items
     random.seed(seed)
-    sampled_items = random.sample(dataset, 200)
+    if not dataset:
+        raise RuntimeError(f"No question records found in {filepath}")
+    sampled_items = random.sample(dataset, min(200, len(dataset)))
     
     output_data = []
     for item in sampled_items:
@@ -66,7 +93,7 @@ def main():
             generated_answer = trace.get('extracted', '')
             
             # Determine if the generated trace is correct by comparing to ground truth
-            is_correct = (generated_answer.strip() == gt_answer.strip())
+            is_correct = answers_match(generated_answer, gt_answer)
             
             output_data.append({
                 'question': question,
@@ -76,6 +103,7 @@ def main():
                 'generated_answer': generated_answer,
                 'student_solution': student_solution,
                 'is_correct': is_correct,
+                'label_basis': 'final_answer_match',
                 'precision': args.precision
             })
         

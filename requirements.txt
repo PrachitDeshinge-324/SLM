@@ -1,10 +1,10 @@
 # Core ML
-torch>=2.1.0
-transformers>=4.36.0
-accelerate>=0.25.0
+torch>=2.4.0
+transformers>=4.48.0
+accelerate>=1.0.0
 
 # Quantization (CUDA only)
-bitsandbytes>=0.41.0
+bitsandbytes>=0.45.0
 
 # Data
 pandas>=2.0.0

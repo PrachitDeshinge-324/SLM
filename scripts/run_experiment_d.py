@@ -52,6 +52,10 @@ def main():
     parser.add_argument("--max_new_tokens_cqa", type=int, default=384, help="Max new tokens for CQA (384 avoids mid-reasoning cutoffs)")
 
     args = parser.parse_args()
+    if args.n_samples < 1 or args.batch_size < 1:
+        parser.error("--n_samples and --batch_size must both be positive")
+    if args.temperature <= 0 or not 0 < args.top_p <= 1 or args.top_k < 0:
+        parser.error("--temperature must be positive, --top_p in (0, 1], and --top_k non-negative")
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Load datasets
@@ -70,55 +74,70 @@ def main():
             data = data[:args.limit]
 
         output_file = os.path.join(args.output_dir, f"{safe_model_name}_{args.precision}_{dataset_name}_n{args.n_samples}.jsonl")
+        dataset_fingerprint = hashlib.sha256(json.dumps(
+            [(item['qid'], item['question'], item['ground_truth']) for item in data],
+            ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")).hexdigest()
 
         # Check existing to resume
         processed_ids = set()
-        has_config_header = False
+        existing_config = None
         if os.path.exists(output_file):
             with open(output_file, 'r') as f:
                 for line in f:
                     try:
                         record = json.loads(line)
                         if record.get("type") == "run_config":
-                            has_config_header = True
+                            existing_config = record
                             continue
-                        processed_ids.add(record['qid'])
+                        if "qid" in record:
+                            processed_ids.add(record['qid'])
                     except Exception:
                         pass
+
+        expected_config = {
+            "type": "run_config", "model": args.model, "precision": args.precision,
+            "dataset": dataset_name, "n_samples": args.n_samples,
+            "batch_size": args.batch_size, "temperature": args.temperature,
+            "top_k": args.top_k, "top_p": args.top_p, "seed": args.seed,
+            "max_new_tokens_gsm8k": args.max_new_tokens_gsm8k,
+            "max_new_tokens_cqa": args.max_new_tokens_cqa,
+            "total_questions": len(data),
+            "dataset_fingerprint": dataset_fingerprint,
+            "model_revision": getattr(model.config, "_commit_hash", None),
+        }
+        if processed_ids and existing_config is None:
+            raise RuntimeError(f"Cannot safely resume {output_file}: existing records have no run_config header. Move the file or start a fresh output directory.")
+        if existing_config is not None:
+            mismatches = [key for key, value in expected_config.items()
+                          if existing_config.get(key) != value]
+            if mismatches:
+                raise RuntimeError(f"Cannot resume {output_file}: run settings differ for {', '.join(mismatches)}. Use a fresh output directory.")
 
         print(f"Starting {dataset_name}. Found {len(processed_ids)} already processed items.")
 
         with open(output_file, 'a') as f:
             # Only write config if file doesn't already have one
-            if not has_config_header:
+            if existing_config is None:
                 run_config = {
-                    "type": "run_config",
-                    "model": args.model,
-                    "precision": args.precision,
-                    "dataset": dataset_name,
-                    "n_samples": args.n_samples,
-                    "batch_size": args.batch_size,
-                    "temperature": args.temperature,
-                    "top_k": args.top_k,
-                    "top_p": args.top_p,
-                    "seed": args.seed,
+                    **expected_config,
                     "max_new_tokens_gsm8k": args.max_new_tokens_gsm8k,
                     "max_new_tokens_cqa": args.max_new_tokens_cqa,
-                    "total_questions": len(data),
                     "timestamp": datetime.datetime.now().isoformat(),
                 }
                 f.write(json.dumps(run_config) + "\n")
                 f.flush()
 
-            # Filter out already processed items
-            unprocessed_data = [item for item in data if item['qid'] not in processed_ids]
-            
-            # Determine how many questions to process together (so total sequences = batch_size roughly)
+            # Preserve fixed chunk boundaries across resumes while filling the
+            # requested sequence batch. Partially completed chunks are regenerated
+            # with the same seed; only missing question records are appended.
             questions_per_batch = max(1, args.batch_size // args.n_samples)
-                
+                 
             # Process in chunks of questions
-            for i in tqdm(range(0, len(unprocessed_data), questions_per_batch), desc=f"Processing {dataset_name}"):
-                chunk = unprocessed_data[i:i + questions_per_batch]
+            for i in tqdm(range(0, len(data), questions_per_batch), desc=f"Processing {dataset_name}"):
+                chunk = data[i:i + questions_per_batch]
+                if all(item['qid'] in processed_ids for item in chunk):
+                    continue
                 
                 # Set per-chunk seed for reproducibility across resumes
                 chunk_seed = _qid_seed(args.seed, chunk[0]['qid'])
@@ -165,8 +184,7 @@ def main():
                         if "out of memory" in str(e).lower():
                             torch.cuda.empty_cache()
                             if current_batch_size == 1:
-                                print(f"\n⚠️  OOM even with batch_size=1 on chunk starting at {chunk[0]['qid']}. Skipping chunk.")
-                                break
+                                raise RuntimeError(f"CUDA OOM at batch_size=1 for {chunk[0]['qid']}; stopping so the run cannot appear complete with missing questions.") from e
                             current_batch_size = max(1, current_batch_size // 2)
                             print(f"\n⚠️  OOM on chunk starting at {chunk[0]['qid']}. "
                                   f"Reducing batch_size to {current_batch_size} and retrying...")
@@ -178,6 +196,8 @@ def main():
                 
                 # Process metrics and log for each question
                 for q_idx, item in enumerate(chunk):
+                    if item['qid'] in processed_ids:
+                        continue
                     responses = grouped_responses[q_idx]
                     gen_lengths = grouped_lengths[q_idx]
                     extractor = extractors[q_idx]
@@ -198,6 +218,7 @@ def main():
                         "performance": {
                             "tokens_per_sec": tps,
                             "latency_sec": latency / len(chunk),
+                            "effective_batch_size": current_batch_size,
                         },
                         "raw_samples": [
                             {
@@ -211,6 +232,7 @@ def main():
                     }
 
                     f.write(json.dumps(record) + "\n")
+                    processed_ids.add(item['qid'])
                 
                 f.flush()  # Ensure it writes to disk immediately after each chunk
 
