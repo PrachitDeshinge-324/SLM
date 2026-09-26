@@ -54,3 +54,5 @@ results/*.jpg
 # IDE settings
 .vscode/
 .idea/
+*.html
+*.pdf

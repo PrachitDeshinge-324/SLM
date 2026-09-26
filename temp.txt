@@ -1,0 +1,23 @@
+function ClickConnect() {
+    console.log("Keeping Colab alive...");
+    
+    // Attempt to click the primary connect button
+    const colabButton = document.querySelector("colab-connect-button");
+    if (colabButton && colabButton.shadowRoot) {
+        const connectBtn = colabButton.shadowRoot.querySelector("#connect");
+        if (connectBtn) {
+            connectBtn.click();
+            return;
+        }
+    }
+    
+    // Fallback: Click the generic toolbar button if the main one isn't reachable
+    const toolbarButton = document.querySelector("colab-toolbar-button");
+    if (toolbarButton) {
+        toolbarButton.click();
+    }
+}
+
+// Run the function every 60 seconds (60000 milliseconds)
+var colabKeepAlive = setInterval(ClickConnect, 60000);
+colabKeepAlive

@@ -60,7 +60,7 @@ REPO_URL              = os.environ.get("REPO_URL",    "https://github.com/Prachi
 REPO_DIR              = os.environ.get("REPO_DIR",    "/content/SLM")
 REPO_BRANCH           = os.environ.get("REPO_BRANCH", "")  # auto-detect if empty
 DRIVE_DIR             = os.environ.get("DRIVE_DIR",   "/content/drive/MyDrive/Experiment_D_Results")
-RESOURCE_LOG_INTERVAL = int(os.environ.get("RESOURCE_LOG_INTERVAL", "300"))
+RESOURCE_LOG_INTERVAL = int(os.environ.get("RESOURCE_LOG_INTERVAL", "180"))
 EXTRA_PIP_PACKAGES    = os.environ.get("EXTRA_PIP_PACKAGES", "flash-linear-attention").split()
 
 _LOGGER_FAIL_CAP = 5

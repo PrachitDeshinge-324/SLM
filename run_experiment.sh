@@ -5,8 +5,8 @@
 set -uo pipefail
 
 SESSION="${SESSION:-exp}"
-GPU="${GPU:-A100}"
-EXPERIMENT_ARGS="${EXPERIMENT_ARGS:---model Qwen/Qwen3.5-0.8B --precision 8bit --dataset gsm8k --n_samples 16 --batch_size 196}"
+GPU="${GPU:-L4}"
+EXPERIMENT_ARGS="${EXPERIMENT_ARGS:---model meta-llama/Llama-3.2-3B-Instruct --precision 4bit --dataset both --n_samples 8 --batch_size 96}"
 HF_TOKEN="${HF_TOKEN:-}"
 
 if [[ -z "$HF_TOKEN" ]]; then

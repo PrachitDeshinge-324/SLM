@@ -425,68 +425,66 @@ def main():
     if "tps" in summary_df.columns:
         summary_df["tps"] = summary_df["tps"].round(2)
 
-    # ── Identity columns shared across both CSVs ──────────────────────
+    # ── Identity columns ──────────────────────
     id_cols = ["dataset", "model", "precision", "n_samples"]
 
-    # ══════════════════════════════════════════════════════════════════
-    # PRIMARY CSV — Core experiment results
-    # ══════════════════════════════════════════════════════════════════
-    primary_cols = id_cols + [
+    # ── Define and Format all desired columns ──
+    all_cols = id_cols + [
         c for c in [
-            "accuracy", "pass@k",
-            "acc_delta_vs_16bit", "pass@k_delta_vs_16bit",
-            "confidence", "n_questions",
-        ] if c in summary_df.columns
-    ]
-    primary_df = summary_df[primary_cols].copy()
-
-    # Convert fractions → readable percentages
-    for c in ["accuracy", "pass@k", "acc_delta_vs_16bit", "pass@k_delta_vs_16bit", "confidence"]:
-        if c in primary_df.columns:
-            primary_df[c] = (primary_df[c] * 100).round(2)
-    primary_df = primary_df.rename(columns={
-        "accuracy": "accuracy_%",
-        "pass@k": "pass@k_%",
-        "acc_delta_vs_16bit": "acc_delta_vs_16bit_%",
-        "pass@k_delta_vs_16bit": "pass@k_delta_vs_16bit_%",
-        "confidence": "confidence_%",
-    })
-
-    primary_path = os.path.join(args.results_dir, "primary_results.csv")
-    primary_df.to_csv(primary_path, index=False)
-    print(f"\nSaved PRIMARY: {primary_path}")
-
-    # ══════════════════════════════════════════════════════════════════
-    # SECONDARY CSV — Reliability & Performance (grouped columns)
-    # ══════════════════════════════════════════════════════════════════
-    secondary_cols = id_cols + [
-        c for c in [
-            # ── Reliability ──
-            "failure_rate", "diversity", "cutoff_rate",
-            # ── Performance ──
+            # Primary Metrics
+            "accuracy", "pass@k", "acc_delta_vs_16bit", "pass@k_delta_vs_16bit",
+            "confidence", "diversity", "n_questions",
+            # Reliability
+            "failure_rate", "cutoff_rate",
+            # Performance
             "tps", "avg_latency_sec", "total_time", "total_time_sec",
         ] if c in summary_df.columns
     ]
-    secondary_df = summary_df[secondary_cols].copy()
-    secondary_df = secondary_df.rename(columns={
-        "failure_rate": "reliability.failure_rate",
-        "diversity": "reliability.diversity",
-        "cutoff_rate": "reliability.cutoff_rate",
-        "tps": "performance.tokens_per_sec",
-        "avg_latency_sec": "performance.avg_latency_sec",
-        "total_time": "performance.total_time",
-        "total_time_sec": "performance.total_time_sec",
+    
+    formatted_df = summary_df[all_cols].copy()
+
+    # Convert fractions → readable percentages
+    for c in ["accuracy", "pass@k", "acc_delta_vs_16bit", "pass@k_delta_vs_16bit", "confidence"]:
+        if c in formatted_df.columns:
+            formatted_df[c] = (formatted_df[c] * 100).round(2)
+            
+    # Rename columns for extreme readability
+    formatted_df = formatted_df.rename(columns={
+        "accuracy": "Accuracy_%",
+        "pass@k": "Pass@K_%",
+        "acc_delta_vs_16bit": "Acc_Delta_vs_16bit_%",
+        "pass@k_delta_vs_16bit": "Pass@K_Delta_vs_16bit_%",
+        "confidence": "Confidence_%",
+        "diversity": "Diversity",
+        "n_questions": "N_Questions",
+        "failure_rate": "Reliability_Failure_Rate",
+        "cutoff_rate": "Reliability_Cutoff_Rate",
+        "tps": "Perf_Tokens_Per_Sec",
+        "avg_latency_sec": "Perf_Avg_Latency_Sec",
+        "total_time": "Perf_Total_Time",
+        "total_time_sec": "Perf_Total_Time_Sec",
     })
 
-    secondary_path = os.path.join(args.results_dir, "secondary_metrics.csv")
-    secondary_df.to_csv(secondary_path, index=False)
-    print(f"Saved SECONDARY: {secondary_path}")
+    # ══════════════════════════════════════════════════════════════════
+    # Save a separate CSV for each dataset
+    # ══════════════════════════════════════════════════════════════════
+    datasets_present = formatted_df['dataset'].unique()
+    for ds in datasets_present:
+        ds_df = formatted_df[formatted_df['dataset'] == ds].copy()
+        
+        # We don't need the 'dataset' column anymore since it's in the filename
+        ds_df = ds_df.drop(columns=['dataset'])
+        
+        ds_path = os.path.join(args.results_dir, f"results_{ds.lower()}.csv")
+        ds_df.to_csv(ds_path, index=False)
+        print(f"Saved dataset results to: {ds_path}")
 
     # ── Console summary ───────────────────────────────────────────────
-    print("\n=== Primary Results ===")
-    print(primary_df.to_string(index=False))
-    print("\n=== Secondary Metrics (Reliability + Performance) ===")
-    print(secondary_df.to_string(index=False))
+    print("\n=== Formatted Results Summary ===")
+    # Print just a few key columns for the console
+    console_cols = ["model", "precision", "n_samples", "Accuracy_%", "Pass@K_%", "Confidence_%"]
+    console_cols = [c for c in console_cols if c in formatted_df.columns]
+    print(formatted_df[console_cols].to_string(index=False))
 
     # ── Accuracy vs. Precision Comparison Plot ─────────────────────────
     print("\nGenerating Accuracy vs. Precision bar charts...")
