@@ -56,3 +56,5 @@ results/*.jpg
 .idea/
 *.html
 *.pdf
+*.jsonl
+*.md

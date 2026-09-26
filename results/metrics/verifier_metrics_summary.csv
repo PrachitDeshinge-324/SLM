@@ -1,0 +1,4 @@
+File,Precision_Level,Total_Parsed,Accuracy,Precision,Recall (TPR),F1_Score,FPR,TP,FP,FN,TN
+verifier_output_Qwen_Qwen3.5-0.8B_16bit_gsm8k_n16.jsonl,16bit,200,72.50%,68.54%,69.32%,68.93%,25.00%,61,28,27,84
+verifier_output_Qwen_Qwen3.5-0.8B_8bit_gsm8k_n16.jsonl,8bit,200,75.00%,77.92%,64.52%,70.59%,15.89%,60,17,33,90
+verifier_output_Qwen_Qwen3.5-0.8B_4bit_gsm8k_n16.jsonl,4bit,200,72.50%,61.67%,89.16%,72.91%,39.32%,74,46,9,71
