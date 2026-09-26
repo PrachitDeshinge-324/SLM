@@ -7,9 +7,10 @@ import sys
 def main():
     parser = argparse.ArgumentParser(description="Extract seeded traces for verifier benchmark.")
     parser.add_argument("--directory", type=str, required=True, help="Directory containing the raw generated jsonl files")
-    parser.add_argument("--model", type=str, default="Qwen3.5-0.8B", help="Model name (e.g., Qwen3.5-0.8B)")
+    parser.add_argument("--model", type=str, required=True, help="Model name (e.g., Qwen3.5-0.8B)")
     parser.add_argument("--precision", type=str, required=True, help="Precision to extract (e.g., 16bit, 8bit, 4bit)")
-    parser.add_argument("--n_samples", type=str, default="n16", help="Number of samples (e.g., n16, n8)")
+    parser.add_argument("--dataset", type=str, required=True, help="Dataset name (e.g., gsm8k, cqa)")
+    parser.add_argument("--n_samples", type=str, required=True, help="Number of samples (e.g., n16, n8)")
     parser.add_argument("--output_dir", type=str, required=True, help="Directory to save the extracted verifier datasets")
     args = parser.parse_args()
 
@@ -19,8 +20,8 @@ def main():
     
     import glob
     
-    # Use glob to find the input file without needing the exact provider prefix (e.g. 'Qwen_' or 'meta-llama_')
-    pattern = f'*_{args.model}_{args.precision}_gsm8k_{args.n_samples}.jsonl'
+    # Use glob to find the input file without needing the exact provider prefix
+    pattern = f'*_{args.model}_{args.precision}_{args.dataset}_{args.n_samples}.jsonl'
     search_path = os.path.join(args.directory, pattern)
     matching_files = glob.glob(search_path)
     
@@ -31,6 +32,8 @@ def main():
     filepath = matching_files[0]
     if len(matching_files) > 1:
         print(f"Warning: Multiple files matched. Using {filepath}")
+        
+    input_basename = os.path.basename(filepath)
         
     with open(filepath, 'r') as f:
         lines = f.readlines()
@@ -73,7 +76,7 @@ def main():
             'precision': args.precision
         })
         
-    output_filename = f'verifier_{args.model}_{args.precision}_{args.n_samples}.jsonl'
+    output_filename = f'verifier_{input_basename}'
     output_filepath = os.path.join(args.output_dir, output_filename)
     
     with open(output_filepath, 'w') as f:

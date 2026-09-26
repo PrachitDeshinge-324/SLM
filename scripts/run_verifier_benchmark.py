@@ -44,16 +44,34 @@ def parse_verifier_output(output_text):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_id", type=str, required=True, help="HF Model ID (e.g., Qwen/Qwen3.5-0.8B-Instruct)")
-    parser.add_argument("--input_file", type=str, required=True, help="Path to extracted JSONL dataset")
+    parser.add_argument("--directory", type=str, required=True, help="Directory containing the extracted verifier datasets")
+    parser.add_argument("--model_id", type=str, required=True, help="HF Model ID (e.g., Qwen/Qwen3.5-0.8B)")
     parser.add_argument("--precision", type=str, required=True, choices=["16bit", "8bit", "4bit"])
-    parser.add_argument("--output_file", type=str, required=True, help="Path to save results")
+    parser.add_argument("--dataset", type=str, required=True, help="Dataset name (e.g., gsm8k, cqa)")
+    parser.add_argument("--n_samples", type=str, required=True, help="Number of samples (e.g., n16, n8)")
+    parser.add_argument("--output_dir", type=str, required=True, help="Directory to save the evaluated results")
     parser.add_argument("--max_new_tokens", type=int, default=512)
     parser.add_argument("--limit", type=int, default=None, help="Limit number of samples for testing")
     args = parser.parse_args()
 
     # Create output directory if it doesn't exist
-    os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    # Automatically find the input file
+    import glob
+    model_name = args.model_id.split('/')[-1] # Extract just the model name part
+    pattern = f'verifier_*_{model_name}_{args.precision}_{args.dataset}_{args.n_samples}.jsonl'
+    search_path = os.path.join(args.directory, pattern)
+    matching_files = glob.glob(search_path)
+    
+    if not matching_files:
+        print(f"Error: No files matching {pattern} found in {args.directory}")
+        import sys
+        sys.exit(1)
+        
+    input_file = matching_files[0]
+    input_basename = os.path.basename(input_file)
+    output_file = os.path.join(args.output_dir, input_basename.replace("verifier_", "verifier_output_"))
 
     print(f"Loading Tokenizer for {args.model_id}...")
     tokenizer = AutoTokenizer.from_pretrained(args.model_id)
@@ -76,7 +94,8 @@ def main():
     print(f"Loading model {args.model_id} in {args.precision} mode...")
     model = AutoModelForCausalLM.from_pretrained(args.model_id, **model_kwargs)
     
-    with open(args.input_file, 'r') as f:
+    print(f"Loading input file: {input_file}")
+    with open(input_file, 'r') as f:
         dataset = [json.loads(line) for line in f]
         
     if args.limit is not None:
@@ -147,7 +166,7 @@ def main():
         results.append(item)
         
         # Incremental save
-        with open(args.output_file, 'w') as f:
+        with open(output_file, 'w') as f:
             for res in results:
                 f.write(json.dumps(res) + '\n')
                 
