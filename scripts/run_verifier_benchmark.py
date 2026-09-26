@@ -19,19 +19,21 @@ Please evaluate the solution step-by-step. For each step, determine if the mathe
 Finally, conclude whether the overall answer is correct.
 
 Format your response exactly as follows:
-Step 1: [Brief Analysis] - Score: [1 or 0]
-Step 2: [Brief Analysis] - Score: [1 or 0]
+Step 1: [Brief Analysis] - Score: 1
+Step 2: [Brief Analysis] - Score: 0
 ...
-Final Conclusion: [Correct / Incorrect]"""
+Final Conclusion: Incorrect"""
 
 def parse_verifier_output(output_text):
     # Extract step scores
-    # Look for "Score: 1" or "Score: 0" (case insensitive)
     step_scores = []
-    score_pattern = r'Score:\s*([01])'
-    matches = re.findall(score_pattern, output_text, re.IGNORECASE)
-    for m in matches:
-        step_scores.append(int(m))
+    # Split output by steps to ensure we match step-by-step
+    steps = re.split(r'Step \d+:', output_text)[1:]
+    for step_text in steps:
+        if re.search(r'Score:\s*1', step_text, re.IGNORECASE) or re.search(r'\[Correct\]', step_text, re.IGNORECASE):
+            step_scores.append(1)
+        elif re.search(r'Score:\s*0', step_text, re.IGNORECASE) or re.search(r'\[Incorrect\]', step_text, re.IGNORECASE):
+            step_scores.append(0)
         
     # Extract final conclusion
     final_conclusion = None

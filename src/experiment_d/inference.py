@@ -21,6 +21,12 @@ def load_model_and_tokenizer(model_id: str, precision: str = "16bit"):
     """
     device = get_device()
     print(f"Loading {model_id} on {device} with {precision} precision...")
+    
+    # Dynamically check for bfloat16 support to handle a mix of T4, L4, and A100 GPUs
+    if device == "cuda" and torch.cuda.is_bf16_supported():
+        best_dtype = torch.bfloat16
+    else:
+        best_dtype = torch.float16
 
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
     if tokenizer.pad_token is None:
@@ -42,12 +48,12 @@ def load_model_and_tokenizer(model_id: str, precision: str = "16bit"):
             print("Warning: 4-bit quantization usually requires CUDA. Attempting anyway...")
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_compute_dtype=best_dtype,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_use_double_quant=True,
         )
         model_kwargs["quantization_config"] = bnb_config
-        model_kwargs["torch_dtype"] = torch.bfloat16  # For unquantized layers (LM head, embeds)
+        model_kwargs["torch_dtype"] = best_dtype  # For unquantized layers (LM head, embeds)
     elif precision == "8bit":
         if device != "cuda":
             print("Warning: 8-bit quantization usually requires CUDA. Attempting anyway...")
@@ -55,13 +61,10 @@ def load_model_and_tokenizer(model_id: str, precision: str = "16bit"):
             load_in_8bit=True,
         )
         model_kwargs["quantization_config"] = bnb_config
-        model_kwargs["torch_dtype"] = torch.float16  # Native float16 avoids MatMul8bitLt casting warning
+        model_kwargs["torch_dtype"] = best_dtype
     else:
-        # 16bit / bfloat16
-        if device == "mps":
-            model_kwargs["torch_dtype"] = torch.float16  # mps prefers float16
-        else:
-            model_kwargs["torch_dtype"] = torch.bfloat16
+        # 16bit
+        model_kwargs["torch_dtype"] = best_dtype
 
     model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
 
@@ -75,12 +78,9 @@ def _get_model_device(model):
     back to inspecting the first parameter.
     """
     try:
-        dev = model.device
-        if dev is not None and str(dev) != "meta":
-            return dev
+        return next(model.parameters()).device
     except Exception:
-        pass
-    return next(model.parameters()).device
+        return "cpu"
 
 
 def generate_n_samples(
@@ -136,12 +136,14 @@ def generate_n_samples(
         generated_tokens = outputs[:, prompt_length:]
         
         # Calculate length of each generated sequence
+        batch_valid_tokens = 0
         for i in range(current_batch):
             seq = generated_tokens[i]
             valid_len = (seq != tokenizer.pad_token_id).sum().item()
             generation_lengths.append(valid_len)
+            batch_valid_tokens += valid_len
 
-        total_new_tokens += generated_tokens.numel()
+        total_new_tokens += batch_valid_tokens
 
         decoded = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
         all_responses.extend(decoded)
@@ -211,12 +213,14 @@ def generate_batch_prompts(
         prompt_length = batch_input_ids.shape[1]
         generated_tokens = outputs[:, prompt_length:]
         
+        batch_valid_tokens = 0
         for j in range(generated_tokens.shape[0]):
             seq = generated_tokens[j]
             valid_len = (seq != tokenizer.pad_token_id).sum().item()
             generation_lengths_flat.append(valid_len)
+            batch_valid_tokens += valid_len
             
-        total_new_tokens += generated_tokens.numel()
+        total_new_tokens += batch_valid_tokens
         decoded = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
         all_responses_flat.extend(decoded)
         

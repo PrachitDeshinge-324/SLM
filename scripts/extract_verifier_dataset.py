@@ -57,24 +57,27 @@ def main():
         question = item['question']
         ground_truth = item.get('ground_truth', '')
         
-        # Extract the first generated trace (index 0)
-        trace = item['raw_samples'][0]
-        student_solution = trace['response']
-        generated_answer = trace.get('extracted', '')
-        
-        # Determine if the generated trace is correct by comparing to ground truth
+        # Determine ground truth answer
         gt_answer = ground_truth.split('####')[-1].strip()
-        is_correct = (generated_answer.strip() == gt_answer.strip())
         
-        output_data.append({
-            'question': question,
-            'ground_truth': ground_truth,
-            'gt_answer': gt_answer,
-            'generated_answer': generated_answer,
-            'student_solution': student_solution,
-            'is_correct': is_correct,
-            'precision': args.precision
-        })
+        # Extract ALL generated traces for this question
+        for trace_idx, trace in enumerate(item['raw_samples']):
+            student_solution = trace['response']
+            generated_answer = trace.get('extracted', '')
+            
+            # Determine if the generated trace is correct by comparing to ground truth
+            is_correct = (generated_answer.strip() == gt_answer.strip())
+            
+            output_data.append({
+                'question': question,
+                'ground_truth': ground_truth,
+                'gt_answer': gt_answer,
+                'trace_index': trace_idx,
+                'generated_answer': generated_answer,
+                'student_solution': student_solution,
+                'is_correct': is_correct,
+                'precision': args.precision
+            })
         
     output_filename = f'verifier_{input_basename}'
     output_filepath = os.path.join(args.output_dir, output_filename)

@@ -148,7 +148,8 @@ def main():
                 
                 # OOM-safe generation: catch CUDA OOM, clear cache, adapt batch size
                 grouped_responses = None
-                while args.batch_size > 0:
+                current_batch_size = args.batch_size
+                while current_batch_size > 0:
                     try:
                         grouped_responses, tps, latency, grouped_lengths = generate_batch_prompts(
                             model, tokenizer, prompts,
@@ -157,18 +158,18 @@ def main():
                             top_k=args.top_k,
                             top_p=args.top_p,
                             max_new_tokens=batch_max_new,
-                            batch_size=args.batch_size,
+                            batch_size=current_batch_size,
                         )
                         break  # Success!
                     except RuntimeError as e:
                         if "out of memory" in str(e).lower():
                             torch.cuda.empty_cache()
-                            if args.batch_size == 1:
+                            if current_batch_size == 1:
                                 print(f"\n⚠️  OOM even with batch_size=1 on chunk starting at {chunk[0]['qid']}. Skipping chunk.")
                                 break
-                            args.batch_size = max(1, args.batch_size // 2)
+                            current_batch_size = max(1, current_batch_size // 2)
                             print(f"\n⚠️  OOM on chunk starting at {chunk[0]['qid']}. "
-                                  f"Reducing batch_size to {args.batch_size} and retrying...")
+                                  f"Reducing batch_size to {current_batch_size} and retrying...")
                         else:
                             raise  # Re-raise non-OOM errors
                             
