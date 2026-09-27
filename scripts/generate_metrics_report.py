@@ -28,22 +28,23 @@ def main():
     for filepath in files:
         filename = os.path.basename(filepath)
         # Expected format: verifier_output_{model_id}_{precision}_{dataset}_{samples}.jsonl
-        match = re.search(r'verifier_output_(.+?)_(\d+bit)_(.+?)_n\d+\.jsonl', filename)
+        match = re.search(r'verifier_output_(.+?)_(\d+bit)_(.+?)_(n\d+)\.jsonl', filename)
         if match:
             model_name = match.group(1)
             precision = match.group(2)
             dataset_name = match.group(3)
+            samples_n = match.group(4)
         else:
             print(f"Warning: Could not parse model/dataset from {filename}. Skipping.")
             continue
             
-        key = (model_name, dataset_name)
+        key = (model_name, dataset_name, samples_n)
         if key not in grouped_files:
             grouped_files[key] = []
         grouped_files[key].append((filepath, precision))
         
-    for (model_name, dataset_name), file_list in grouped_files.items():
-        print(f"\nProcessing Group: Model='{model_name}', Dataset='{dataset_name}'")
+    for (model_name, dataset_name, samples_n), file_list in grouped_files.items():
+        print(f"\nProcessing Group: Model='{model_name}', Dataset='{dataset_name}', Samples='{samples_n}'")
         results_list = []
         matrices = {}
         
@@ -52,11 +53,17 @@ def main():
             tp = fp = tn = fn = 0
             total = 0
             
+            # --- Question-level tracking ---
+            from collections import Counter
+            questions_data = {}
+            
             with open(filepath, 'r') as f:
                 for line in f:
                     data = json.loads(line)
                     conc = data.get('verifier_final_conclusion')
                     is_correct = data.get('is_correct')
+                    question = data.get('question')
+                    gen_ans = str(data.get('generated_answer'))
                     
                     if conc is not None:
                         total += 1
@@ -65,9 +72,52 @@ def main():
                         elif not conc and not is_correct: tn += 1
                         elif not conc and is_correct: fn += 1
                         
+                        if question not in questions_data:
+                            questions_data[question] = []
+                            
+                        questions_data[question].append({
+                            "gen_ans": gen_ans,
+                            "is_correct": is_correct,
+                            "verifier_says_correct": conc
+                        })
+                        
             if total == 0:
                 continue
                 
+            # --- Question-level Metrics ---
+            gen_maj_correct_count = 0
+            ver_maj_correct_count = 0
+            total_questions = len(questions_data)
+            
+            for q, traces in questions_data.items():
+                all_ans = [t["gen_ans"] for t in traces]
+                
+                # 1. Generator Majority (Base performance without verifier)
+                if all_ans:
+                    gen_maj = Counter(all_ans).most_common(1)[0][0]
+                    if any(t["is_correct"] for t in traces if t["gen_ans"] == gen_maj):
+                        gen_maj_correct_count += 1
+                        
+                # 2. Verifier-Guided Majority 
+                ver_approved_ans = [t["gen_ans"] for t in traces if t["verifier_says_correct"]]
+                
+                if ver_approved_ans:
+                    # Majority vote among traces the verifier approved
+                    ver_maj = Counter(ver_approved_ans).most_common(1)[0][0]
+                elif all_ans:
+                    # Fallback to standard generator majority if verifier rejected EVERYTHING
+                    ver_maj = Counter(all_ans).most_common(1)[0][0]
+                else:
+                    ver_maj = None
+                    
+                if ver_maj is not None:
+                    if any(t["is_correct"] for t in traces if t["gen_ans"] == ver_maj):
+                        ver_maj_correct_count += 1
+                        
+            gen_maj_acc = gen_maj_correct_count / total_questions if total_questions > 0 else 0
+            ver_maj_acc = ver_maj_correct_count / total_questions if total_questions > 0 else 0
+            
+            # --- Trace-level Metrics ---
             accuracy = (tp + tn) / total
             tpr = tp / (tp + fn) if (tp + fn) > 0 else 0
             fpr = fp / (fp + tn) if (fp + tn) > 0 else 0
@@ -77,12 +127,16 @@ def main():
             
             results_list.append({
                 "Precision_Level": precision,
-                "Total_Parsed": total,
-                "Accuracy": f"{accuracy*100:.2f}%",
-                "Precision": f"{precision_metric*100:.2f}%",
-                "Recall (TPR)": f"{recall*100:.2f}%",
-                "F1_Score": f"{f1*100:.2f}%",
-                "FPR": f"{fpr*100:.2f}%",
+                "Total_Traces": total,
+                "Total_Questions": total_questions,
+                "Gen_Maj_Acc": f"{gen_maj_acc*100:.2f}%",
+                "Ver_Maj_Acc": f"{ver_maj_acc*100:.2f}%",
+                "Delta (Ver-Gen)": f"{(ver_maj_acc - gen_maj_acc)*100:+.2f}%",
+                "Trace_Accuracy": f"{accuracy*100:.2f}%",
+                "Trace_Precision": f"{precision_metric*100:.2f}%",
+                "Trace_Recall": f"{recall*100:.2f}%",
+                "Trace_F1": f"{f1*100:.2f}%",
+                "Trace_FPR": f"{fpr*100:.2f}%",
                 "TP": tp,
                 "FP": fp,
                 "FN": fn,
@@ -106,7 +160,7 @@ def main():
         df = df.sort_values('SortKey', ascending=False).drop('SortKey', axis=1)
         
         clean_model = model_name.replace("/", "_")
-        csv_path = os.path.join(args.output_dir, f"metrics_{clean_model}_{dataset_name}.csv")
+        csv_path = os.path.join(args.output_dir, f"metrics_{clean_model}_{dataset_name}_{samples_n}.csv")
         df.to_csv(csv_path, index=False)
         print(f"  -> Saved metrics CSV to: {csv_path}")
         
@@ -119,7 +173,7 @@ def main():
         # Sort the matrices to plot in order (16bit -> 8bit -> 4bit)
         sorted_precisions = sorted(matrices.keys(), key=sort_key, reverse=True)
         
-        fig.suptitle(f"Verifier Performance: {model_name} on {dataset_name}", fontsize=16, y=1.05)
+        fig.suptitle(f"Verifier Performance: {model_name} on {dataset_name} ({samples_n})", fontsize=16, y=1.05)
         
         for ax, prec in zip(axes, sorted_precisions):
             matrix = matrices[prec]
@@ -132,7 +186,7 @@ def main():
             ax.set_ylabel("Verifier Prediction", fontsize=12)
             
         plt.tight_layout()
-        plot_path = os.path.join(args.output_dir, f"confusion_matrices_{clean_model}_{dataset_name}.png")
+        plot_path = os.path.join(args.output_dir, f"confusion_matrices_{clean_model}_{dataset_name}_{samples_n}.png")
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"  -> Saved confusion matrices plot to: {plot_path}")

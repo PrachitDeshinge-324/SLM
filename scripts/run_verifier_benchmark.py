@@ -1,11 +1,37 @@
 import argparse
 import json
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from tqdm import tqdm
+import logging
 import os
 import re
+import warnings
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers.utils import logging as tf_logging
+from tqdm import tqdm
 from dotenv import load_dotenv
+
+# Suppress harmless specific warnings for a cleaner console
+# (?s) allows '.' to match newlines across multiline warning messages
+warnings.filterwarnings("ignore", message=r"(?s).*MatMul8bitLt.*")
+warnings.filterwarnings("ignore", message=r"(?s).*torch_dtype.*")
+
+
+class HarmlessWarningFilter(logging.Filter):
+    """Filter warnings emitted through the logging module (e.g. transformers logger)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(term in msg for term in ["torch_dtype", "MatMul8bitLt"])
+
+
+_warning_filter = HarmlessWarningFilter()
+logging.getLogger().addFilter(_warning_filter)
+for _h in logging.getLogger().handlers:
+    _h.addFilter(_warning_filter)
+
+tf_logging.get_logger().addFilter(_warning_filter)
+for _h in tf_logging.get_logger().handlers:
+    _h.addFilter(_warning_filter)
 
 load_dotenv()
 
@@ -86,10 +112,11 @@ def main():
     # Configure Quantization & Precision
     # We use "cuda" instead of "auto" to prevent small models from being needlessly
     # split across multiple GPUs (e.g. Dual T4), which causes massive PCIe overhead.
-    model_kwargs = {"device_map": "cuda", "torch_dtype": compute_dtype}
+    model_kwargs = {"device_map": "cuda", "dtype": compute_dtype}
     if args.precision == "8bit":
         from transformers import BitsAndBytesConfig
         model_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
+        model_kwargs["dtype"] = torch.float16
     elif args.precision == "4bit":
         from transformers import BitsAndBytesConfig
         model_kwargs["quantization_config"] = BitsAndBytesConfig(

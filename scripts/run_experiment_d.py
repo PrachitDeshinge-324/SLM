@@ -9,8 +9,26 @@ from tqdm import tqdm
 from dotenv import load_dotenv
 
 import warnings
-warnings.filterwarnings("ignore", message=".*torch_dtype.*")
-warnings.filterwarnings("ignore", message=".*MatMul8bitLt.*")
+import logging
+
+# Suppress harmless specific warnings for a cleaner console
+# (?s) allows '.' to match newlines across multiline warning messages
+warnings.filterwarnings("ignore", message=r"(?s).*torch_dtype.*")
+warnings.filterwarnings("ignore", message=r"(?s).*MatMul8bitLt.*")
+
+
+class HarmlessWarningFilter(logging.Filter):
+    """Filter warnings emitted through the logging module (e.g. transformers logger)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(term in msg for term in ["torch_dtype", "MatMul8bitLt"])
+
+
+_warning_filter = HarmlessWarningFilter()
+logging.getLogger().addFilter(_warning_filter)
+for _h in logging.getLogger().handlers:
+    _h.addFilter(_warning_filter)
 
 # Ensure the repository root directory is in sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -19,6 +37,11 @@ load_dotenv()
 
 import torch
 from transformers import set_seed as hf_set_seed
+from transformers.utils import logging as tf_logging
+
+tf_logging.get_logger().addFilter(_warning_filter)
+for _h in tf_logging.get_logger().handlers:
+    _h.addFilter(_warning_filter)
 
 from src.experiment_d.data_loader import load_cqa_dataset, load_gsm8k_dataset
 from src.experiment_d.prompts import get_gsm8k_messages, get_cqa_messages, build_prompt

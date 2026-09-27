@@ -58,3 +58,8 @@ results/*.jpg
 *.pdf
 *.jsonl
 *.md
+
+*.csv
+*.png
+*.jpeg
+*.ipynb
