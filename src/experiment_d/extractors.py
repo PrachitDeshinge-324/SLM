@@ -70,3 +70,28 @@ def extract_cqa_answer(text: str) -> str:
         return matches[-1].upper()
         
     return None
+
+def extract_math500_answer(text: str) -> str:
+    """
+    Extracts the answer from a MATH-500 generation.
+    It looks for \boxed{} first, then falls back to other heuristics.
+    """
+    text = text.strip()
+    match = re.search(r'\\boxed{(.+?)}', text)
+    if match:
+        return match.group(1).strip()
+    
+    # Fallback to GSM8K logic
+    return extract_gsm8k_answer(text)
+
+def get_extractor(dataset_name: str):
+    name = dataset_name.lower()
+    if name == "gsm8k":
+        return extract_gsm8k_answer
+    elif name == "cqa":
+        return extract_cqa_answer
+    elif name == "math500":
+        return extract_math500_answer
+    else:
+        # Generic fallback
+        return extract_gsm8k_answer

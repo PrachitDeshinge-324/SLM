@@ -3,11 +3,32 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 import time
 
 
-def get_device():
-    """Detects available device: cuda, mps, or cpu."""
+import os
+
+# Model families known to crash on MPS due to PyTorch MPS double-free bugs
+# (e.g., Qwen3.5 hybrid GatedDeltaNet + sparse attention architecture)
+_MPS_INCOMPATIBLE_FAMILIES = ["qwen3.5", "qwen3-5"]
+
+
+def get_device(model_id: str = ""):
+    """Detects available device: cuda, mps, or cpu.
+    
+    MPS is skipped for model families with known MPS memory bugs.
+    Set FORCE_CPU=1 environment variable to always use CPU.
+    """
+    if os.environ.get("FORCE_CPU", "0") == "1":
+        print("FORCE_CPU=1 set. Using CPU.")
+        return "cpu"
     if torch.cuda.is_available():
         return "cuda"
-    elif torch.backends.mps.is_available():
+    if torch.backends.mps.is_available():
+        model_lower = model_id.lower()
+        for family in _MPS_INCOMPATIBLE_FAMILIES:
+            if family in model_lower:
+                print(f"Warning: '{model_id}' has a known PyTorch MPS double-free bug. Falling back to CPU.")
+                print("         (Set FORCE_MPS=1 to override this safety check.)")
+                if os.environ.get("FORCE_MPS", "0") != "1":
+                    return "cpu"
         return "mps"
     return "cpu"
 
@@ -19,7 +40,7 @@ def load_model_and_tokenizer(model_id: str, precision: str = "16bit"):
 
     Note: 8-bit and 4-bit require bitsandbytes and typically a CUDA backend.
     """
-    device = get_device()
+    device = get_device(model_id)
     print(f"Loading {model_id} on {device} with {precision} precision...")
     
     # Dynamically check for bfloat16 support to handle a mix of T4, L4, and A100 GPUs

@@ -87,3 +87,29 @@ def build_prompt(tokenizer, messages: list[dict]) -> str:
         tokenize=False,
         add_generation_prompt=True,
     )
+
+def get_math500_messages(question: str) -> list[dict]:
+    return [
+        {"role": "system", "content": "You are a helpful math tutor. Solve the problem step by step and enclose the final answer in \\boxed{}."},
+        {"role": "user", "content": question},
+    ]
+
+def get_generic_messages(question: str, choices: list = None) -> list[dict]:
+    if choices:
+        return get_cqa_messages(question, choices)
+    else:
+        return [
+            {"role": "system", "content": "You are a helpful assistant. Provide the reasoning and final answer clearly."},
+            {"role": "user", "content": question},
+        ]
+
+def get_messages(dataset_name: str, question: str, choices: list = None):
+    name = dataset_name.lower()
+    if name == "gsm8k":
+        return get_gsm8k_messages(question)
+    elif name == "cqa":
+        return get_cqa_messages(question, choices)
+    elif name == "math500":
+        return get_math500_messages(question)
+    else:
+        return get_generic_messages(question, choices)

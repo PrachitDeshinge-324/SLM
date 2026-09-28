@@ -4,17 +4,10 @@ import os
 import ast
 
 def parse_cqa_choices(choices_str: str):
-    """
-    Parses the string representation of CQA choices.
-    Example string:
-    {'label': array(['A', 'B', 'C', 'D', 'E'], dtype=object), 'text': array(['bank', 'library', ...], dtype=object)}
-    """
-    # Safe eval environment with numpy array and builtins
     env = {
         'array': np.array,
         'object': object
     }
-    
     try:
         parsed = eval(choices_str, {"__builtins__": {}}, env)
         labels = parsed['label'].tolist()
@@ -25,15 +18,10 @@ def parse_cqa_choices(choices_str: str):
         return []
 
 def load_cqa_dataset(csv_path: str = "CQA/validation.csv"):
-    """
-    Loads CommonsenseQA and standardizes format.
-    """
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"Could not find {csv_path}. Please ensure it is present.")
-    
     df = pd.read_csv(csv_path)
     dataset = []
-    
     for idx, row in df.iterrows():
         choices = parse_cqa_choices(row['choices'])
         dataset.append({
@@ -43,29 +31,17 @@ def load_cqa_dataset(csv_path: str = "CQA/validation.csv"):
             "ground_truth": row['answerKey'],
             "choices": choices
         })
-        
     return dataset
 
 def load_gsm8k_dataset(parquet_path: str = "gsm8k/main/test-00000-of-00001.parquet"):
-    """
-    Loads GSM8K test set and standardizes format.
-    """
     if not os.path.exists(parquet_path):
         raise FileNotFoundError(f"Could not find {parquet_path}. Please ensure it is present.")
-        
     df = pd.read_parquet(parquet_path)
     dataset = []
-    
     for idx, row in df.iterrows():
-        # Ground truth format usually has "#### <answer>"
         answer_str = row['answer']
-        # We can extract the raw numeric ground truth, or just store the full answer string.
-        # It's better to isolate the number for the `metrics.py` check, but let's store both.
-        # "#### 72" -> "72"
         truth_num = answer_str.split("####")[-1].strip() if "####" in answer_str else answer_str.strip()
-        # Normalize: strip commas so "1,000" becomes "1000" (matching extractor output)
         truth_num = truth_num.replace(',', '')
-        
         dataset.append({
             "qid": f"gsm8k_{idx}",
             "dataset": "gsm8k",
@@ -74,26 +50,60 @@ def load_gsm8k_dataset(parquet_path: str = "gsm8k/main/test-00000-of-00001.parqu
             "choices": None,
             "raw_answer_str": answer_str
         })
-        
     return dataset
 
-def load_datasets():
-    """
-    Convenience method to load both test sets.
-    """
-    print("Loading CQA...")
-    cqa_data = load_cqa_dataset()
-    print(f"Loaded {len(cqa_data)} CQA items.")
-    
-    print("Loading GSM8K...")
-    gsm8k_data = load_gsm8k_dataset()
-    print(f"Loaded {len(gsm8k_data)} GSM8K items.")
-    
-    return cqa_data, gsm8k_data
+def load_math500_dataset(path_or_name: str = "HuggingFaceH4/MATH-500"):
+    try:
+        from datasets import load_dataset
+    except ImportError:
+        raise ImportError("Please install the 'datasets' library to load HuggingFace datasets.")
+    ds = load_dataset(path_or_name, split="test")
+    dataset = []
+    for idx, row in enumerate(ds):
+        answer = str(row.get('answer', ''))
+        if not answer and 'solution' in row:
+            import re
+            match = re.search(r'\\boxed{(.+?)}', row['solution'])
+            if match:
+                answer = match.group(1)
+        dataset.append({
+            "qid": f"math500_{idx}",
+            "dataset": "math500",
+            "question": row['problem'],
+            "ground_truth": answer,
+            "choices": None,
+            "raw_answer_str": row.get('solution', '')
+        })
+    return dataset
 
-if __name__ == "__main__":
-    c, g = load_datasets()
-    print("CQA Sample:")
-    print(c[0])
-    print("GSM8K Sample:")
-    print(g[0])
+def get_dataset_loader(dataset_name: str):
+    name = dataset_name.lower()
+    if name == "gsm8k":
+        return load_gsm8k_dataset()
+    elif name == "cqa":
+        return load_cqa_dataset()
+    elif name == "math500":
+        return load_math500_dataset()
+    else:
+        # Fallback to HuggingFace loading attempt
+        try:
+            from datasets import load_dataset
+            ds = load_dataset(dataset_name, split="test")
+            dataset = []
+            for idx, row in enumerate(ds):
+                # Guess standard column names
+                q_col = 'question' if 'question' in row else ('problem' if 'problem' in row else list(row.keys())[0])
+                a_col = 'answer' if 'answer' in row else ('solution' if 'solution' in row else list(row.keys())[-1])
+                dataset.append({
+                    "qid": f"{dataset_name.replace('/', '_')}_{idx}",
+                    "dataset": dataset_name,
+                    "question": row[q_col],
+                    "ground_truth": str(row[a_col]),
+                    "choices": None,
+                    "raw_answer_str": str(row[a_col])
+                })
+            print(f"Dynamically loaded dataset '{dataset_name}' from HuggingFace.")
+            return dataset
+        except Exception as e:
+            raise ValueError(f"Unknown dataset '{dataset_name}' and could not load from HuggingFace dynamically. Error: {e}")
+

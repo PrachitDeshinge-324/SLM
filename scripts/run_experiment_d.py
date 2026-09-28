@@ -43,10 +43,9 @@ tf_logging.get_logger().addFilter(_warning_filter)
 for _h in tf_logging.get_logger().handlers:
     _h.addFilter(_warning_filter)
 
-from src.experiment_d.data_loader import load_cqa_dataset, load_gsm8k_dataset
-from src.experiment_d.prompts import get_gsm8k_messages, get_cqa_messages, build_prompt
-from src.experiment_d.inference import load_model_and_tokenizer, generate_n_samples, generate_batch_prompts
-from src.experiment_d.extractors import extract_gsm8k_answer, extract_cqa_answer
+from src.experiment_d.prompts import get_messages, build_prompt
+from src.experiment_d.inference import load_model_and_tokenizer, generate_batch_prompts
+from src.experiment_d.extractors import get_extractor
 from src.experiment_d.metrics import compute_metrics
 
 
@@ -62,7 +61,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run Experiment D (Quantization Self-Improvement)")
     parser.add_argument("--model", type=str, required=True, help="HuggingFace model ID (e.g. Qwen/Qwen3.5-0.8B)")
     parser.add_argument("--precision", type=str, choices=["16bit", "8bit", "4bit"], default="16bit")
-    parser.add_argument("--dataset", type=str, choices=["gsm8k", "cqa", "both"], default="both")
+    parser.add_argument("--dataset", type=str, default="gsm8k", help="Dataset name (e.g. gsm8k, cqa, math500 or any huggingface dataset)")
     parser.add_argument("--n_samples", type=int, default=16, help="Number of samples per prompt")
     parser.add_argument("--batch_size", type=int, default=4, help="Mini-batch size for generation (lower = less VRAM)")
     parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
@@ -71,8 +70,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of questions per dataset (0 for all)")
     parser.add_argument("--output_dir", type=str, default="results", help="Directory to save JSONL logs")
-    parser.add_argument("--max_new_tokens_gsm8k", type=int, default=512, help="Max new tokens for GSM8K")
-    parser.add_argument("--max_new_tokens_cqa", type=int, default=384, help="Max new tokens for CQA (384 avoids mid-reasoning cutoffs)")
+    parser.add_argument("--max_new_tokens", type=int, default=512, help="Max new tokens (default 512, adjust if needed)")
 
     args = parser.parse_args()
     if args.n_samples < 1 or args.batch_size < 1:
@@ -83,10 +81,16 @@ def main():
 
     # Load datasets
     datasets_to_run = []
-    if args.dataset in ["gsm8k", "both"]:
-        datasets_to_run.append(("gsm8k", load_gsm8k_dataset()))
-    if args.dataset in ["cqa", "both"]:
-        datasets_to_run.append(("cqa", load_cqa_dataset()))
+    
+    from src.experiment_d.data_loader import get_dataset_loader
+    if args.dataset == "both":
+        datasets_to_run.append(("gsm8k", get_dataset_loader("gsm8k")))
+        datasets_to_run.append(("cqa", get_dataset_loader("cqa")))
+    else:
+        # Generic loader supports multiple comma-separated datasets optionally
+        for ds_name in args.dataset.split(","):
+            ds_name = ds_name.strip()
+            datasets_to_run.append((ds_name, get_dataset_loader(ds_name)))
 
     model, tokenizer = load_model_and_tokenizer(args.model, args.precision)
 
@@ -96,9 +100,13 @@ def main():
         if args.limit > 0:
             data = data[:args.limit]
 
-        model_dir = os.path.join(args.output_dir, dataset_name, safe_model_name)
+        # Sanitize dataset name for filesystem use (HuggingFace IDs like
+        # 'ChilleD/SVAMP' contain slashes that break os.path.join and filenames)
+        safe_dataset_name = dataset_name.replace("/", "_")
+
+        model_dir = os.path.join(args.output_dir, safe_dataset_name, safe_model_name)
         os.makedirs(model_dir, exist_ok=True)
-        output_file = os.path.join(model_dir, f"{safe_model_name}_{args.precision}_{dataset_name}_n{args.n_samples}.jsonl")
+        output_file = os.path.join(model_dir, f"{safe_model_name}_{args.precision}_{safe_dataset_name}_n{args.n_samples}.jsonl")
         dataset_fingerprint = hashlib.sha256(json.dumps(
             [(item['qid'], item['question'], item['ground_truth']) for item in data],
             ensure_ascii=False, separators=(",", ":")
@@ -125,8 +133,8 @@ def main():
             "dataset": dataset_name, "n_samples": args.n_samples,
             "batch_size": args.batch_size, "temperature": args.temperature,
             "top_k": args.top_k, "top_p": args.top_p, "seed": args.seed,
-            "max_new_tokens_gsm8k": args.max_new_tokens_gsm8k,
-            "max_new_tokens_cqa": args.max_new_tokens_cqa,
+            "max_new_tokens": args.max_new_tokens,
+            
             "total_questions": len(data),
             "dataset_fingerprint": dataset_fingerprint,
             "model_revision": getattr(model.config, "_commit_hash", None),
@@ -146,8 +154,8 @@ def main():
             if existing_config is None:
                 run_config = {
                     **expected_config,
-                    "max_new_tokens_gsm8k": args.max_new_tokens_gsm8k,
-                    "max_new_tokens_cqa": args.max_new_tokens_cqa,
+                    "max_new_tokens": args.max_new_tokens,
+                    
                     "timestamp": datetime.datetime.now().isoformat(),
                 }
                 f.write(json.dumps(run_config) + "\n")
@@ -176,14 +184,9 @@ def main():
                 max_news = []
                 
                 for item in chunk:
-                    if dataset_name == "gsm8k":
-                        messages = get_gsm8k_messages(item['question'])
-                        extractors.append(extract_gsm8k_answer)
-                        max_news.append(args.max_new_tokens_gsm8k)
-                    else:
-                        messages = get_cqa_messages(item['question'], item['choices'])
-                        extractors.append(extract_cqa_answer)
-                        max_news.append(args.max_new_tokens_cqa)
+                    messages = get_messages(dataset_name, item['question'], item.get('choices'))
+                    extractors.append(get_extractor(dataset_name))
+                    max_news.append(args.max_new_tokens)
                         
                     prompts.append(build_prompt(tokenizer, messages))
                 

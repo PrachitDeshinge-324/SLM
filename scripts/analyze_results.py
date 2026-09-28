@@ -339,7 +339,7 @@ def main():
     parser = argparse.ArgumentParser(description="Analyze results from Experiment D")
     parser.add_argument("--results_dir", type=str, default="results", help="Directory with JSONL result files")
     parser.add_argument("--model", type=str, default=None, help="Filter analysis to a specific model ID")
-    parser.add_argument("--dataset", type=str, default=None, choices=["gsm8k", "cqa"], help="Filter analysis to a specific dataset")
+    parser.add_argument("--dataset", type=str, default=None, help="Filter analysis to a specific dataset")
     parser.add_argument("--n_samples", type=int, default=None, help="Filter analysis to a specific sample count (e.g. 8 or 16)")
     args = parser.parse_args()
 
