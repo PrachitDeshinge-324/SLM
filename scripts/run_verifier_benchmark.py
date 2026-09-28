@@ -61,12 +61,12 @@ def parse_verifier_output(output_text):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--directory", type=str, required=True, help="Directory containing the extracted verifier datasets")
+    parser.add_argument("--directory", type=str, default="results/verifier", help="Directory containing the extracted verifier datasets")
     parser.add_argument("--model_id", type=str, required=True, help="HF Model ID (e.g., Qwen/Qwen3.5-0.8B)")
     parser.add_argument("--precision", type=str, required=True, choices=["16bit", "8bit", "4bit"])
     parser.add_argument("--dataset", type=str, required=True, help="Dataset name (e.g., gsm8k, cqa)")
     parser.add_argument("--n_samples", type=str, required=True, help="Number of samples (e.g., n16, n8)")
-    parser.add_argument("--output_dir", type=str, required=True, help="Directory to save the evaluated results")
+    parser.add_argument("--output_dir", type=str, default="results/verifier_output", help="Directory to save the evaluated results")
     parser.add_argument("--max_new_tokens", type=int, default=1024)
     parser.add_argument("--batch_size", type=int, default=16, help="Batch size for generation")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of samples for testing")
@@ -75,12 +75,12 @@ def main():
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # Automatically find the input file
     import glob
-    model_name = args.model_id.split('/')[-1] # Extract just the model name part
-    pattern = f'verifier_*_{model_name}_{args.precision}_{args.dataset}_{args.n_samples}.jsonl'
+    safe_model = args.model_id.replace("/", "_")
+    # Strict match starting with verifier_ to prevent matching verifier_output files
+    pattern = f'**/verifier_{safe_model}_{args.precision}_{args.dataset}_{args.n_samples}.jsonl'
     search_path = os.path.join(args.directory, pattern)
-    matching_files = glob.glob(search_path)
+    matching_files = glob.glob(search_path, recursive=True)
     
     if not matching_files:
         print(f"Error: No files matching {pattern} found in {args.directory}")
@@ -91,7 +91,12 @@ def main():
         raise RuntimeError(f"Ambiguous input pattern {pattern}: found {len(matching_files)} files. Specify a directory containing exactly one matching dataset.")
     input_file = matching_files[0]
     input_basename = os.path.basename(input_file)
-    output_file = os.path.join(args.output_dir, input_basename.replace("verifier_", "verifier_output_"))
+    
+    # Store output in nested directory
+    safe_model = args.model_id.replace("/", "_")
+    nested_out_dir = os.path.join(args.output_dir, args.dataset, safe_model)
+    os.makedirs(nested_out_dir, exist_ok=True)
+    output_file = os.path.join(nested_out_dir, input_basename.replace("verifier_", "verifier_output_"))
 
     print(f"Loading Tokenizer for {args.model_id}...")
     tokenizer = AutoTokenizer.from_pretrained(args.model_id, trust_remote_code=True)

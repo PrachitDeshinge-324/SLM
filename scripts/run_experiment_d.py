@@ -96,7 +96,9 @@ def main():
         if args.limit > 0:
             data = data[:args.limit]
 
-        output_file = os.path.join(args.output_dir, f"{safe_model_name}_{args.precision}_{dataset_name}_n{args.n_samples}.jsonl")
+        model_dir = os.path.join(args.output_dir, dataset_name, safe_model_name)
+        os.makedirs(model_dir, exist_ok=True)
+        output_file = os.path.join(model_dir, f"{safe_model_name}_{args.precision}_{dataset_name}_n{args.n_samples}.jsonl")
         dataset_fingerprint = hashlib.sha256(json.dumps(
             [(item['qid'], item['question'], item['ground_truth']) for item in data],
             ensure_ascii=False, separators=(",", ":")

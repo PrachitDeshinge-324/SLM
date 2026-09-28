@@ -343,7 +343,10 @@ def main():
     parser.add_argument("--n_samples", type=int, default=None, help="Filter analysis to a specific sample count (e.g. 8 or 16)")
     args = parser.parse_args()
 
-    files = glob.glob(os.path.join(args.results_dir, "*.jsonl"))
+    all_files = glob.glob(os.path.join(args.results_dir, "**", "*.jsonl"), recursive=True)
+    # Exclude verifier files which are processed separately
+    files = [f for f in all_files if not os.path.basename(f).startswith("verifier")]
+    
     if not files:
         print(f"No jsonl files found in {args.results_dir}")
         return

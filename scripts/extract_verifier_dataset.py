@@ -31,12 +31,12 @@ def answers_match(predicted, expected):
 
 def main():
     parser = argparse.ArgumentParser(description="Extract seeded traces for verifier benchmark.")
-    parser.add_argument("--directory", type=str, required=True, help="Directory containing the raw generated jsonl files")
+    parser.add_argument("--directory", type=str, default="results", help="Directory containing the raw generated jsonl files")
     parser.add_argument("--model", type=str, required=True, help="Model name (e.g., Qwen3.5-0.8B)")
     parser.add_argument("--precision", type=str, required=True, help="Precision to extract (e.g., 16bit, 8bit, 4bit)")
     parser.add_argument("--dataset", type=str, required=True, help="Dataset name (e.g., gsm8k, cqa)")
     parser.add_argument("--n_samples", type=str, required=True, help="Number of samples (e.g., n16, n8)")
-    parser.add_argument("--output_dir", type=str, required=True, help="Directory to save the extracted verifier datasets")
+    parser.add_argument("--output_dir", type=str, default="results/verifier", help="Directory to save the extracted verifier datasets")
     args = parser.parse_args()
 
     seed = 42
@@ -45,10 +45,12 @@ def main():
     
     import glob
     
-    # Use glob to find the input file without needing the exact provider prefix
-    pattern = f'*_{args.model}_{args.precision}_{args.dataset}_{args.n_samples}.jsonl'
+    # Use glob to find the input file across subdirectories
+    safe_model = args.model.replace("/", "_")
+    # Do not use an asterisk prefix so it doesn't match 'verifier_...' files
+    pattern = f'**/{safe_model}_{args.precision}_{args.dataset}_{args.n_samples}.jsonl'
     search_path = os.path.join(args.directory, pattern)
-    matching_files = glob.glob(search_path)
+    matching_files = glob.glob(search_path, recursive=True)
     
     if not matching_files:
         print(f"Error: No files matching {pattern} found in {args.directory}")
@@ -108,7 +110,11 @@ def main():
             })
         
     output_filename = f'verifier_{input_basename}'
-    output_filepath = os.path.join(args.output_dir, output_filename)
+    
+    # Store output in nested directory
+    nested_out_dir = os.path.join(args.output_dir, args.dataset, safe_model)
+    os.makedirs(nested_out_dir, exist_ok=True)
+    output_filepath = os.path.join(nested_out_dir, output_filename)
     
     with open(output_filepath, 'w') as f:
         for out_item in output_data:

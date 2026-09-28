@@ -9,16 +9,16 @@ import seaborn as sns
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Process verifier JSONL logs and generate metrics.")
-    parser.add_argument("--input_dir", type=str, required=True, help="Directory containing the JSONL logs.")
-    parser.add_argument("--output_dir", type=str, default="results/metrics", help="Directory to save CSV and plots.")
+    parser.add_argument("--input_dir", type=str, default="results/verifier_output", help="Directory containing the JSONL logs.")
+    parser.add_argument("--output_dir", type=str, default="results/verifier_output/metrics", help="Directory to save CSV and plots.")
     return parser.parse_args()
 
 def main():
     args = parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
     
-    # Find all relevant jsonl files
-    files = glob.glob(os.path.join(args.input_dir, "verifier_output_*.jsonl"))
+    # Find all relevant jsonl files across subdirectories
+    files = glob.glob(os.path.join(args.input_dir, "**", "verifier_output_*.jsonl"), recursive=True)
     if not files:
         print(f"No verifier_output_*.jsonl files found in {args.input_dir}")
         return
