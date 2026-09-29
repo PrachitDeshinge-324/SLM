@@ -139,13 +139,23 @@ def main():
             "dataset_fingerprint": dataset_fingerprint,
             "model_revision": getattr(model.config, "_commit_hash", None),
         }
+        # Scientific parameters that MUST match for resume to be valid
+        # Operational parameters like batch_size are hardware-dependent and allowed to change
+        scientific_keys = [
+            "model", "precision", "dataset", "n_samples",
+            "temperature", "top_k", "top_p", "seed",
+            "max_new_tokens", "dataset_fingerprint"
+        ]
+
         if processed_ids and existing_config is None:
             raise RuntimeError(f"Cannot safely resume {output_file}: existing records have no run_config header. Move the file or start a fresh output directory.")
         if existing_config is not None:
-            mismatches = [key for key, value in expected_config.items()
-                          if existing_config.get(key) != value]
+            mismatches = [key for key in scientific_keys
+                          if key in expected_config and existing_config.get(key) != expected_config.get(key)]
             if mismatches:
                 raise RuntimeError(f"Cannot resume {output_file}: run settings differ for {', '.join(mismatches)}. Use a fresh output directory.")
+            if existing_config.get("batch_size") != args.batch_size:
+                print(f"Notice: Resuming with adjusted batch_size ({existing_config.get('batch_size')} -> {args.batch_size}).")
 
         print(f"Starting {dataset_name}. Found {len(processed_ids)} already processed items.")
 

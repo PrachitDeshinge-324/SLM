@@ -1,3 +1,28 @@
+
+def load_svamp_dataset(path_or_name: str = "ChilleD/SVAMP"):
+    try:
+        from datasets import load_dataset
+    except ImportError:
+        raise ImportError("Please install the 'datasets' library to load HuggingFace datasets.")
+    ds = load_dataset(path_or_name, split="test")
+    dataset = []
+    for idx, row in enumerate(ds):
+        # SVAMP has 'Body', 'Question', 'Answer'
+        body = row.get('Body', '')
+        q = row.get('Question', '')
+        full_question = f"{body} {q}".strip()
+        answer = str(row.get('Answer', ''))
+        
+        dataset.append({
+            "qid": f"svamp_{row.get('ID', idx)}",
+            "dataset": path_or_name,
+            "question": full_question,
+            "ground_truth": answer,
+            "choices": None,
+            "raw_answer_str": answer
+        })
+    return dataset
+
 import pandas as pd
 import numpy as np
 import os
@@ -84,6 +109,8 @@ def get_dataset_loader(dataset_name: str):
         return load_cqa_dataset()
     elif name == "math500":
         return load_math500_dataset()
+    elif "svamp" in name:
+        return load_svamp_dataset(dataset_name)
     else:
         # Fallback to HuggingFace loading attempt
         try:
@@ -91,9 +118,23 @@ def get_dataset_loader(dataset_name: str):
             ds = load_dataset(dataset_name, split="test")
             dataset = []
             for idx, row in enumerate(ds):
-                # Guess standard column names
-                q_col = 'question' if 'question' in row else ('problem' if 'problem' in row else list(row.keys())[0])
-                a_col = 'answer' if 'answer' in row else ('solution' if 'solution' in row else list(row.keys())[-1])
+                # Guess standard column names (case insensitive)
+                keys = list(row.keys())
+                lower_keys = [k.lower() for k in keys]
+                
+                q_col = keys[0]
+                if 'question' in lower_keys:
+                    q_col = keys[lower_keys.index('question')]
+                elif 'problem' in lower_keys:
+                    q_col = keys[lower_keys.index('problem')]
+                    
+                a_col = keys[-1]
+                if 'answer' in lower_keys:
+                    a_col = keys[lower_keys.index('answer')]
+                elif 'solution' in lower_keys:
+                    a_col = keys[lower_keys.index('solution')]
+                elif 'target' in lower_keys:
+                    a_col = keys[lower_keys.index('target')]
                 dataset.append({
                     "qid": f"{dataset_name.replace('/', '_')}_{idx}",
                     "dataset": dataset_name,

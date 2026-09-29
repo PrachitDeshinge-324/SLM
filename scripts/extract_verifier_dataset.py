@@ -47,8 +47,9 @@ def main():
     
     # Use glob to find the input file across subdirectories
     safe_model = args.model.replace("/", "_")
+    safe_dataset = args.dataset.replace("/", "_")
     # Do not use an asterisk prefix so it doesn't match 'verifier_...' files
-    pattern = f'**/{safe_model}_{args.precision}_{args.dataset}_{args.n_samples}.jsonl'
+    pattern = f'**/{safe_model}_{args.precision}_{safe_dataset}_{args.n_samples}.jsonl'
     search_path = os.path.join(args.directory, pattern)
     matching_files = glob.glob(search_path, recursive=True)
     
@@ -112,7 +113,7 @@ def main():
     output_filename = f'verifier_{input_basename}'
     
     # Store output in nested directory
-    nested_out_dir = os.path.join(args.output_dir, args.dataset, safe_model)
+    nested_out_dir = os.path.join(args.output_dir, safe_dataset, safe_model)
     os.makedirs(nested_out_dir, exist_ok=True)
     output_filepath = os.path.join(nested_out_dir, output_filename)
     

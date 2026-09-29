@@ -78,7 +78,8 @@ def main():
     import glob
     safe_model = args.model_id.replace("/", "_")
     # Strict match starting with verifier_ to prevent matching verifier_output files
-    pattern = f'**/verifier_{safe_model}_{args.precision}_{args.dataset}_{args.n_samples}.jsonl'
+    safe_dataset = args.dataset.replace("/", "_")
+    pattern = f'**/verifier_{safe_model}_{args.precision}_{safe_dataset}_{args.n_samples}.jsonl'
     search_path = os.path.join(args.directory, pattern)
     matching_files = glob.glob(search_path, recursive=True)
     
@@ -94,7 +95,8 @@ def main():
     
     # Store output in nested directory
     safe_model = args.model_id.replace("/", "_")
-    nested_out_dir = os.path.join(args.output_dir, args.dataset, safe_model)
+    safe_dataset = args.dataset.replace("/", "_")
+    nested_out_dir = os.path.join(args.output_dir, safe_dataset, safe_model)
     os.makedirs(nested_out_dir, exist_ok=True)
     output_file = os.path.join(nested_out_dir, input_basename.replace("verifier_", "verifier_output_"))
 

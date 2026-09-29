@@ -297,7 +297,8 @@ def generate_accuracy_vs_precision_plot(summary_df: pd.DataFrame, results_dir: s
             plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=num_n*2, frameon=True, fontsize=9)
             plt.tight_layout()
 
-            out_name = f"{short_model}_{dataset}_accuracy_vs_precision.png"
+            safe_dataset = dataset.replace("/", "_")
+            out_name = f"{short_model}_{safe_dataset}_accuracy_vs_precision.png"
             out_path = os.path.join(results_dir, out_name)
             plt.savefig(out_path, dpi=180, bbox_inches='tight')
             plt.close()
@@ -403,9 +404,10 @@ def main():
     print("\nGenerating combined calibration graphs per model & dataset...")
     for (m_name, d_name), prec_dict in grouped_runs.items():
         if len(prec_dict) >= 1:
-            combined_name = f"{m_name}_{d_name}_combined_calibration.png"
+            safe_d_name = d_name.replace("/", "_")
+            combined_name = f"{m_name}_{safe_d_name}_combined_calibration.png"
             combined_path = os.path.join(args.results_dir, combined_name)
-            generate_combined_calibration_plot(prec_dict, m_name, d_name, combined_path)
+            generate_combined_calibration_plot(prec_dict, m_name, safe_d_name, combined_path)
 
     summary_df = pd.DataFrame(summary_stats)
 
@@ -478,7 +480,8 @@ def main():
         # We don't need the 'dataset' column anymore since it's in the filename
         ds_df = ds_df.drop(columns=['dataset'])
         
-        ds_path = os.path.join(args.results_dir, f"results_{ds.lower()}.csv")
+        safe_ds = ds.lower().replace("/", "_")
+        ds_path = os.path.join(args.results_dir, f"results_{safe_ds}.csv")
         ds_df.to_csv(ds_path, index=False)
         print(f"Saved dataset results to: {ds_path}")
 
