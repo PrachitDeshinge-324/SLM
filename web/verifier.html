@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <title>Phase 2: Verifier - Agentic AI</title>
     <link rel="stylesheet" href="style.css">
+    <script>
+      MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']]
+        }
+      };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
     <header>
@@ -35,8 +43,43 @@
                 </ul>
             </div>
 
-            <h2 style="margin-top: 2rem;">1. Comprehensive Verifier Metrics (GSM8K, N=8)</h2>
-            <p>The <strong>Delta ($\Delta$)</strong> metric shows whether verification improves final accuracy. <strong>MCC (Matthew's Correlation Coefficient)</strong> measures the true quality of the verifier, correctly handling class imbalances where FPR fails.</p>
+            <h2 style="margin-top: 2rem;">1. Key Formulas & Evaluation Metrics</h2>
+            <div class="grid" style="margin-bottom: 2rem;">
+                <div class="card">
+                    <div class="card-header">1. Verifier Accuracy Delta (&Delta;)</div>
+                    <div style="font-size: 1.1rem; text-align: center; margin: 0.8rem 0; font-weight: bold; color: var(--primary);">
+                        $$\Delta = \text{Accuracy}_{\text{Verifier}} - \text{Accuracy}_{\text{Generator}}$$
+                    </div>
+                    <p style="font-size: 0.9em; margin-bottom: 0;"><strong>Interpretation:</strong> The net gain in task accuracy from filtering through the model's self-judgment vs simple generator majority vote. Positive (&gt; 0) means the verifier genuinely helped.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">2. Trace Accuracy</div>
+                    <div style="font-size: 1.1rem; text-align: center; margin: 0.8rem 0; font-weight: bold; color: var(--primary);">
+                        $$\text{Trace Acc} = \frac{TP + TN}{TP + TN + FP + FN}$$
+                    </div>
+                    <p style="font-size: 0.9em; margin-bottom: 0;"><strong>Interpretation:</strong> How often the model correctly labels an individual reasoning path as valid (True Positive) or invalid (True Negative).</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">3. False Positive Rate (Sycophancy)</div>
+                    <div style="font-size: 1.1rem; text-align: center; margin: 0.8rem 0; font-weight: bold; color: var(--danger);">
+                        $$\text{FPR} = \frac{FP}{FP + TN}$$
+                    </div>
+                    <p style="font-size: 0.9em; margin-bottom: 0;"><strong>Interpretation:</strong> Percentage of <em>incorrect</em> reasoning steps the model mistakenly approves. High FPR poisons self-training datasets.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">4. Matthews Correlation Coefficient (MCC)</div>
+                    <div style="font-size: 1.05rem; text-align: center; margin: 0.8rem 0; font-weight: bold; color: var(--purple);">
+                        $$\text{MCC} = \frac{(TP \cdot TN) - (FP \cdot FN)}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}$$
+                    </div>
+                    <p style="font-size: 0.9em; margin-bottom: 0;"><strong>Interpretation:</strong> Robust metric for imbalanced data (ranges from -1 to +1). Overcomes the "Shrinking Denominator" flaw where FPR looks artificially inflated.</p>
+                </div>
+            </div>
+
+            <h2 style="margin-top: 2rem;">2. Comprehensive Verifier Metrics (GSM8K, N=8)</h2>
+            <p>Below is the benchmark across models and precision levels:</p>
             
             <table>
                 <thead>
@@ -45,7 +88,7 @@
                         <th>Precision</th>
                         <th>Gen Acc</th>
                         <th>Ver Acc</th>
-                        <th>Delta ($\Delta$)</th>
+                        <th>Delta (&Delta;)</th>
                         <th>Trace Acc</th>
                         <th>MCC</th>
                     </tr>
@@ -167,7 +210,7 @@
                         <th>Precision</th>
                         <th>Gen Acc</th>
                         <th>Ver Acc</th>
-                        <th>Delta ($\Delta$)</th>
+                        <th>Delta (&Delta;)</th>
                         <th>Trace Acc</th>
                         <th>MCC</th>
                     </tr>
@@ -202,7 +245,7 @@
                     </tr>
                 </tbody>
             </table>
-            <p><strong>Observation:</strong> Across all precisions, the Verifier $\Delta$ is strictly negative. When generation accuracy is too high, there are very few negative examples for the verifier to practice on. A verifier only improves the system when the task sits in the "sweet spot" of difficulty (like GSM8K).</p>
+            <p><strong>Observation:</strong> Across all precisions, the Verifier &Delta; is strictly negative. When generation accuracy is too high, there are very few negative examples for the verifier to practice on. A verifier only improves the system when the task sits in the "sweet spot" of difficulty (like GSM8K).</p>
 
             <h2 style="margin-top: 3rem;">3. Deep Dive: Why FPR fails for High-Accuracy Models</h2>
             <div class="card highlight">

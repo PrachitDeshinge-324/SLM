@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <title>Phase 1: Generation - Agentic AI</title>
     <link rel="stylesheet" href="style.css">
+    <script>
+      MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']]
+        }
+      };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
     <header>
@@ -36,7 +44,26 @@
                 </ul>
             </div>
 
-            <h2 style="margin-top: 2rem;">1. Grade School Math (GSM8K) Results</h2>
+            <h2 style="margin-top: 2rem;">1. Key Formulas & Definitions</h2>
+            <div class="grid" style="margin-bottom: 2rem;">
+                <div class="card">
+                    <div class="card-header">1. Pass@k Coverage</div>
+                    <div style="font-size: 1.1rem; text-align: center; margin: 0.8rem 0; font-weight: bold; color: var(--primary);">
+                        $$\text{Pass@}k = 1 - \frac{\binom{N - c}{k}}{\binom{N}{k}}$$
+                    </div>
+                    <p style="font-size: 0.9em; margin-bottom: 0;"><strong>Meaning:</strong> Probability that at least one of the $k$ sampled paths produces the correct answer ($c$ correct out of $N$). Measures whether the model has enough "coverage" to self-improve.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">2. Agreement Confidence</div>
+                    <div style="font-size: 1.1rem; text-align: center; margin: 0.8rem 0; font-weight: bold; color: var(--purple);">
+                        $$\text{Confidence} = \frac{\text{Count}(\text{Majority Answer})}{N}$$
+                    </div>
+                    <p style="font-size: 0.9em; margin-bottom: 0;"><strong>Meaning:</strong> The percentage of reasoning paths that agree on the most frequent answer. Tests whether internal consensus still signals truth under quantization.</p>
+                </div>
+            </div>
+
+            <h2 style="margin-top: 2rem;">2. Grade School Math (GSM8K) Results</h2>
             <p>Mathematical reasoning requires rigid logic, making it highly sensitive to extreme (4-bit) quantization.</p>
 
             <h3>Qwen3.5-0.8B</h3>
