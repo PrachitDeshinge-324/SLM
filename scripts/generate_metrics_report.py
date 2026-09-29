@@ -6,6 +6,62 @@ import re
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import sys
+
+# Ensure project root is in sys.path so we can import from src and scripts
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+def parse_verifier_output(output_text, student_answer=None):
+    if not output_text:
+        return [], None
+    text = output_text
+    if "</think>" in text:
+        text = text.split("</think>")[-1]
+
+    # 1. Direct "Final Conclusion: Correct / Incorrect"
+    m = re.search(r'(?i)(?:\*{1,2})?Final\s+Conclusion(?:\*{1,2})?\s*:\s*(?:\*{1,2})?\s*(Correct|Incorrect)\b', text)
+    if m:
+        return [], m.group(1).lower() == "correct"
+
+    # 2. XML tags: <final_conclusion>Correct</final_conclusion>
+    m = re.search(r'(?i)<final_conclusion>\s*(Correct|Incorrect)\s*</final_conclusion>', text)
+    if m:
+        return [], m.group(1).lower() == "correct"
+
+    # 3. "Conclusion: The student's solution is Correct/Incorrect"
+    m = re.search(r'(?i)(?:\*{1,2})?Conclusion(?:\*{1,2})?\s*:\s*(?:the\s+student\'?s?\s+solution\s+is\s+)?(?:\*{1,2})?\s*(Correct|Incorrect)\b', text)
+    if m:
+        return [], m.group(1).lower() == "correct"
+
+    # 4. "[student's] solution is correct/incorrect"
+    m = re.search(r'(?i)\b(?:the\s+student\'?s?\s+|this\s+)?solution\s+is\s+(?:\*{1,2})?\s*(correct|incorrect)\b', text)
+    if m:
+        return [], m.group(1).lower() == "correct"
+
+    # 5. Tail check for explicit statement in the last 250 characters
+    tail = text[-250:]
+    m_inc = re.search(r'(?i)\b(?:is\s+|judged\s+as\s+|marked\s+as\s+)(?:\*{1,2})?incorrect\b', tail)
+    if m_inc:
+        return [], False
+    m_cor = re.search(r'(?i)\b(?:is\s+|judged\s+as\s+|marked\s+as\s+)(?:\*{1,2})?correct\b', tail)
+    if m_cor:
+        return [], True
+
+    # 6. Fallback for Reasoning/Thinking models (e.g. DeepSeek-R1) that re-solve the problem:
+    if student_answer is not None:
+        try:
+            from src.experiment_d.extractors import extract_gsm8k_answer
+            from scripts.extract_verifier_dataset import answers_match
+            ver_ans = extract_gsm8k_answer(text)
+            if ver_ans:
+                return [], answers_match(ver_ans, str(student_answer))
+        except Exception:
+            pass
+
+    # 7. Ultimate fallback: if completely unparseable, assume False (reject)
+    return [], False
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Process verifier JSONL logs and generate metrics.")
@@ -61,9 +117,11 @@ def main():
                 for line in f:
                     data = json.loads(line)
                     conc = data.get('verifier_final_conclusion')
+                    gen_ans = str(data.get('generated_answer'))
+                    if conc is None and 'verifier_raw_response' in data:
+                        _, conc = parse_verifier_output(data['verifier_raw_response'], student_answer=gen_ans)
                     is_correct = data.get('is_correct')
                     question = data.get('question')
-                    gen_ans = str(data.get('generated_answer'))
                     
                     if conc is not None:
                         total += 1
