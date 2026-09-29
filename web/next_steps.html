@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Next Steps - Agentic AI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>What's Next?</h1>
+        <p>Planning the next phases of our research based on the findings from Experiment D.</p>
+    </header>
+
+    <nav>
+        <div class="nav-container">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="proposal.html" class="nav-link">Original Proposal</a>
+            <a href="problem_statement.html" class="nav-link">Problem & Datasets</a>
+            <a href="generation.html" class="nav-link">Phase 1: Generation</a>
+            <a href="verifier.html" class="nav-link">Phase 2: Verifier</a>
+            <a href="next_steps.html" class="nav-link active">Next Steps</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="content-box">
+            <h2>Future Research Pathways</h2>
+            
+            <div class="alert" style="background-color: #f0fdf4; border-left-color: var(--success);">
+                <h3 style="margin-top:0; color: #166534;">Executive Summary</h3>
+                <p style="margin-bottom:0;">Based on Experiment D, Qwen 0.8B is the only viable candidate for autonomous self-improvement under quantization. The next immediate step is to either <strong>(A) execute the full QLoRA self-training loop</strong> to see if the 4-bit FPR spike poisons the model, or <strong>(B) swap to a harder dataset</strong> to measure DeepSeek without the ceiling effect.</p>
+            </div>
+
+            <div class="grid" style="margin-top: 2rem;">
+                <div class="card highlight">
+                    <div class="card-header">Option A: Experiment B (Self-Improvement Loop)</div>
+                    <p>The original proposal outlined moving from Inference-only verification (Experiment D) to an actual Self-Improvement Training Loop (Experiment B).</p>
+                    <ul>
+                        <li>Take the quantized Qwen 0.8B model.</li>
+                        <li>Generate multiple samples, keep the ones matching the majority-vote answer.</li>
+                        <li>Fine-tune (using QLoRA) on those self-generated, self-approved traces.</li>
+                        <li>Compare the resulting model's accuracy after 1-3 iterations against the quantized baseline. Does the training loop break down, or does the 8-bit regularization hold up?</li>
+                    </ul>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">Option B: New Dataset Sweet Spot</div>
+                    <p>Because GSM8K generated a ceiling effect for models like DeepSeek-1.5B (90% accuracy), we are unable to accurately measure its verifier usefulness.</p>
+                    <ul>
+                        <li>Run Experiment D again on a slightly harder dataset like <strong>EleutherAI/asdiv</strong> (Asian Math Word Problems) or <strong>MAWPS</strong>.</li>
+                        <li>Find the dataset where DeepSeek's base accuracy sits around 60-70%.</li>
+                        <li>This will remove the "Shrinking Denominator" effect and allow us to cleanly measure its False Positive Rate without class imbalance distortion.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

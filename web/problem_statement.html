@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Problem Statement - Agentic AI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Problem Statement & Datasets</h1>
+        <p>Understanding the gap in the literature regarding quantized self-improvement.</p>
+    </header>
+
+    <nav>
+        <div class="nav-container">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="proposal.html" class="nav-link">Original Proposal</a>
+            <a href="problem_statement.html" class="nav-link active">Problem & Datasets</a>
+            <a href="generation.html" class="nav-link">Phase 1: Generation</a>
+            <a href="verifier.html" class="nav-link">Phase 2: Verifier</a>
+            <a href="next_steps.html" class="nav-link">Next Steps</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="content-box">
+            <h2>The Core Problem & Datasets</h2>
+            
+            <div class="alert" style="background-color: #f0fdf4; border-left-color: var(--success);">
+                <h3 style="margin-top:0; color: #166534;">Executive Summary</h3>
+                <p style="margin-bottom:0;">This project investigates a critical gap in on-device AI: <strong>Does quantization destroy a small model's ability to evaluate its own reasoning?</strong> We use GSM8K as our primary benchmark because it provides the perfect difficulty curve (~60% base accuracy) to measure verifier impact without hitting a ceiling effect.</p>
+            </div>
+
+            <h2 style="margin-top: 2rem;">The Core Problem</h2>
+            <div class="card highlight">
+                <p><strong>The Context:</strong> Large language models can "teach themselves" (self-improvement) by generating answers, judging which ones are good, and training on those. This works because judging an answer is usually easier than generating one from scratch.</p>
+                <p><strong>The Conflict:</strong> Two things are true in the current landscape:
+                    <ol>
+                        <li>Small models are notoriously worse at judging their own answers than massive models.</li>
+                        <li>Deployed models are almost always quantized (shrunk to 8-bit or 4-bit) to run on-device.</li>
+                    </ol>
+                </p>
+                <p><strong>The Research Question:</strong> <em>Nobody appears to have studied what happens when you combine these two things.</em> Does shrinking a model make its self-judgment worse, better, or unaffected? Can a quantized model reliably critique itself?</p>
+            </div>
+
+            <h2>The Datasets</h2>
+            <div class="grid">
+                <div class="card">
+                    <div class="card-header">GSM8K (Grade School Math)</div>
+                    <p><strong>Type:</strong> Mathematical Reasoning (Open-ended).</p>
+                    <p><strong>Status:</strong> Our primary benchmark. It requires rigid logic and step-by-step reasoning, making it highly sensitive to extreme quantization. It provides a perfect "sweet spot" difficulty (~60% base accuracy for 1B models), allowing the verifier room to actually improve the outcome.</p>
+                </div>
+                <div class="card">
+                    <div class="card-header">SVAMP & CQA</div>
+                    <p><strong>SVAMP Status:</strong> Dropped. Models hit a "ceiling effect" (~85% base accuracy), leaving almost no incorrect examples for the verifier to practice on.</p>
+                    <p><strong>CQA Status:</strong> De-prioritized. Multiple-choice tasks introduce "noise" where increased generation diversity just raises the chance of randomly guessing the correct letter, skewing the metrics.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

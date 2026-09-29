@@ -63,3 +63,7 @@ results/*.jpg
 *.png
 *.jpeg
 *.ipynb
+
+# Whitelist web presentation directory and its assets
+!web/
+!web/**
