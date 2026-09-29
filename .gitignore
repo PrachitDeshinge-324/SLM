@@ -65,6 +65,7 @@ results/*.jpg
 *.ipynb
 
 # Whitelist web presentation directory and its assets
+!.nojekyll
 !index.html
 !web/
 !web/**
