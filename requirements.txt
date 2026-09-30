@@ -18,6 +18,7 @@ seaborn>=0.13.0
 # Utilities
 tqdm>=4.65.0
 python-dotenv>=1.0.0
+sympy
 
 # Flash Attention / Fast Generation
 flash-linear-attention>=0.5.2
