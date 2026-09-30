@@ -52,8 +52,8 @@ def parse_verifier_output(output_text, student_answer=None):
         return [], None
     
     text = output_text
-    if "</think>" in text:
-        text = text.split("</think>")[-1]
+    # Strip <think> blocks completely to avoid parsing internal monologue
+    text = re.sub(r'<think>.*?(?:</think>|$)', '', text, flags=re.DOTALL).strip()
 
     # 1. Direct "Final Conclusion: Correct / Incorrect" (supports markdown ** and optional punctuation)
     m = re.search(r'(?i)(?:\*{1,2})?Final\s+Conclusion(?:\*{1,2})?\s*:\s*(?:\*{1,2})?\s*(Correct|Incorrect)\b', text)
@@ -97,8 +97,8 @@ def parse_verifier_output(output_text, student_answer=None):
         except Exception:
             pass
 
-    # 7. Ultimate fallback: if completely unparseable, assume False (reject)
-    return [], False
+    # 7. Ultimate fallback: if completely unparseable, assume None (unparseable)
+    return [], None
 
 def main():
     parser = argparse.ArgumentParser()
@@ -108,7 +108,7 @@ def main():
     parser.add_argument("--dataset", type=str, required=True, help="Dataset name (e.g., gsm8k, cqa)")
     parser.add_argument("--n_samples", type=str, required=True, help="Number of samples (e.g., n16, n8)")
     parser.add_argument("--output_dir", type=str, default="results/verifier_output", help="Directory to save the evaluated results")
-    parser.add_argument("--max_new_tokens", type=int, default=1024)
+    parser.add_argument("--max_new_tokens", type=int, default=2048)
     parser.add_argument("--batch_size", type=int, default=16, help="Batch size for generation")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of samples for testing")
     args = parser.parse_args()

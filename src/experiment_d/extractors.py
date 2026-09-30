@@ -6,6 +6,8 @@ def extract_gsm8k_answer(text: str) -> str:
     Returns the numeric string if found, else None.
     """
     text = text.strip()
+    # Strip <think> blocks (and unclosed <think> blocks) to avoid extracting from scratchpad
+    text = re.sub(r'<think>.*?(?:</think>|$)', '', text, flags=re.DOTALL).strip()
     
     # 1. Official format: #### N
     match = re.search(r'####\s*\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)', text)
@@ -43,6 +45,8 @@ def extract_cqa_answer(text: str) -> str:
     Returns the uppercase letter if found, else None.
     """
     text = text.strip()
+    # Strip <think> blocks (and unclosed <think> blocks) to avoid extracting from scratchpad
+    text = re.sub(r'<think>.*?(?:</think>|$)', '', text, flags=re.DOTALL).strip()
     
     # 1. Official format: Answer: A  /  #### A
     match = re.search(r'(?:Answer|####)\s*:?\s*\(?([A-E])\)?', text, flags=re.IGNORECASE)
@@ -77,6 +81,9 @@ def extract_math500_answer(text: str) -> str:
     It looks for \boxed{} first, then falls back to other heuristics.
     """
     text = text.strip()
+    # Strip <think> blocks (and unclosed <think> blocks) to avoid extracting from scratchpad
+    text = re.sub(r'<think>.*?(?:</think>|$)', '', text, flags=re.DOTALL).strip()
+    
     match = re.search(r'\\boxed{(.+?)}', text)
     if match:
         return match.group(1).strip()

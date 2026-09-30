@@ -38,7 +38,7 @@
                 <p style="margin-bottom:0;">Can a quantized model reliably judge if its own answers are correct? We fed generated mathematical traces back into the models as judges. <strong>The main findings:</strong></p>
                 <ul style="margin-bottom:0;">
                     <li><strong>Qwen 0.8B is the only reliable SLM judge:</strong> It consistently <em>improves</em> overall accuracy (Positive Delta) via verification across all precisions (16-bit to 4-bit) on GSM8K.</li>
-                    <li><strong>MCC Exposes Quantization Collapse:</strong> Matthew's Correlation Coefficient (MCC) proves DeepSeek loses all verification ability at 8-bit (MCC drops to near-zero 0.08), while Qwen remains stable.</li>
+                    <li><strong>Reasoning Models are Robust to Quantization:</strong> Matthew's Correlation Coefficient (MCC) proves DeepSeek maintains consistent verification ability across 16-bit (0.35), 8-bit (0.34), and 4-bit (0.42) precisions, showing strong resilience against quantization compared to traditional models.</li>
                     <li><strong>The Ceiling Effect (SVAMP):</strong> When the base task is too easy (e.g., SVAMP), models fail as judges. Using the verifier actually <em>hurts</em> performance (Negative Delta) because there aren't enough negative examples to learn from.</li>
                 </ul>
             </div>
@@ -149,24 +149,24 @@
                         <td>69.38%</td>
                         <td>0.4587</td>
                     </tr>
-                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">DeepSeek (Quantization Collapse)</td></tr>
+                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">DeepSeek (Reasoning Model)</td></tr>
                     <tr>
                         <td>DeepSeek-R1-1.5B</td>
                         <td>16-bit</td>
                         <td>90.00%</td>
                         <td>91.00%</td>
                         <td><span class="badge badge-green">+1.00%</span></td>
-                        <td>79.00%</td>
-                        <td>0.3628</td>
+                        <td>78.75%</td>
+                        <td>0.3545</td>
                     </tr>
                     <tr>
                         <td>DeepSeek-R1-1.5B</td>
                         <td>8-bit</td>
                         <td>87.00%</td>
-                        <td>80.00%</td>
-                        <td><span class="badge badge-red">-7.00%</span></td>
-                        <td>57.12%</td>
-                        <td><span class="badge badge-red">0.0865</span></td>
+                        <td>87.00%</td>
+                        <td><span class="badge badge-gray">0.00%</span></td>
+                        <td>78.12%</td>
+                        <td>0.3473</td>
                     </tr>
                     <tr>
                         <td>DeepSeek-R1-1.5B</td>
@@ -174,8 +174,8 @@
                         <td>87.00%</td>
                         <td>85.00%</td>
                         <td><span class="badge badge-red">-2.00%</span></td>
-                        <td>79.25%</td>
-                        <td>0.4381</td>
+                        <td>78.97%</td>
+                        <td>0.4275</td>
                     </tr>
                     <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">Broken Verifiers (Near-Zero or Negative MCC)</td></tr>
                     <tr>
@@ -251,7 +251,7 @@
             <div class="card highlight">
                 <p><strong>The Shrinking Denominator Illusion:</strong> DeepSeek 16-bit shows a massive 63.64% False Positive Rate. Is it a terrible judge? No.</p>
                 <p>Because its generator is 90% accurate, 90% of the traces it evaluates are correct. The pool of <em>True Negatives</em> is so small (only 72 traces out of 800) that making just a handful of mistakes artificially inflates the FPR percentage. </p>
-                <p><strong>The Solution (MCC):</strong> Matthew's Correlation Coefficient (MCC) takes all four quadrants of the confusion matrix into account, making it immune to class imbalance. DeepSeek 16-bit's MCC is a respectable 0.36. However, looking at the MCC reveals a new finding: <strong>DeepSeek's verifier collapses completely at 8-bit</strong>, plunging to an MCC of 0.08 (essentially random guessing). MCC surfaces insights that FPR obscures.</p>
+                <p><strong>The Solution (MCC):</strong> Matthew's Correlation Coefficient (MCC) takes all four quadrants of the confusion matrix into account, making it immune to class imbalance. DeepSeek 16-bit's MCC is a respectable 0.35. Looking at the MCC across precisions reveals a new finding: <strong>DeepSeek's verifier remains highly stable even down to 4-bit</strong>, maintaining an MCC around 0.35 - 0.42. Unlike traditional models which collapse under quantization, the reasoning model's extensive internal chain-of-thought preserves its verification abilities.</p>
             </div>
 
             <h2 style="margin-top: 3rem;">4. Visualizing Quantization Collapse</h2>

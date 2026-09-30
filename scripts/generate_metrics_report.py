@@ -17,8 +17,8 @@ def parse_verifier_output(output_text, student_answer=None):
     if not output_text:
         return [], None
     text = output_text
-    if "</think>" in text:
-        text = text.split("</think>")[-1]
+    # Strip <think> blocks completely to avoid parsing internal monologue
+    text = re.sub(r'<think>.*?(?:</think>|$)', '', text, flags=re.DOTALL).strip()
 
     # 1. Direct "Final Conclusion: Correct / Incorrect"
     m = re.search(r'(?i)(?:\*{1,2})?Final\s+Conclusion(?:\*{1,2})?\s*:\s*(?:\*{1,2})?\s*(Correct|Incorrect)\b', text)
@@ -60,8 +60,8 @@ def parse_verifier_output(output_text, student_answer=None):
         except Exception:
             pass
 
-    # 7. Ultimate fallback: if completely unparseable, assume False (reject)
-    return [], False
+    # 7. Ultimate fallback: if completely unparseable, assume None (unparseable)
+    return [], None
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Process verifier JSONL logs and generate metrics.")
@@ -116,10 +116,11 @@ def main():
             with open(filepath, 'r') as f:
                 for line in f:
                     data = json.loads(line)
-                    conc = data.get('verifier_final_conclusion')
                     gen_ans = str(data.get('generated_answer'))
-                    if conc is None and 'verifier_raw_response' in data:
+                    if 'verifier_raw_response' in data:
                         _, conc = parse_verifier_output(data['verifier_raw_response'], student_answer=gen_ans)
+                    else:
+                        conc = data.get('verifier_final_conclusion')
                     is_correct = data.get('is_correct')
                     question = data.get('question')
                     

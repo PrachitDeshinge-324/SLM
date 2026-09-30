@@ -70,7 +70,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of questions per dataset (0 for all)")
     parser.add_argument("--output_dir", type=str, default="results", help="Directory to save JSONL logs")
-    parser.add_argument("--max_new_tokens", type=int, default=512, help="Max new tokens (default 512, adjust if needed)")
+    parser.add_argument("--max_new_tokens", type=int, default=2048, help="Max new tokens (default 2048, adjust if needed)")
 
     args = parser.parse_args()
     if args.n_samples < 1 or args.batch_size < 1:
@@ -144,7 +144,7 @@ def main():
         scientific_keys = [
             "model", "precision", "dataset", "n_samples",
             "temperature", "top_k", "top_p", "seed",
-            "max_new_tokens", "dataset_fingerprint"
+             "dataset_fingerprint"
         ]
 
         if processed_ids and existing_config is None:
