@@ -104,7 +104,7 @@ def main():
         # 'ChilleD/SVAMP' contain slashes that break os.path.join and filenames)
         safe_dataset_name = dataset_name.replace("/", "_")
 
-        model_dir = os.path.join(args.output_dir, safe_dataset_name, safe_model_name)
+        model_dir = os.path.join(args.output_dir, safe_dataset_name, "generator", safe_model_name)
         os.makedirs(model_dir, exist_ok=True)
         output_file = os.path.join(model_dir, f"{safe_model_name}_{args.precision}_{safe_dataset_name}_n{args.n_samples}.jsonl")
         dataset_fingerprint = hashlib.sha256(json.dumps(

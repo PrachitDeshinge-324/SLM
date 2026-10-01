@@ -5,73 +5,13 @@ import argparse
 import sys
 import re
 from fractions import Fraction
+from pathlib import Path
 
+# Ensure the repository root directory is in sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-def answers_match(predicted, expected):
-    """
-    Compare choice letters exactly, numeric answers via fractions, 
-    and algebraic/complex answers via symbolic math (SymPy).
-    """
-    if predicted is None or expected is None:
-        return False
-    left, right = str(predicted).strip(), str(expected).strip()
-    
-    # 1. Exact string match (handles A/B/C/D choices perfectly)
-    if left.casefold() == right.casefold():
-        return True
+from src.experiment_d.utils import answers_match
 
-    def clean_numeric(value):
-        return value.replace(',', '').replace('$', '').strip()
-
-    # 2. Numeric / Fraction evaluation (handles 95% of GSM8K)
-    try:
-        def as_fraction(value):
-            value = clean_numeric(value)
-            mixed = re.fullmatch(r'([+-]?\d+)\s+(\d+)\s*/\s*(\d+)', value)
-            if mixed:
-                whole, numerator, denominator = map(int, mixed.groups())
-                sign = -1 if whole < 0 else 1
-                return Fraction(whole) + sign * Fraction(numerator, denominator)
-            return Fraction(value)
-            
-        if as_fraction(left) == as_fraction(right):
-            return True
-    except (ValueError, ZeroDivisionError):
-        pass
-
-    # 3. Symbolic Math evaluation (Critical for MATH-500)
-    try:
-        import sympy
-        from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application, convert_xor
-        
-        # Basic heuristic LaTeX cleanup to make it SymPy-friendly
-        def clean_latex(val):
-            val = re.sub(r'\\text\{.*?\}', '', val)
-            val = val.replace('\\$', '').replace('$', '')
-            val = re.sub(r'\\frac{([^{}]+)}{([^{}]+)}', r'((\1)/(\2))', val)
-            val = val.replace('{', '(').replace('}', ')')
-            val = val.replace('^', '**')
-            val = val.replace('\\sqrt', 'sqrt')
-            val = val.replace('\\pi', 'pi')
-            val = val.replace('\\cdot', '*')
-            val = val.replace('\\times', '*')
-            val = val.replace('\\%', '/100')
-            return val
-            
-        transformations = standard_transformations + (implicit_multiplication_application, convert_xor)
-        
-        expr_left = parse_expr(clean_latex(left), transformations=transformations, evaluate=False)
-        expr_right = parse_expr(clean_latex(right), transformations=transformations, evaluate=False)
-        
-        diff = sympy.simplify(expr_left - expr_right)
-        if diff == 0:
-            return True
-    except ImportError:
-        print("Warning: sympy not installed. Symbolic math fallback disabled.", file=sys.stderr)
-    except Exception:
-        pass # Malformed expression or unsupported format, continue
-        
-    return False
 
 def main():
     parser = argparse.ArgumentParser(description="Extract seeded traces for verifier benchmark.")
@@ -80,7 +20,7 @@ def main():
     parser.add_argument("--precision", type=str, required=True, help="Precision to extract (e.g., 16bit, 8bit, 4bit)")
     parser.add_argument("--dataset", type=str, required=True, help="Dataset name (e.g., gsm8k, cqa)")
     parser.add_argument("--n_samples", type=str, required=True, help="Number of samples (e.g., n16, n8)")
-    parser.add_argument("--output_dir", type=str, default="results/verifier", help="Directory to save the extracted verifier datasets")
+    parser.add_argument("--output_dir", type=str, default="results", help="Directory to save the extracted verifier datasets")
     args = parser.parse_args()
 
     seed = 42
@@ -157,7 +97,7 @@ def main():
     output_filename = f'verifier_{input_basename}'
     
     # Store output in nested directory
-    nested_out_dir = os.path.join(args.output_dir, safe_dataset, safe_model)
+    nested_out_dir = os.path.join(args.output_dir, safe_dataset, "verifier_dataset", safe_model)
     os.makedirs(nested_out_dir, exist_ok=True)
     output_filepath = os.path.join(nested_out_dir, output_filename)
     
@@ -165,7 +105,7 @@ def main():
         for out_item in output_data:
             f.write(json.dumps(out_item) + '\n')
             
-    print(f"[{args.precision}] Extracted 200 traces to {output_filepath}")
+    print(f"[{args.precision}] Extracted {len(output_data)} traces ({len(sampled_items)} questions) to {output_filepath}")
 
 if __name__ == '__main__':
     main()

@@ -350,7 +350,7 @@ def main() -> int:
             check=False,
         )
 
-    script_path  = os.path.join(REPO_DIR, "scripts", "run_experiment_d.py")
+    script_path  = os.path.join(REPO_DIR, "fullrun.sh")
     analyze_path = os.path.join(REPO_DIR, "scripts", "analyze_results.py")
     if not os.path.isfile(script_path):
         print(f"\n[FATAL] Script not found: {script_path}")
@@ -365,8 +365,10 @@ def main() -> int:
     print("STEP 4: Starting resource logger...")
     print("=" * 60)
     run_ts     = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_path   = os.path.join(output_dir, f"resource_log_{run_ts}.jsonl")
-    stdout_log = os.path.join(output_dir, f"experiment_stdout_{run_ts}.log")
+    log_dir    = os.path.join(output_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_path   = os.path.join(log_dir, f"resource_log_{run_ts}.jsonl")
+    stdout_log = os.path.join(log_dir, f"experiment_stdout_{run_ts}.log")
 
     logger_thread = threading.Thread(target=_resource_logger_thread, args=(log_path,))
     logger_thread.start()
@@ -389,7 +391,7 @@ def main() -> int:
             experiment_args.pop(idx)
         print("[WARNING] User-supplied --output_dir ignored — Drive path is used instead.")
 
-    cmd = [sys.executable, script_path, "--output_dir", output_dir] + experiment_args
+    cmd = ["bash", script_path, "--output_dir", output_dir] + experiment_args
     env = os.environ.copy()
     env["PYTHONPATH"] = REPO_DIR
     env["PYTHONUNBUFFERED"] = "1"

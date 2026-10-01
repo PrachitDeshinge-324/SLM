@@ -199,66 +199,67 @@ def generate_batch_prompts(
     original_padding_side = tokenizer.padding_side
     tokenizer.padding_side = 'left'
     
-    inputs = tokenizer(prompts, return_tensors="pt", padding=True).to(device)
-    
-    # Expand prompts lazily per generation mini-batch. Materializing every
-    # repeated prompt up front can waste substantial VRAM at large batch sizes.
-    total_sequences = len(prompts) * n_samples
-    
-    all_responses_flat = []
-    generation_lengths_flat = []
-    
-    total_new_tokens = 0
-    start_time = time.time()
-    
-    for i in range(0, total_sequences, batch_size):
-        end = min(i + batch_size, total_sequences)
+    try:
+        inputs = tokenizer(prompts, return_tensors="pt", padding=True).to(device)
         
-        prompt_indices = torch.arange(i, end, device=inputs["input_ids"].device) // n_samples
-        batch_input_ids = inputs["input_ids"].index_select(0, prompt_indices)
-        batch_attention_mask = inputs["attention_mask"].index_select(0, prompt_indices)
+        # Expand prompts lazily per generation mini-batch. Materializing every
+        # repeated prompt up front can waste substantial VRAM at large batch sizes.
+        total_sequences = len(prompts) * n_samples
         
-        with torch.no_grad():
-            outputs = model.generate(
-                input_ids=batch_input_ids,
-                attention_mask=batch_attention_mask,
-                max_new_tokens=max_new_tokens,
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
-                do_sample=True,
-                pad_token_id=tokenizer.pad_token_id,
-            )
+        all_responses_flat = []
+        generation_lengths_flat = []
+        
+        total_new_tokens = 0
+        start_time = time.time()
+        
+        for i in range(0, total_sequences, batch_size):
+            end = min(i + batch_size, total_sequences)
             
-        prompt_length = batch_input_ids.shape[1]
-        generated_tokens = outputs[:, prompt_length:]
-        
-        batch_valid_tokens = 0
-        for j in range(generated_tokens.shape[0]):
-            seq = generated_tokens[j]
-            valid_len = (seq != tokenizer.pad_token_id).sum().item()
-            generation_lengths_flat.append(valid_len)
-            batch_valid_tokens += valid_len
+            prompt_indices = torch.arange(i, end, device=inputs["input_ids"].device) // n_samples
+            batch_input_ids = inputs["input_ids"].index_select(0, prompt_indices)
+            batch_attention_mask = inputs["attention_mask"].index_select(0, prompt_indices)
             
-        total_new_tokens += batch_valid_tokens
-        decoded = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
-        all_responses_flat.extend(decoded)
+            with torch.no_grad():
+                outputs = model.generate(
+                    input_ids=batch_input_ids,
+                    attention_mask=batch_attention_mask,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    do_sample=True,
+                    pad_token_id=tokenizer.pad_token_id,
+                )
+                
+            prompt_length = batch_input_ids.shape[1]
+            generated_tokens = outputs[:, prompt_length:]
+            
+            batch_valid_tokens = 0
+            for j in range(generated_tokens.shape[0]):
+                seq = generated_tokens[j]
+                valid_len = (seq != tokenizer.pad_token_id).sum().item()
+                generation_lengths_flat.append(valid_len)
+                batch_valid_tokens += valid_len
+                
+            total_new_tokens += batch_valid_tokens
+            decoded = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+            all_responses_flat.extend(decoded)
+            
+        end_time = time.time()
+        latency = end_time - start_time
+        tokens_per_sec = total_new_tokens / latency if latency > 0 else 0
         
-    end_time = time.time()
-    latency = end_time - start_time
-    tokens_per_sec = total_new_tokens / latency if latency > 0 else 0
-    
-    # Restore the caller's padding preference after successful generation.
-    tokenizer.padding_side = original_padding_side
-    
-    # Group responses back by prompt
-    grouped_responses = []
-    grouped_lengths = []
-    
-    for i in range(len(prompts)):
-        start = i * n_samples
-        end = start + n_samples
-        grouped_responses.append(all_responses_flat[start:end])
-        grouped_lengths.append(generation_lengths_flat[start:end])
+        # Group responses back by prompt
+        grouped_responses = []
+        grouped_lengths = []
+        
+        for i in range(len(prompts)):
+            start = i * n_samples
+            end = start + n_samples
+            grouped_responses.append(all_responses_flat[start:end])
+            grouped_lengths.append(generation_lengths_flat[start:end])
+    finally:
+        # Always restore the caller's padding preference, even on OOM or other errors.
+        tokenizer.padding_side = original_padding_side
         
     return grouped_responses, tokens_per_sec, latency, grouped_lengths

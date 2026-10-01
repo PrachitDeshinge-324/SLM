@@ -65,8 +65,8 @@ def parse_verifier_output(output_text, student_answer=None):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Process verifier JSONL logs and generate metrics.")
-    parser.add_argument("--input_dir", type=str, default="results/verifier_output", help="Directory containing the JSONL logs.")
-    parser.add_argument("--output_dir", type=str, default="results/verifier_output/metrics", help="Directory to save CSV and plots.")
+    parser.add_argument("--input_dir", type=str, default="results", help="Directory containing the JSONL logs.")
+    parser.add_argument("--output_dir", type=str, default="results", help="Directory to save CSV and plots.")
     return parser.parse_args()
 
 def main():
@@ -219,7 +219,15 @@ def main():
         df = df.sort_values('SortKey', ascending=False).drop('SortKey', axis=1)
         
         clean_model = model_name.replace("/", "_")
-        csv_path = os.path.join(args.output_dir, f"metrics_{clean_model}_{dataset_name}_{samples_n}.csv")
+        
+        # Create dataset-specific subdirectories
+        dataset_metrics_dir = os.path.join(args.output_dir, dataset_name, "verifier_output", "metrics")
+        csv_dir = os.path.join(dataset_metrics_dir, "csvs")
+        plots_dir = os.path.join(dataset_metrics_dir, "plots")
+        os.makedirs(csv_dir, exist_ok=True)
+        os.makedirs(plots_dir, exist_ok=True)
+
+        csv_path = os.path.join(csv_dir, f"metrics_{clean_model}_{dataset_name}_{samples_n}.csv")
         df.to_csv(csv_path, index=False)
         print(f"  -> Saved metrics CSV to: {csv_path}")
         
@@ -245,7 +253,7 @@ def main():
             ax.set_ylabel("Verifier Prediction", fontsize=12)
             
         plt.tight_layout()
-        plot_path = os.path.join(args.output_dir, f"confusion_matrices_{clean_model}_{dataset_name}_{samples_n}.png")
+        plot_path = os.path.join(plots_dir, f"confusion_matrices_{clean_model}_{dataset_name}_{samples_n}.png")
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"  -> Saved confusion matrices plot to: {plot_path}")

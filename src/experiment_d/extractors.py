@@ -84,9 +84,18 @@ def extract_math500_answer(text: str) -> str:
     # Strip <think> blocks (and unclosed <think> blocks) to avoid extracting from scratchpad
     text = re.sub(r'<think>.*?(?:</think>|$)', '', text, flags=re.DOTALL).strip()
     
-    match = re.search(r'\\boxed{(.+?)}', text)
-    if match:
-        return match.group(1).strip()
+    idx = text.find("\\boxed{")
+    if idx != -1:
+        start_idx = idx + 7
+        brace_count = 1
+        for i in range(start_idx, len(text)):
+            # Skip escaped braces (e.g. \{ and \} in LaTeX set notation)
+            if text[i] == '{' and (i == 0 or text[i-1] != '\\'):
+                brace_count += 1
+            elif text[i] == '}' and (i == 0 or text[i-1] != '\\'):
+                brace_count -= 1
+            if brace_count == 0:
+                return text[start_idx:i].strip()
     
     # Fallback to GSM8K logic
     return extract_gsm8k_answer(text)

@@ -27,22 +27,22 @@ import pandas as pd
 import numpy as np
 import os
 import ast
+import re as _re
 
 def parse_cqa_choices(choices_str: str):
-    env = {
-        'array': np.array,
-        'object': object
-    }
+    """Safely parse CQA choices string without eval()."""
+    # Strip numpy array(..., dtype=object) wrappers → plain Python lists
+    cleaned = _re.sub(r'\barray\((\[.*?\])\s*,\s*dtype=\w+\)', r'\1', choices_str, flags=_re.DOTALL)
     try:
-        parsed = eval(choices_str, {"__builtins__": {}}, env)
-        labels = parsed['label'].tolist()
-        texts = parsed['text'].tolist()
+        parsed = ast.literal_eval(cleaned)
+        labels = parsed['label']
+        texts = parsed['text']
         return [{"label": l, "text": t} for l, t in zip(labels, texts)]
-    except Exception as e:
+    except (ValueError, SyntaxError, KeyError) as e:
         print(f"Error parsing choices: {e}\nString: {choices_str}")
         return []
 
-def load_cqa_dataset(csv_path: str = "CQA/validation.csv"):
+def load_cqa_dataset(csv_path: str = "data/CQA/validation.csv"):
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"Could not find {csv_path}. Please ensure it is present.")
     df = pd.read_csv(csv_path)
@@ -58,7 +58,7 @@ def load_cqa_dataset(csv_path: str = "CQA/validation.csv"):
         })
     return dataset
 
-def load_gsm8k_dataset(parquet_path: str = "gsm8k/main/test-00000-of-00001.parquet"):
+def load_gsm8k_dataset(parquet_path: str = "data/gsm8k/main/test-00000-of-00001.parquet"):
     if not os.path.exists(parquet_path):
         raise FileNotFoundError(f"Could not find {parquet_path}. Please ensure it is present.")
     df = pd.read_parquet(parquet_path)

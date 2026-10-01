@@ -69,3 +69,8 @@ results/*.jpg
 !index.html
 !web/
 !web/**
+
+# Exclude specific directories
+notebooks/
+Docs/
+archive/

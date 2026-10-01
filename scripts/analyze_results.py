@@ -140,7 +140,7 @@ def compute_calibration_curve(df: pd.DataFrame, num_bins: int = 10, min_bin_coun
 
 
 
-def generate_combined_calibration_plot(dataset_runs: dict, model: str, dataset: str, output_path: str):
+def generate_combined_calibration_plot(dataset_runs: dict, model: str, dataset: str, results_dir: str):
     """
     Overlays all precisions (16-bit, 8-bit, 4-bit) AND n_samples (e.g., 8, 16)
     for a specific (model, dataset) onto a single combined calibration chart.
@@ -204,6 +204,15 @@ def generate_combined_calibration_plot(dataset_runs: dict, model: str, dataset: 
             label=f"{prec} (N={n_samp}): Acc={acc_pct:.1f}%, P@{n_samp}={passk_pct:.1f}%"
         )
 
+    # Create directory structure
+    safe_dataset = dataset.replace("/", "_")
+    dataset_metrics_dir = os.path.join(results_dir, safe_dataset, "generator", "metrics")
+    plots_dir = os.path.join(dataset_metrics_dir, "plots")
+    os.makedirs(plots_dir, exist_ok=True)
+    
+    out_name = f"{short_model}_{safe_dataset}_combined_calibration.png"
+    actual_output_path = os.path.join(plots_dir, out_name)
+
     plt.title(f"Calibration: {short_model} on {dataset.upper()}", fontsize=13, fontweight='bold')
     plt.xlabel("Confidence (Agreement Fraction)", fontsize=11)
     plt.ylabel("Actual Accuracy", fontsize=11)
@@ -212,9 +221,9 @@ def generate_combined_calibration_plot(dataset_runs: dict, model: str, dataset: 
     # Put legend outside the plot if it's too big, or lower right with small font
     plt.legend(loc="lower right", fontsize=8, frameon=True)
     plt.tight_layout()
-    plt.savefig(output_path, dpi=180)
+    plt.savefig(actual_output_path, dpi=180)
     plt.close()
-    print(f"  Saved COMBINED plot: {output_path}")
+    print(f"  Saved COMBINED plot: {actual_output_path}")
 
 def generate_accuracy_vs_precision_plot(summary_df: pd.DataFrame, results_dir: str):
     """
@@ -298,8 +307,12 @@ def generate_accuracy_vs_precision_plot(summary_df: pd.DataFrame, results_dir: s
             plt.tight_layout()
 
             safe_dataset = dataset.replace("/", "_")
+            dataset_metrics_dir = os.path.join(results_dir, safe_dataset, "generator", "metrics")
+            plots_dir = os.path.join(dataset_metrics_dir, "plots")
+            os.makedirs(plots_dir, exist_ok=True)
+
             out_name = f"{short_model}_{safe_dataset}_accuracy_vs_precision.png"
-            out_path = os.path.join(results_dir, out_name)
+            out_path = os.path.join(plots_dir, out_name)
             plt.savefig(out_path, dpi=180, bbox_inches='tight')
             plt.close()
             print(f"  Saved COMBINED BAR CHART: {out_path}")
@@ -405,9 +418,7 @@ def main():
     for (m_name, d_name), prec_dict in grouped_runs.items():
         if len(prec_dict) >= 1:
             safe_d_name = d_name.replace("/", "_")
-            combined_name = f"{m_name}_{safe_d_name}_combined_calibration.png"
-            combined_path = os.path.join(args.results_dir, combined_name)
-            generate_combined_calibration_plot(prec_dict, m_name, safe_d_name, combined_path)
+            generate_combined_calibration_plot(prec_dict, m_name, safe_d_name, args.results_dir)
 
     summary_df = pd.DataFrame(summary_stats)
 
@@ -481,7 +492,13 @@ def main():
         ds_df = ds_df.drop(columns=['dataset'])
         
         safe_ds = ds.lower().replace("/", "_")
-        ds_path = os.path.join(args.results_dir, f"results_{safe_ds}.csv")
+        
+        # Create directory structure
+        dataset_metrics_dir = os.path.join(args.results_dir, safe_ds, "generator", "metrics")
+        csv_dir = os.path.join(dataset_metrics_dir, "csvs")
+        os.makedirs(csv_dir, exist_ok=True)
+        
+        ds_path = os.path.join(csv_dir, f"results_{safe_ds}.csv")
         ds_df.to_csv(ds_path, index=False)
         print(f"Saved dataset results to: {ds_path}")
 

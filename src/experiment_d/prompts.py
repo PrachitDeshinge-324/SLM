@@ -88,9 +88,25 @@ def build_prompt(tokenizer, messages: list[dict]) -> str:
         add_generation_prompt=True,
     )
 
+MATH500_SYSTEM = "You are a helpful math tutor. Solve the problem step by step and enclose the final answer in \\boxed{}."
+
+MATH500_1SHOT_USER = "A rectangular band has a perimeter of 40 inches. What is the maximum possible area of the region enclosed by the band?"
+
+MATH500_1SHOT_ASSISTANT = (
+    "Let the length of the rectangle be $l$ and the width be $w$. "
+    "We are given that the perimeter is $2l + 2w = 40$, which simplifies to $l + w = 20$. "
+    "We want to maximize the area $A = lw$. "
+    "Substituting $w = 20 - l$, we get $A = l(20 - l) = 20l - l^2$. "
+    "This is a downward-opening parabola with its maximum at $l = -20/(2(-1)) = 10$. "
+    "When $l = 10$, $w = 20 - 10 = 10$, and the maximum area is $10 \\times 10 = 100$.\n"
+    "\\boxed{100}"
+)
+
 def get_math500_messages(question: str) -> list[dict]:
     return [
-        {"role": "system", "content": "You are a helpful math tutor. Solve the problem step by step and enclose the final answer in \\boxed{}."},
+        {"role": "system", "content": MATH500_SYSTEM},
+        {"role": "user", "content": MATH500_1SHOT_USER},
+        {"role": "assistant", "content": MATH500_1SHOT_ASSISTANT},
         {"role": "user", "content": question},
     ]
 

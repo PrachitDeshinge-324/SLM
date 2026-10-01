@@ -3,12 +3,17 @@ import json
 import logging
 import os
 import re
+import sys
 import warnings
+from pathlib import Path
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.utils import logging as tf_logging
 from tqdm import tqdm
 from dotenv import load_dotenv
+
+# Ensure the repository root directory is in sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Suppress harmless specific warnings for a cleaner console
 # (?s) allows '.' to match newlines across multiline warning messages
@@ -102,12 +107,12 @@ def parse_verifier_output(output_text, student_answer=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--directory", type=str, default="results/verifier", help="Directory containing the extracted verifier datasets")
+    parser.add_argument("--directory", type=str, default="results", help="Directory containing the extracted verifier datasets")
     parser.add_argument("--model_id", type=str, required=True, help="HF Model ID (e.g., Qwen/Qwen3.5-0.8B)")
     parser.add_argument("--precision", type=str, required=True, choices=["16bit", "8bit", "4bit"])
     parser.add_argument("--dataset", type=str, required=True, help="Dataset name (e.g., gsm8k, cqa)")
     parser.add_argument("--n_samples", type=str, required=True, help="Number of samples (e.g., n16, n8)")
-    parser.add_argument("--output_dir", type=str, default="results/verifier_output", help="Directory to save the evaluated results")
+    parser.add_argument("--output_dir", type=str, default="results", help="Directory to save the evaluated results")
     parser.add_argument("--max_new_tokens", type=int, default=2048)
     parser.add_argument("--batch_size", type=int, default=16, help="Batch size for generation")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of samples for testing")
@@ -137,7 +142,7 @@ def main():
     # Store output in nested directory
     safe_model = args.model_id.replace("/", "_")
     safe_dataset = args.dataset.replace("/", "_")
-    nested_out_dir = os.path.join(args.output_dir, safe_dataset, safe_model)
+    nested_out_dir = os.path.join(args.output_dir, safe_dataset, "verifier_output", safe_model)
     os.makedirs(nested_out_dir, exist_ok=True)
     output_file = os.path.join(nested_out_dir, input_basename.replace("verifier_", "verifier_output_"))
 
@@ -214,8 +219,12 @@ def main():
     print(f"Evaluating {len(dataset)} traces in batches of {args.batch_size}...")
     
     # Chunk dataset into batches
-    for i in tqdm(range(0, len(dataset), args.batch_size)):
-        batch_items = dataset[i : i + args.batch_size]
+    current_batch_size = args.batch_size
+    pbar = tqdm(total=len(dataset))
+    i = 0
+    
+    while i < len(dataset):
+        batch_items = dataset[i : i + current_batch_size]
         
         batch_texts = []
         for item in batch_items:
@@ -232,13 +241,24 @@ def main():
             
         inputs = tokenizer(batch_texts, return_tensors="pt", padding=True).to(model.device)
         
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs, 
-                max_new_tokens=args.max_new_tokens,
-                do_sample=False,
-                pad_token_id=tokenizer.eos_token_id
-            )
+        try:
+            with torch.no_grad():
+                outputs = model.generate(
+                    **inputs, 
+                    max_new_tokens=args.max_new_tokens,
+                    do_sample=False,
+                    pad_token_id=tokenizer.eos_token_id
+                )
+        except RuntimeError as e:
+            if "out of memory" in str(e).lower():
+                torch.cuda.empty_cache()
+                if current_batch_size == 1:
+                    raise RuntimeError(f"CUDA OOM at batch_size=1 at index {i}; stopping.") from e
+                current_batch_size = max(1, current_batch_size // 2)
+                print(f"\n⚠️  OOM at index {i}. Reducing batch_size to {current_batch_size} and retrying...")
+                continue
+            else:
+                raise
             
         # Extract generated tokens (ignoring the prompt)
         prompt_length = inputs.input_ids.shape[1]
@@ -257,6 +277,11 @@ def main():
         with open(output_file, 'a') as f:
             for item in batch_items:
                 f.write(json.dumps(item) + '\n')
+                
+        i += len(batch_items)
+        pbar.update(len(batch_items))
+        
+    pbar.close()
                 
     # --- Metrics Calculation ---
     # Reload full dataset to calculate metrics across both resumed and newly processed items
@@ -284,7 +309,7 @@ def main():
     print("="*40)
     
     orm_total = tp + fp + tn + fn
-    print(f"Final-conclusion parse coverage: {orm_total}/{len(dataset)} ({(orm_total / len(dataset) * 100) if dataset else 0:.2f}%)")
+    print(f"Final-conclusion parse coverage: {orm_total}/{len(full_results)} ({(orm_total / len(full_results) * 100) if full_results else 0:.2f}%)")
     if orm_total > 0:
         accuracy = (tp + tn) / orm_total
         tpr = tp / (tp + fn) if (tp + fn) > 0 else 0

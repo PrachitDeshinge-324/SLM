@@ -1,5 +1,6 @@
 from collections import Counter
 from typing import List, Tuple, Dict, Any
+from src.experiment_d.utils import answers_match
 
 def compute_metrics(extracted_answers: List[str], ground_truth: str) -> Dict[str, Any]:
     """
@@ -36,12 +37,12 @@ def compute_metrics(extracted_answers: List[str], ground_truth: str) -> Dict[str
     # Confidence is the fraction of *valid* samples that agree with the majority
     confidence = majority_count / valid_count
     
-    # Check correctness
-    # Ensure both are strings and stripped
-    correctness = (str(majority_answer).strip() == str(ground_truth).strip())
+    # Check correctness using robust comparison (handles numeric equivalence,
+    # fractions, and symbolic math — not just strict string equality)
+    correctness = answers_match(majority_answer, ground_truth)
     
     # Oracle Correctness (pass@k): Did it get the right answer AT LEAST ONCE?
-    oracle_correctness = any(str(ans).strip() == str(ground_truth).strip() for ans in valid_answers)
+    oracle_correctness = any(answers_match(ans, ground_truth) for ans in valid_answers)
     
     return {
         "majority_answer": majority_answer,
