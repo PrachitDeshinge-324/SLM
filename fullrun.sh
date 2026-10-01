@@ -28,9 +28,6 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-VERIFIER_EXTRACT_DIR="${BASE_DIR}/verifier"
-VERIFIER_OUTPUT_DIR="${BASE_DIR}/verifier_output"
-
 echo "======================================================"
 echo " 4. Generate Reasoning Traces"
 echo "======================================================"
@@ -52,7 +49,7 @@ PYTHONPATH=. python scripts/extract_verifier_dataset.py \
   --precision "${PRECISION}" \
   --dataset "${DATASET}" \
   --n_samples "n${N_SAMPLES}" \
-  --output_dir "${VERIFIER_EXTRACT_DIR}"
+  --output_dir "${BASE_DIR}"
 
 echo "======================================================"
 echo " 7. Evaluate Verifier Accuracy"
@@ -66,13 +63,13 @@ else
 fi
 
 PYTHONPATH=. python scripts/run_verifier_benchmark.py \
-    --directory "${VERIFIER_EXTRACT_DIR}" \
+    --directory "${BASE_DIR}" \
     --model_id "${MODEL}" \
     --precision "${PRECISION}" \
     --dataset "${DATASET}" \
     --n_samples "n${N_SAMPLES}" \
     --batch_size "${BATCH_SIZE}" \
-    --output_dir "${VERIFIER_OUTPUT_DIR}" \
+    --output_dir "${BASE_DIR}" \
     ${LIMIT_ARG}
 
 echo "======================================================"

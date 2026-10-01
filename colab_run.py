@@ -466,6 +466,18 @@ def main() -> int:
     elif returncode == 0:
         print(f"[INFO] {analyze_path} not found — skipping analysis step.")
 
+    print("\n" + "=" * 60)
+    print("STEP 7: Forcing Google Drive Sync...")
+    print("=" * 60)
+    try:
+        from google.colab import drive
+        drive.flush_and_unmount()
+        print("✅ Successfully flushed and unmounted Google Drive. Files should now be visible in the Drive UI.")
+    except ImportError:
+        print("Not in a Colab environment or `google.colab` unavailable, skipping drive flush.")
+    except Exception as e:
+        print(f"⚠️ Error while flushing Drive: {e}")
+
     return returncode
 
 

@@ -190,26 +190,37 @@ def main():
     if args.limit is not None:
         dataset = dataset[:args.limit]
         
-    # --- Resume Functionality ---
-    existing_results = []
+    # --- Robust Key-Based Resume Functionality ---
+    existing_keys = set()
     if os.path.exists(output_file):
-        print(f"Found existing output file: {output_file}. Attempting to resume...")
+        print(f"Found existing output file: {output_file}. Scanning for already evaluated traces...")
         try:
             with open(output_file, 'r') as f:
-                existing_results = [json.loads(line) for line in f]
-        except json.JSONDecodeError:
-            print("Warning: Output file contains invalid JSON. Starting from scratch.")
-            existing_results = []
-            
-    num_existing = len(existing_results)
-    if num_existing > 0:
-        if num_existing >= len(dataset):
-            print(f"All {len(dataset)} traces have already been evaluated. Exiting.")
+                for line in f:
+                    line_str = line.strip()
+                    if not line_str:
+                        continue
+                    try:
+                        rec = json.loads(line_str)
+                        q = rec.get("question")
+                        t_idx = rec.get("trace_index")
+                        if q is not None and t_idx is not None:
+                            existing_keys.add((q, t_idx))
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"Warning reading output file: {e}")
+
+    if existing_keys:
+        initial_count = len(dataset)
+        dataset = [item for item in dataset if (item.get("question"), item.get("trace_index")) not in existing_keys]
+        evaluated_count = initial_count - len(dataset)
+        print(f"Resuming: {evaluated_count} traces already evaluated. Remaining to evaluate: {len(dataset)}")
+        if len(dataset) == 0:
+            print(f"All {initial_count} traces have already been evaluated. Exiting.")
             return
-        print(f"Resuming from trace {num_existing}... ({len(dataset) - num_existing} remaining)")
-        dataset = dataset[num_existing:]
     else:
-        # If starting fresh, clear the output file
+        # If starting completely fresh, clear the output file
         open(output_file, 'w').close()
         
     results = []
