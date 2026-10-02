@@ -68,7 +68,7 @@ results/*.jpg
 !.nojekyll
 !index.html
 !web/
-!web/**
+!web/** 
 
 # Exclude specific directories
 notebooks/
