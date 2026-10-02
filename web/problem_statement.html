@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <title>Problem Statement - Agentic AI</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true, theme: 'base', themeVariables: { primaryColor: '#f1f5f9', primaryBorderColor: '#3b82f6', lineColor: '#333333', textColor: '#1e293b' }});</script>
 </head>
 <body>
     <header>
@@ -29,6 +31,21 @@
             <div class="alert" style="background-color: #f0fdf4; border-left-color: var(--success);">
                 <h3 style="margin-top:0; color: #166534;">Executive Summary</h3>
                 <p style="margin-bottom:0;">This project investigates a critical gap in on-device AI: <strong>Does quantization destroy a small model's ability to evaluate its own reasoning?</strong> We use GSM8K as our primary benchmark because it provides the perfect difficulty curve (~60% base accuracy) to measure verifier impact without hitting a ceiling effect.</p>
+            </div>
+
+            <h2 style="margin-top: 2rem;">The Method: Self-Improvement Loop</h2>
+            <div class="card" style="text-align: center; background: white; padding: 20px;">
+                <div class="mermaid">
+                    graph LR
+                        A[Generator Phase<br/>Produce N Answers] --> B[Verifier Phase<br/>Judge & Filter Answers]
+                        B -->|Select Correct Traces| C[Self-Improvement<br/>QLoRA Fine-Tuning]
+                        C -->|Update Model Weights| A
+                        
+                        classDef default fill:#f8fafc,stroke:#3b82f6,stroke-width:2px;
+                        classDef loop fill:#eff6ff,stroke:#2563eb,stroke-width:2px,stroke-dasharray: 5 5;
+                        class C loop;
+                </div>
+                <p style="margin-top: 1rem; color: #475569; font-size: 0.95rem;"><em>The core hypothesis: Can a quantized model reliably execute the "Verifier Phase" without polluting its own training data?</em></p>
             </div>
 
             <h2 style="margin-top: 2rem;">The Core Problem</h2>

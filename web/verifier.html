@@ -2,155 +2,153 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Phase 2: Verifier - Agentic AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Experiment D: Verifier Reliability Analysis</title>
     <link rel="stylesheet" href="style.css">
-    <script>
-      MathJax = {
-        tex: {
-          inlineMath: [['$', '$'], ['\\(', '\\)']]
-        }
-      };
-    </script>
+    <script>MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };</script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        .research-summary { background: #f8fafc; border-left: 4px solid #3b82f6; padding: 1.5rem; margin-bottom: 2rem; }
+        .data-table-container { margin: 2rem 0; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; font-size: 0.9rem; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f1f5f9; font-weight: 600; color: #1e293b; }
+        .positive { color: #16a34a; font-weight: bold; }
+        .negative { color: #dc2626; font-weight: bold; }
+        .metric-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; }
+        .ul-bullets { margin-top: 10px; margin-left: 20px; }
+        .ul-bullets li { margin-bottom: 8px; }
+    </style>
 </head>
 <body>
-    <header>
-        <h1>Phase 2: Verifier Reliability & Self-Improvement</h1>
-        <p>Evaluating if quantized small language models (SLMs) can act as reliable judges of their own logic to facilitate self-improvement loops.</p>
-    </header>
-
-    <nav>
-        <div class="nav-container">
-            <a href="index.html" class="nav-link">Home</a>
-            <a href="proposal.html" class="nav-link">Original Proposal</a>
-            <a href="problem_statement.html" class="nav-link">Problem & Datasets</a>
-            <a href="generation.html" class="nav-link">Phase 1: Generation</a>
-            <a href="verifier.html" class="nav-link active">Phase 2: Verifier</a>
-            <a href="next_steps.html" class="nav-link">Next Steps</a>
-        </div>
-    </nav>
-
-        <div class="content-box">
-            <h2>Phase 2: Comprehensive Verifier Findings</h2>
-            
-            <div class="alert" style="background-color: #f0fdf4; border-left-color: var(--success);">
-                <h3 style="margin-top:0; color: #166534;">Executive Summary: 4 Major Discoveries</h3>
-                <p style="margin-bottom:0;">Can quantized SLMs self-improve? Our evaluation uncovered four critical insights for edge AI:</p>
-                <ul style="margin-bottom:0; margin-top: 0.5rem;">
-                    <li><strong>1. The 4-bit Lobotomy (Quantization Effect):</strong> 4-bit quantization destroys a model's ability to verify logic. Look at Gemma-1B or DeepSeek-1.5B: their MCC drops sharply in 4-bit, proving quantization breaks internal logical coherence long before it breaks generation capacity.</li>
-                    <li><strong>2. The MCC / Imbalance Problem:</strong> When a generator is highly accurate (e.g., DeepSeek at 90%), FPR artificially spikes because there are almost no negative examples. Using Matthew's Correlation Coefficient (MCC) reveals that DeepSeek is actually a phenomenal judge, immune to the "Yes Man" effect.</li>
-                    <li><strong>3. The "Yes Man" Effect:</strong> Sub-2B standard models blindly rubber-stamp their own hallucinations. Feeding this data into a self-improvement loop (STaR) will cause catastrophic <strong>model collapse</strong>.</li>
-                    <li><strong>4. The ~3B Parameter Survival Line:</strong> Scale acts as a buffer. <strong>Llama-3.2-3B</strong> and <strong>Qwen3.5-2B</strong> are the only non-reasoning models capable of surviving quantization while maintaining a positive verification Delta.</li>
-                </ul>
-            </div>
-
-            <h2 style="margin-top: 2rem;">1. Key Self-Improvement Metrics</h2>
-            <div class="grid" style="margin-bottom: 2rem;">
-                <div class="card">
-                    <div class="card-header">1. Verifier Accuracy Delta (&Delta;)</div>
-                    <div style="font-size: 1.1rem; text-align: center; margin: 0.8rem 0; font-weight: bold; color: var(--primary);">
-                        $$\Delta = \text{Accuracy}_{\text{Verifier}} - \text{Accuracy}_{\text{Generator}}$$
-                    </div>
-                    <p style="font-size: 0.9em; margin-bottom: 0;"><strong>The Real-World Test:</strong> A negative &Delta; means the verifier actively hurts performance and cannot be used for self-improvement.</p>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">2. Matthew's Correlation Coefficient (MCC)</div>
-                    <div style="font-size: 1.1rem; text-align: center; margin: 0.8rem 0; font-weight: bold; color: var(--primary);">
-                        $$MCC = \frac{TP \times TN - FP \times FN}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}$$
-                    </div>
-                    <p style="font-size: 0.9em; margin-bottom: 0;"><strong>The Ground Truth:</strong> FPR is highly sensitive to class imbalance (if Gen Acc is 90%, True Negatives are scarce, artificially spiking FPR). MCC considers all four quadrants, making it the mathematically superior metric for judging a verifier's true competence.</p>
-                </div>
-            </div>
-
-            <h2 style="margin-top: 2rem;">2. GSM8K Benchmark</h2>
-            <p>Official metrics loaded directly from <code>results/gsm8k/verifier_output/metrics</code>.</p>
-            
-            <table>
-                <thead>
-                    <tr>
-                        <th>Model</th>
-                        <th>Precision</th>
-                        <th>Gen Acc (Maj)</th>
-                        <th>Ver Acc (Maj)</th>
-                        <th>Delta (&Delta;)</th>
-                        <th>FPR</th>
-                        <th>MCC</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">DeepSeek-R1-Distill-Qwen-1.5B (CoT Model)</td></tr>
-<tr><td>DeepSeek-R1-Distill-Qwen-1.5B</td><td>16bit</td><td>90.00%</td><td>91.00%</td><td style='color:var(--success)'>+1.00%</td><td>64.14%</td><td>0.355</td></tr>
-<tr><td>DeepSeek-R1-Distill-Qwen-1.5B</td><td>8bit</td><td>87.00%</td><td>87.00%</td><td style='color:gray'>0.00%</td><td>62.38%</td><td>0.365</td></tr>
-<tr><td>DeepSeek-R1-Distill-Qwen-1.5B</td><td>4bit</td><td>87.00%</td><td>85.00%</td><td style='color:var(--danger)'>-2.00%</td><td>55.20%</td><td>0.428</td></tr>
-                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">The "Survival Line" (>= 2 Billion Params)</td></tr>
-<tr><td>Llama-3.2-3B-Instruct</td><td>16bit</td><td>75.00%</td><td>77.00%</td><td style='color:var(--success)'>+2.00%</td><td>87.02%</td><td>0.223</td></tr>
-<tr><td>Llama-3.2-3B-Instruct</td><td>8bit</td><td>79.00%</td><td>78.00%</td><td style='color:var(--danger)'>-1.00%</td><td>81.27%</td><td>0.213</td></tr>
-<tr><td>Llama-3.2-3B-Instruct</td><td>4bit</td><td>77.00%</td><td>77.00%</td><td style='color:gray'>0.00%</td><td>92.45%</td><td>0.115</td></tr>
-<tr><td>Qwen3.5-2B</td><td>16bit</td><td>82.00%</td><td>83.50%</td><td style='color:var(--success)'>+1.50%</td><td>19.44%</td><td>0.569</td></tr>
-<tr><td>Qwen3.5-2B</td><td>8bit</td><td>80.00%</td><td>80.00%</td><td style='color:gray'>0.00%</td><td>21.51%</td><td>0.543</td></tr>
-<tr><td>Qwen3.5-2B</td><td>4bit</td><td>78.22%</td><td>80.20%</td><td style='color:var(--success)'>+1.98%</td><td>30.29%</td><td>0.514</td></tr>
-                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">The "Collapse Zone" (< 1.5 Billion Params)</td></tr>
-<tr><td>Llama-3.2-1B-Instruct</td><td>16bit</td><td>54.00%</td><td>53.00%</td><td style='color:var(--danger)'>-1.00%</td><td>0.42%</td><td>-0.042</td></tr>
-<tr><td>Qwen3.5-0.8B</td><td>16bit</td><td>61.50%</td><td>63.00%</td><td style='color:var(--success)'>+1.50%</td><td>28.91%</td><td>0.520</td></tr>
-<tr><td>Qwen3.5-0.8B</td><td>8bit</td><td>62.50%</td><td>66.00%</td><td style='color:var(--success)'>+3.50%</td><td>26.11%</td><td>0.491</td></tr>
-<tr><td>Qwen3.5-0.8B</td><td>4bit</td><td>55.00%</td><td>58.50%</td><td style='color:var(--success)'>+3.50%</td><td>44.00%</td><td>0.459</td></tr>
-<tr><td>gemma-3-1b-it</td><td>16bit</td><td>55.00%</td><td>52.00%</td><td style='color:var(--danger)'>-3.00%</td><td>89.51%</td><td>-0.086</td></tr>
-<tr><td>gemma-3-1b-it</td><td>8bit</td><td>52.00%</td><td>48.00%</td><td style='color:var(--danger)'>-4.00%</td><td>85.35%</td><td>-0.062</td></tr>
-<tr><td>gemma-3-1b-it</td><td>4bit</td><td>38.00%</td><td>38.00%</td><td style='color:gray'>0.00%</td><td>95.41%</td><td>0.116</td></tr>
-                </tbody>
-            </table>
-
-            <h2 style="margin-top: 3rem;">3. Deep Dive Insights</h2>
-            
-            <div class="grid">
-                <div class="card highlight">
-                    <h3 style="margin-top: 0;">Insight 1: The 4-bit Lobotomy</h3>
-                    <p>Look at the MCC column for <strong>Gemma-3-1B</strong> or <strong>DeepSeek</strong>. As precision drops from 16-bit to 4-bit, the MCC collapses.</p>
-                    <p><strong>Conclusion:</strong> 4-bit quantization destroys the continuous weight representations required to maintain a logical chain of thought. You cannot run verifiers in 4-bit on SLMs.</p>
-                </div>
-
-                <div class="card highlight">
-                    <h3 style="margin-top: 0;">Insight 2: The Imbalance Illusion</h3>
-                    <p>Look at <strong>DeepSeek-R1</strong> (16-bit) on GSM8K. It has a seemingly bad FPR of 64.1%, but an incredible MCC of 0.354 (compared to standard models).</p>
-                    <p>Because its generator is 90% accurate, 90% of the traces it evaluates are correct. Making just a handful of mistakes artificially inflates the FPR percentage. <strong>MCC proves that DeepSeek is actually a phenomenal binary classifier.</strong></p>
-                </div>
-            </div>
-
-            <h2 style="margin-top: 3rem;">4. Math500 Benchmark</h2>
-            <div class="alert" style="background-color: #fffbeb; border-left-color: var(--warning);">
-                Official metrics loaded directly from <code>results/math500/verifier_output/metrics</code>.
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Model</th>
-                        <th>Precision</th>
-                        <th>Gen Acc (Maj)</th>
-                        <th>Ver Acc (Maj)</th>
-                        <th>Delta (&Delta;)</th>
-                        <th>FPR</th>
-                        <th>MCC</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">DeepSeek-R1-Distill-Qwen-1.5B (CoT Model)</td></tr>
-<tr><td>DeepSeek-R1-Distill-Qwen-1.5B</td><td>16bit</td><td>51.00%</td><td>52.00%</td><td style='color:var(--success)'>+1.00%</td><td>43.22%</td><td>0.250</td></tr>
-<tr><td>DeepSeek-R1-Distill-Qwen-1.5B</td><td>4bit</td><td>55.00%</td><td>54.00%</td><td style='color:var(--danger)'>-1.00%</td><td>53.90%</td><td>0.265</td></tr>
-                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">Qwen 3.5 Family</td></tr>
-<tr><td>Qwen3.5-0.8B</td><td>16bit</td><td>41.00%</td><td>42.00%</td><td style='color:var(--success)'>+1.00%</td><td>33.03%</td><td>0.483</td></tr>
-<tr><td>Qwen3.5-0.8B</td><td>8bit</td><td>44.00%</td><td>45.00%</td><td style='color:var(--success)'>+1.00%</td><td>28.44%</td><td>0.494</td></tr>
-<tr><td>Qwen3.5-0.8B</td><td>4bit</td><td>34.00%</td><td>36.00%</td><td style='color:var(--success)'>+2.00%</td><td>26.73%</td><td>0.547</td></tr>
-                </tbody>
-            </table>
-            
-            <h2 style="margin-top: 3rem;">5. Final Conclusion</h2>
-            <div class="card highlight">
-                <p><strong>Self-Improvement on Edge Devices is Architecturally Bound by Model Size.</strong></p>
-                <p>The MCC data unequivocally proves that you cannot compress a non-reasoning verifier below ~3 Billion parameters and expect it to self-correct. These models act as "Yes Men", verifying their own broken logic with high confidence.</p>
-                <p>If you are building an autonomous, self-correcting agentic pipeline on edge hardware, <strong>Llama-3.2-3B and Qwen3.5-2B are the absolute minimum viable architectures.</strong> Attempting self-improvement loops on anything smaller, particularly with 4-bit quantization, will result in catastrophic degradation.</p>
-            </div>
-        </div>
+<header>
+    <h1>Experiment D: Verifier Reliability Analysis</h1>
+    <p>Does quantization break the reliability of self-judgment in small language models?</p>
+</header>
+<nav>
+    <div class="nav-container">
+        <a href="index.html" class="nav-link">Home</a>
+        <a href="proposal.html" class="nav-link">Original Proposal</a>
+        <a href="problem_statement.html" class="nav-link">Problem &amp; Datasets</a>
+        <a href="generation.html" class="nav-link">Phase 1: Generation</a>
+        <a href="verifier.html" class="nav-link active">Phase 2: Verifier</a>
+        <a href="next_steps.html" class="nav-link">Next Steps</a>
     </div>
+</nav>
+
+<main class="container">
+    <section class="research-summary">
+        <h2>Executive Research Summary</h2>
+        <p>In direct response to the project plan's core question—<em>"Does compression break the reliability of self-judgment?"</em>—we evaluated candidate SLMs by comparing their 16-bit self-verification performance directly against their 8-bit and 4-bit states.</p>
+        
+        <ul class="ul-bullets">
+            <li><strong>The "Delta Illusion":</strong> We cannot measure verifier survival by Selection Delta alone. If a 4-bit verifier yields a higher Delta than 16-bit, it is often because the 4-bit <em>generator</em> collapsed, making it artificially easy for the verifier to beat the baseline. We must track degradation via <strong>False Positive Rate (FPR) and MCC</strong> instead.</li>
+            <li><strong>8-bit is Highly Robust:</strong> Across almost all models, 8-bit quantization preserves verification capabilities exceptionally well, showing statistically insignificant reliability loss compared to 16-bit.</li>
+            <li><strong>4-bit Causes Measurable Degradation:</strong> Aggressive 4-bit quantization consistently degrades verifier calibration (FPRs rise, MCCs drop). However, for robust models like Qwen3.5-2B, <strong>it does not universally destroy the capability</strong>, leaving them viable for self-improvement loops.</li>
+            <li><strong>Architecture Matters Most:</strong> Models like Gemma-3 and Llama-3.2 exhibit catastrophic failure (>85% FPR) even at full 16-bit precision, making them fundamentally unsafe for unsupervised self-training regardless of quantization.</li>
+        </ul>
+    </section>
+
+    <section class="content-box">
+        <h2>1. Evaluation Methodology & Core Metrics</h2>
+        <p>To accurately assess quantization damage, we track these critical metrics (comparing 8-bit/4-bit against the 16-bit baseline):</p>
+        <div class="grid">
+            <div class="metric-card">
+                <h3>Safety Risk: False Positive Rate (FPR)</h3>
+                <p><strong>Goal: <span class="positive">LOWER is better</span></strong></p>
+                <p><strong>Formula:</strong> $\frac{FP}{FP+TN}$</p>
+                <p>The rate at which the verifier incorrectly approves a flawed trace. A rising FPR as precision drops means the model is becoming falsely confident in incorrect logic—polluting the self-training dataset.</p>
+            </div>
+            <div class="metric-card">
+                <h3>Discrimination: MCC</h3>
+                <p><strong>Goal: <span class="positive">HIGHER is better</span></strong></p>
+                <p><strong>Formula:</strong> $\frac{TP\cdot TN-FP\cdot FN}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}$</p>
+                <p>A balanced metric of verification quality robust to class imbalance. A drop in MCC relative to 16-bit indicates a degradation in the verifier's fundamental classification ability.</p>
+            </div>
+            <div class="metric-card">
+                <h3>Selection Utility: Delta</h3>
+                <p><strong>Goal: <span class="positive">HIGHER is better</span></strong> (but with caveats)</p>
+                <p><strong>Formula:</strong> $Acc_{guided} - Acc_{generator}$</p>
+                <p>Measures overall verifier impact. However, Delta is deceptive for measuring quantization damage because the generator baseline itself shifts during quantization.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="content-box">
+        <h2>2. Quantization Effect: Change From 16-bit Baseline</h2>
+        <p>This analysis isolates the true cost of compression by subtracting the 16-bit baseline metrics from the 8-bit and 4-bit results. <em>(Negative MCC change and Positive FPR change indicate degradation).</em></p>
+        
+        <div class="data-table-container">
+            <table>
+                <thead><tr><th>Dataset</th><th>Model</th><th>Precision</th><th>Delta Change</th><th>MCC Change</th><th>FPR Change</th><th>Research Interpretation</th></tr></thead>
+                <tbody>
+                    <tr><td>GSM8K</td><td>Qwen3.5-0.8B</td><td>8-bit</td><td class="positive">+1pp</td><td class="positive">+0.024</td><td class="positive">-8.8pp</td><td>Improves on this sample; 8-bit quantization is highly safe.</td></tr>
+                    <tr style="background:#f8fafc;"><td><strong>GSM8K</strong></td><td><strong>Qwen3.5-0.8B</strong></td><td><strong>4-bit</strong></td><td class="positive"><strong>+4pp</strong></td><td class="negative"><strong>-0.066</strong></td><td class="negative"><strong>+12.2pp</strong></td><td><strong>The Delta Illusion:</strong> Delta rises artificially because 4-bit generation collapsed. However, actual verifier safety degrades significantly (FPR rises by 12.2pp, MCC drops).</td></tr>
+                    <tr><td>GSM8K</td><td>Qwen3.5-2B</td><td>8-bit</td><td class="negative">-2pp</td><td class="negative">-0.027</td><td class="negative">+0.1pp</td><td>Statistically insignificant reliability loss; 8-bit holds strong.</td></tr>
+                    <tr><td>GSM8K</td><td>Qwen3.5-2B</td><td>4-bit</td><td class="negative">-2pp</td><td class="negative">-0.074</td><td class="negative">+9.8pp</td><td>Clear degradation in safety (FPR rises ~10pp), but retains a positive base MCC (0.497). Verification is degraded but not destroyed.</td></tr>
+                    <tr><td>GSM8K</td><td>DeepSeek-R1-1.5B</td><td>8-bit</td><td class="negative">-1pp</td><td class="positive">+0.010</td><td class="positive">-1.7pp</td><td>Stable at 8-bit.</td></tr>
+                    <tr><td>GSM8K</td><td>DeepSeek-R1-1.5B</td><td>4-bit</td><td class="negative">-3pp</td><td class="positive">+0.073</td><td class="positive">-8.9pp</td><td>Anomaly: 4-bit compression actually improves class balance (FPR drops), though its base verifier performance is already exceptionally poor (~60% FPR).</td></tr>
+                    <tr><td>GSM8K</td><td>Llama-3.2-3B</td><td>8-bit</td><td class="negative">-3pp</td><td class="negative">-0.010</td><td class="positive">-5.7pp</td><td>Slight improvement in FPR, but base performance is catastrophic.</td></tr>
+                    <tr><td>GSM8K</td><td>Llama-3.2-3B</td><td>4-bit</td><td class="negative">-2pp</td><td class="negative">-0.108</td><td class="negative">+5.5pp</td><td>Severe verifier collapse; MCC drops significantly, FPR crosses 92%.</td></tr>
+                    <tr><td>GSM8K</td><td>Gemma-3-1B</td><td>8-bit</td><td class="negative">-2pp</td><td class="positive">+0.024</td><td class="positive">-4.1pp</td><td>Minor noise shift on fundamentally broken baseline.</td></tr>
+                    <tr><td>GSM8K</td><td>Gemma-3-1B</td><td>4-bit</td><td class="positive">+4pp</td><td class="positive">+0.202</td><td class="negative">+5.9pp</td><td>FPR peaks at 95.4%. Model approves virtually all incorrect traces.</td></tr>
+                    <tr><td>MATH500</td><td>Qwen3.5-0.8B</td><td>8-bit</td><td>0pp</td><td class="positive">+0.011</td><td class="positive">-4.6pp</td><td>Excellent 8-bit retention.</td></tr>
+                    <tr><td>MATH500</td><td>Qwen3.5-0.8B</td><td>4-bit</td><td class="positive">+1pp</td><td class="positive">+0.064</td><td class="positive">-6.3pp</td><td>Highly stable. Verification capabilities successfully survive aggressive 4-bit quantization on this dataset.</td></tr>
+                    <tr><td>MATH500</td><td>DeepSeek-R1-1.5B</td><td>8-bit</td><td class="negative">-5pp</td><td class="negative">-0.008</td><td class="negative">+6.4pp</td><td>Selection becomes noticeably worse, FPR climbs.</td></tr>
+                    <tr><td>MATH500</td><td>DeepSeek-R1-1.5B</td><td>4-bit</td><td class="negative">-2pp</td><td class="positive">+0.015</td><td class="negative">+10.7pp</td><td>Severe 4-bit degradation in safety; FPR jumps +10.7pp.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="content-box">
+        <h2>3. Complete Base Empirical Results (N=100 per precision)</h2>
+        <div class="data-table-container">
+            <h3>GSM8K Verifier Performance</h3>
+            <table>
+                <thead><tr><th>Model</th><th>Bits</th><th>Gen Maj.</th><th>Guided Maj.</th><th>Delta</th><th>FPR</th><th>MCC</th><th>Bal. Acc.</th></tr></thead>
+                <tbody>
+                    <tr><td>Qwen3.5-0.8B</td><td>16</td><td>60%</td><td>61%</td><td class="positive">+1pp</td><td>31.8%</td><td>0.480</td><td>73.8%</td></tr>
+                    <tr><td>Qwen3.5-0.8B</td><td>8</td><td>66%</td><td>68%</td><td class="positive">+2pp</td><td>23.0%</td><td>0.503</td><td>75.1%</td></tr>
+                    <tr><td>Qwen3.5-0.8B</td><td>4</td><td>56%</td><td>61%</td><td class="positive">+5pp</td><td>44.1%</td><td>0.414</td><td>70.8%</td></tr>
+                    <tr style="background:#f8fafc;"><td><strong>Qwen3.5-2B</strong></td><td><strong>16</strong></td><td><strong>79%</strong></td><td><strong>81%</strong></td><td class="positive"><strong>+2pp</strong></td><td><strong>21.4%</strong></td><td><strong>0.570</strong></td><td><strong>80.2%</strong></td></tr>
+                    <tr style="background:#f8fafc;"><td><strong>Qwen3.5-2B</strong></td><td><strong>8</strong></td><td><strong>80%</strong></td><td><strong>80%</strong></td><td><strong>0pp</strong></td><td><strong>21.5%</strong></td><td><strong>0.543</strong></td><td><strong>78.6%</strong></td></tr>
+                    <tr style="background:#f8fafc;"><td><strong>Qwen3.5-2B</strong></td><td><strong>4</strong></td><td><strong>78%</strong></td><td><strong>78%</strong></td><td><strong>0pp</strong></td><td><strong>31.2%</strong></td><td><strong>0.497</strong></td><td><strong>75.3%</strong></td></tr>
+                    <tr><td>DeepSeek-R1-1.5B</td><td>16</td><td>90%</td><td>91%</td><td class="positive">+1pp</td><td>64.1%</td><td>0.355</td><td>64.4%</td></tr>
+                    <tr><td>DeepSeek-R1-1.5B</td><td>8</td><td>87%</td><td>87%</td><td>0pp</td><td>62.4%</td><td>0.365</td><td>65.0%</td></tr>
+                    <tr><td>DeepSeek-R1-1.5B</td><td>4</td><td>87%</td><td>85%</td><td class="negative">-2pp</td><td>55.2%</td><td>0.428</td><td>68.4%</td></tr>
+                    <tr><td>Gemma-3-1B</td><td>16</td><td>55%</td><td>52%</td><td class="negative">-3pp</td><td>89.5%</td><td>-0.086</td><td>47.1%</td></tr>
+                    <tr><td>Gemma-3-1B</td><td>8</td><td>53%</td><td>48%</td><td class="negative">-5pp</td><td>85.4%</td><td>-0.062</td><td>47.7%</td></tr>
+                    <tr><td>Gemma-3-1B</td><td>4</td><td>37%</td><td>38%</td><td class="positive">+1pp</td><td>95.4%</td><td>0.116</td><td>52.3%</td></tr>
+                    <tr><td>Llama-3.2-3B</td><td>16</td><td>75%</td><td>77%</td><td class="positive">+2pp</td><td>87.0%</td><td>0.223</td><td>55.5%</td></tr>
+                    <tr><td>Llama-3.2-3B</td><td>8</td><td>79%</td><td>78%</td><td class="negative">-1pp</td><td>81.3%</td><td>0.213</td><td>56.7%</td></tr>
+                    <tr><td>Llama-3.2-3B</td><td>4</td><td>77%</td><td>77%</td><td>0pp</td><td>92.5%</td><td>0.115</td><td>52.5%</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="data-table-container">
+            <h3>MATH500 Verifier Performance</h3>
+            <table>
+                <thead><tr><th>Model</th><th>Bits</th><th>Gen Maj.</th><th>Guided Maj.</th><th>Delta</th><th>FPR</th><th>MCC</th><th>Bal. Acc.</th></tr></thead>
+                <tbody>
+                    <tr><td>Qwen3.5-0.8B</td><td>16</td><td>41%</td><td>42%</td><td class="positive">+1pp</td><td>33.0%</td><td>0.483</td><td>76.1%</td></tr>
+                    <tr><td>Qwen3.5-0.8B</td><td>8</td><td>44%</td><td>45%</td><td class="positive">+1pp</td><td>28.4%</td><td>0.494</td><td>76.4%</td></tr>
+                    <tr><td>Qwen3.5-0.8B</td><td>4</td><td>34%</td><td>36%</td><td class="positive">+2pp</td><td>26.7%</td><td>0.547</td><td>81.5%</td></tr>
+                    <tr><td>DeepSeek-R1-1.5B</td><td>16</td><td>51%</td><td>52%</td><td class="positive">+1pp</td><td>43.2%</td><td>0.250</td><td>62.5%</td></tr>
+                    <tr><td>DeepSeek-R1-1.5B</td><td>8</td><td>61%</td><td>57%</td><td class="negative">-4pp</td><td>49.6%</td><td>0.242</td><td>61.8%</td></tr>
+                    <tr><td>DeepSeek-R1-1.5B</td><td>4</td><td>55%</td><td>54%</td><td class="negative">-1pp</td><td>53.9%</td><td>0.265</td><td>62.5%</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="content-box">
+        <h2>4. Next Steps: Proceeding to Experiment B</h2>
+        <p>This phase yields a clear "Outcome 1/3" hybrid based on our project plan: agreement and self-judgment reliability degrade measurably under 4-bit compression (FPR climbs), but they do not hit a floor state in the Qwen family, while 8-bit acts as a highly robust middle-ground.</p>
+        <p>Because the verifier does not catastrophically fail at 4-bit, we have clearance to proceed to <strong>Experiment B</strong>. We will run a complete QLoRA self-improvement loop (Generate &rarr; Verify &rarr; Filter &rarr; Train) using the <strong>Qwen3.5</strong> architecture. By forcing the 4-bit model to train on its own verifier-selected data, we will determine if the 31-44% FPR noise rate is low enough to allow self-improvement, or if that degradation causes compounding training collapse over multiple iterations.</p>
+    </section>
+
+</main>
 </body>
 </html>

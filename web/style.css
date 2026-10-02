@@ -152,6 +152,33 @@ tr:hover {
 .badge-green { background: #c6f6d5; color: #22543d; }
 .badge-red { background: #fed7d7; color: #742a2a; }
 
+.positive { color: var(--success); font-weight: 700; }
+.negative { color: var(--danger); font-weight: 700; }
+.text-light { color: var(--text-light); }
+.table-wrap { overflow-x: auto; margin: 1.5rem 0; }
+
+.technical-details {
+    max-width: 1200px;
+    margin: 0 auto 2rem;
+    padding: 0 2rem;
+}
+
+.technical-details > summary {
+    cursor: pointer;
+    color: var(--primary-dark);
+    font-weight: 700;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+}
+
+.technical-details[open] > summary {
+    margin-bottom: 1rem;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
 .card {
     border: 1px solid var(--border);
     border-radius: 8px;

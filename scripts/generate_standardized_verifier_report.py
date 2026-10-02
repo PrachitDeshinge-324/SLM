@@ -83,6 +83,10 @@ def mcc(tp: int, fp: int, fn: int, tn: int) -> float:
     return (tp * tn - fp * fn) / denominator if denominator else 0.0
 
 
+def ratio(numerator: int, denominator: int) -> float:
+    return numerator / denominator if denominator else 0.0
+
+
 def summarize(records: list[dict], selected_questions: set[str]) -> dict:
     records = [record for record in records if record.get("question") in selected_questions]
     by_question: dict[str, list[dict]] = {}
@@ -131,9 +135,18 @@ def summarize(records: list[dict], selected_questions: set[str]) -> dict:
 
     total = len(records)
     parsed = total - unparseable
-    trace_accuracy = (tp + tn) / parsed if parsed else 0.0
-    trace_precision = tp / (tp + fp) if tp + fp else 0.0
-    trace_recall = tp / (tp + fn) if tp + fn else 0.0
+    correct_traces = tp + fn
+    incorrect_traces = tn + fp
+    approved_traces = tp + fp
+    rejected_traces = fn + tn
+    trace_accuracy = ratio(tp + tn, parsed)
+    trace_precision = ratio(tp, approved_traces)
+    trace_recall = ratio(tp, correct_traces)
+    specificity = ratio(tn, incorrect_traces)
+    balanced_accuracy = (trace_recall + specificity) / 2
+    negative_predictive_value = ratio(tn, rejected_traces)
+    false_discovery_rate = ratio(fp, approved_traces)
+    approval_rate = ratio(approved_traces, parsed)
     trace_f1 = (
         2 * trace_precision * trace_recall / (trace_precision + trace_recall)
         if trace_precision + trace_recall
@@ -146,14 +159,22 @@ def summarize(records: list[dict], selected_questions: set[str]) -> dict:
         "Parseable_Traces": parsed,
         "Unparseable_Traces": unparseable,
         "Parse_Coverage": parsed / total if total else 0.0,
+        "Correct_Trace_Prevalence": ratio(correct_traces, parsed),
+        "Incorrect_Trace_Prevalence": ratio(incorrect_traces, parsed),
         "Gen_Maj_Acc": generator_correct / len(by_question) if by_question else 0.0,
         "Ver_Maj_Acc": verifier_correct / len(by_question) if by_question else 0.0,
         "Delta_Ver_Gen": (verifier_correct - generator_correct) / len(by_question) if by_question else 0.0,
         "Trace_Accuracy": trace_accuracy,
         "Trace_Precision": trace_precision,
         "Trace_Recall": trace_recall,
+        "Trace_Specificity": specificity,
+        "Balanced_Accuracy": balanced_accuracy,
+        "Negative_Predictive_Value": negative_predictive_value,
         "Trace_F1": trace_f1,
         "Trace_FPR": fp / (fp + tn) if fp + tn else 0.0,
+        "False_Discovery_Rate": false_discovery_rate,
+        "Approval_Rate": approval_rate,
+        "Selective_Risk": false_discovery_rate,
         "MCC": mcc(tp, fp, fn, tn),
         "TP": tp,
         "FP": fp,
