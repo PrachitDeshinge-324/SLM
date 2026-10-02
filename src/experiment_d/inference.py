@@ -115,6 +115,7 @@ def generate_n_samples(
     top_p: float = 0.95,
     max_new_tokens: int = 256,
     batch_size: int = 4,
+    repetition_penalty: float = 1.0,
 ):
     """
     Generates N samples for a given prompt using temperature sampling.
@@ -149,6 +150,7 @@ def generate_n_samples(
                 temperature=temperature,
                 top_k=top_k,
                 top_p=top_p,
+                repetition_penalty=repetition_penalty,
                 do_sample=True,
                 pad_token_id=tokenizer.pad_token_id,
             )
@@ -188,6 +190,7 @@ def generate_batch_prompts(
     top_p: float = 0.95,
     max_new_tokens: int = 256,
     batch_size: int = 32,
+    repetition_penalty: float = 1.0,
 ):
     """
     Generates n_samples for multiple prompts at once to maximize GPU utilization.
@@ -227,6 +230,7 @@ def generate_batch_prompts(
                     temperature=temperature,
                     top_k=top_k,
                     top_p=top_p,
+                    repetition_penalty=repetition_penalty,
                     do_sample=True,
                     pad_token_id=tokenizer.pad_token_id,
                 )

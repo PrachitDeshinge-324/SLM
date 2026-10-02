@@ -116,6 +116,7 @@ def main():
     parser.add_argument("--max_new_tokens", type=int, default=2048)
     parser.add_argument("--batch_size", type=int, default=16, help="Batch size for generation")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of samples for testing")
+    parser.add_argument("--repetition_penalty", type=float, default=1.0, help="Repetition penalty")
     args = parser.parse_args()
 
     # Create output directory if it doesn't exist
@@ -165,7 +166,11 @@ def main():
     # Configure Quantization & Precision
     # We use "cuda" instead of "auto" to prevent small models from being needlessly
     # split across multiple GPUs (e.g. Dual T4), which causes massive PCIe overhead.
-    model_kwargs = {"device_map": "cuda", "dtype": compute_dtype}
+    model_kwargs = {
+        "device_map": "cuda", 
+        "dtype": compute_dtype,
+        "attn_implementation": "sdpa"
+    }
     if args.precision == "8bit":
         from transformers import BitsAndBytesConfig
         model_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
@@ -179,8 +184,13 @@ def main():
             bnb_4bit_use_double_quant=True,
         )
         
-    print(f"Loading model {args.model_id} in {args.precision} mode...")
-    model = AutoModelForCausalLM.from_pretrained(args.model_id, **model_kwargs)
+    print(f"Loading model {args.model_id} in {args.precision} mode (with SDPA attention)...")
+    try:
+        model = AutoModelForCausalLM.from_pretrained(args.model_id, **model_kwargs)
+    except Exception as e:
+        # Fallback if SDPA is not supported by older transformers or architecture
+        model_kwargs.pop("attn_implementation", None)
+        model = AutoModelForCausalLM.from_pretrained(args.model_id, **model_kwargs)
     model.eval()
     
     print(f"Loading input file: {input_file}")
@@ -257,6 +267,7 @@ def main():
                 outputs = model.generate(
                     **inputs, 
                     max_new_tokens=args.max_new_tokens,
+                    repetition_penalty=args.repetition_penalty,
                     do_sample=False,
                     pad_token_id=tokenizer.eos_token_id
                 )
@@ -278,11 +289,19 @@ def main():
         
         for idx, item in enumerate(batch_items):
             response_text = decoded_responses[idx]
+            
+            # Check length and cutoff
+            seq = generated_tokens[idx]
+            valid_len = (seq != tokenizer.eos_token_id).sum().item()
+            is_cutoff = (valid_len >= args.max_new_tokens)
+            
             _, final_conclusion = parse_verifier_output(response_text, student_answer=item.get('generated_answer'))
             is_actually_correct = item['is_correct']
             
             item['verifier_raw_response'] = response_text
             item['verifier_final_conclusion'] = final_conclusion
+            item['length'] = valid_len
+            item['cutoff'] = is_cutoff
 
         # Incremental save (Append only the new batch)
         with open(output_file, 'a') as f:

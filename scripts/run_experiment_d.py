@@ -67,6 +67,7 @@ def main():
     parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
     parser.add_argument("--top_k", type=int, default=50, help="Top-k sampling")
     parser.add_argument("--top_p", type=float, default=0.95, help="Top-p (nucleus) sampling")
+    parser.add_argument("--repetition_penalty", type=float, default=1.0, help="Repetition penalty (e.g. 1.1 for Qwen to stop loops)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of questions per dataset (0 for all)")
     parser.add_argument("--output_dir", type=str, default="results", help="Directory to save JSONL logs")
@@ -134,6 +135,7 @@ def main():
             "batch_size": args.batch_size, "temperature": args.temperature,
             "top_k": args.top_k, "top_p": args.top_p, "seed": args.seed,
             "max_new_tokens": args.max_new_tokens,
+            "repetition_penalty": args.repetition_penalty,
             
             "total_questions": len(data),
             "dataset_fingerprint": dataset_fingerprint,
@@ -144,7 +146,7 @@ def main():
         scientific_keys = [
             "model", "precision", "dataset", "n_samples",
             "temperature", "top_k", "top_p", "seed",
-             "dataset_fingerprint"
+            "repetition_penalty", "dataset_fingerprint"
         ]
 
         if processed_ids and existing_config is None:
@@ -216,6 +218,7 @@ def main():
                             top_p=args.top_p,
                             max_new_tokens=batch_max_new,
                             batch_size=current_batch_size,
+                            repetition_penalty=args.repetition_penalty,
                         )
                         break  # Success!
                     except RuntimeError as e:

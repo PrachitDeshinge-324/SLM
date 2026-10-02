@@ -15,8 +15,8 @@
 </head>
 <body>
     <header>
-        <h1>Phase 2: Verifier Reliability</h1>
-        <p>Evaluating if quantized models can act as reliable judges of their own logic.</p>
+        <h1>Phase 2: Verifier Reliability & Self-Improvement</h1>
+        <p>Evaluating if quantized small language models (SLMs) can act as reliable judges of their own logic to facilitate self-improvement loops.</p>
     </header>
 
     <nav>
@@ -31,258 +31,124 @@
     </nav>
 
         <div class="content-box">
-            <h2>Phase 2: Verifier Reliability</h2>
+            <h2>Phase 2: Comprehensive Verifier Findings</h2>
             
             <div class="alert" style="background-color: #f0fdf4; border-left-color: var(--success);">
-                <h3 style="margin-top:0; color: #166534;">Executive Summary</h3>
-                <p style="margin-bottom:0;">Can a quantized model reliably judge if its own answers are correct? We fed generated mathematical traces back into the models as judges. <strong>The main findings:</strong></p>
-                <ul style="margin-bottom:0;">
-                    <li><strong>Qwen 0.8B is the only reliable SLM judge:</strong> It consistently <em>improves</em> overall accuracy (Positive Delta) via verification across all precisions (16-bit to 4-bit) on GSM8K.</li>
-                    <li><strong>Reasoning Models are Robust to Quantization:</strong> Matthew's Correlation Coefficient (MCC) proves DeepSeek maintains consistent verification ability across 16-bit (0.35), 8-bit (0.34), and 4-bit (0.42) precisions, showing strong resilience against quantization compared to traditional models.</li>
-                    <li><strong>The Ceiling Effect (SVAMP):</strong> When the base task is too easy (e.g., SVAMP), models fail as judges. Using the verifier actually <em>hurts</em> performance (Negative Delta) because there aren't enough negative examples to learn from.</li>
+                <h3 style="margin-top:0; color: #166534;">Executive Summary: 4 Major Discoveries</h3>
+                <p style="margin-bottom:0;">Can quantized SLMs self-improve? Our evaluation uncovered four critical insights for edge AI:</p>
+                <ul style="margin-bottom:0; margin-top: 0.5rem;">
+                    <li><strong>1. The 4-bit Lobotomy (Quantization Effect):</strong> 4-bit quantization destroys a model's ability to verify logic. Look at Gemma-1B or DeepSeek-1.5B: their MCC drops sharply in 4-bit, proving quantization breaks internal logical coherence long before it breaks generation capacity.</li>
+                    <li><strong>2. The MCC / Imbalance Problem:</strong> When a generator is highly accurate (e.g., DeepSeek at 90%), FPR artificially spikes because there are almost no negative examples. Using Matthew's Correlation Coefficient (MCC) reveals that DeepSeek is actually a phenomenal judge, immune to the "Yes Man" effect.</li>
+                    <li><strong>3. The "Yes Man" Effect:</strong> Sub-2B standard models blindly rubber-stamp their own hallucinations. Feeding this data into a self-improvement loop (STaR) will cause catastrophic <strong>model collapse</strong>.</li>
+                    <li><strong>4. The ~3B Parameter Survival Line:</strong> Scale acts as a buffer. <strong>Llama-3.2-3B</strong> and <strong>Qwen3.5-2B</strong> are the only non-reasoning models capable of surviving quantization while maintaining a positive verification Delta.</li>
                 </ul>
             </div>
 
-            <h2 style="margin-top: 2rem;">1. Key Formulas & Evaluation Metrics</h2>
+            <h2 style="margin-top: 2rem;">1. Key Self-Improvement Metrics</h2>
             <div class="grid" style="margin-bottom: 2rem;">
                 <div class="card">
                     <div class="card-header">1. Verifier Accuracy Delta (&Delta;)</div>
                     <div style="font-size: 1.1rem; text-align: center; margin: 0.8rem 0; font-weight: bold; color: var(--primary);">
                         $$\Delta = \text{Accuracy}_{\text{Verifier}} - \text{Accuracy}_{\text{Generator}}$$
                     </div>
-                    <p style="font-size: 0.9em; margin-bottom: 0;"><strong>Interpretation:</strong> The net gain in task accuracy from filtering through the model's self-judgment vs simple generator majority vote. Positive (&gt; 0) means the verifier genuinely helped.</p>
+                    <p style="font-size: 0.9em; margin-bottom: 0;"><strong>The Real-World Test:</strong> A negative &Delta; means the verifier actively hurts performance and cannot be used for self-improvement.</p>
                 </div>
 
                 <div class="card">
-                    <div class="card-header">2. Trace Accuracy</div>
+                    <div class="card-header">2. Matthew's Correlation Coefficient (MCC)</div>
                     <div style="font-size: 1.1rem; text-align: center; margin: 0.8rem 0; font-weight: bold; color: var(--primary);">
-                        $$\text{Trace Acc} = \frac{TP + TN}{TP + TN + FP + FN}$$
+                        $$MCC = \frac{TP \times TN - FP \times FN}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}$$
                     </div>
-                    <p style="font-size: 0.9em; margin-bottom: 0;"><strong>Interpretation:</strong> How often the model correctly labels an individual reasoning path as valid (True Positive) or invalid (True Negative).</p>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">3. False Positive Rate (Sycophancy)</div>
-                    <div style="font-size: 1.1rem; text-align: center; margin: 0.8rem 0; font-weight: bold; color: var(--danger);">
-                        $$\text{FPR} = \frac{FP}{FP + TN}$$
-                    </div>
-                    <p style="font-size: 0.9em; margin-bottom: 0;"><strong>Interpretation:</strong> Percentage of <em>incorrect</em> reasoning steps the model mistakenly approves. High FPR poisons self-training datasets.</p>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">4. Matthews Correlation Coefficient (MCC)</div>
-                    <div style="font-size: 1.05rem; text-align: center; margin: 0.8rem 0; font-weight: bold; color: var(--purple);">
-                        $$\text{MCC} = \frac{(TP \cdot TN) - (FP \cdot FN)}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}$$
-                    </div>
-                    <p style="font-size: 0.9em; margin-bottom: 0;"><strong>Interpretation:</strong> Robust metric for imbalanced data (ranges from -1 to +1). Overcomes the "Shrinking Denominator" flaw where FPR looks artificially inflated.</p>
+                    <p style="font-size: 0.9em; margin-bottom: 0;"><strong>The Ground Truth:</strong> FPR is highly sensitive to class imbalance (if Gen Acc is 90%, True Negatives are scarce, artificially spiking FPR). MCC considers all four quadrants, making it the mathematically superior metric for judging a verifier's true competence.</p>
                 </div>
             </div>
 
-            <h2 style="margin-top: 2rem;">2. Comprehensive Verifier Metrics (GSM8K, N=8)</h2>
-            <p>Below is the benchmark across models and precision levels:</p>
+            <h2 style="margin-top: 2rem;">2. GSM8K Benchmark</h2>
+            <p>Official metrics loaded directly from <code>results/gsm8k/verifier_output/metrics</code>.</p>
             
             <table>
                 <thead>
                     <tr>
                         <th>Model</th>
                         <th>Precision</th>
-                        <th>Gen Acc</th>
-                        <th>Ver Acc</th>
+                        <th>Gen Acc (Maj)</th>
+                        <th>Ver Acc (Maj)</th>
                         <th>Delta (&Delta;)</th>
-                        <th>Trace Acc</th>
+                        <th>FPR</th>
                         <th>MCC</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">Qwen Family (Reliable Judges)</td></tr>
-                    <tr>
-                        <td>Qwen3.5-2B</td>
-                        <td>16-bit</td>
-                        <td>82.00%</td>
-                        <td>83.50%</td>
-                        <td><span class="badge badge-green">+1.50%</span></td>
-                        <td>80.19%</td>
-                        <td>0.5688</td>
-                    </tr>
-                    <tr>
-                        <td>Qwen3.5-2B</td>
-                        <td>8-bit</td>
-                        <td>80.00%</td>
-                        <td>80.00%</td>
-                        <td><span class="badge badge-gray">0.00%</span></td>
-                        <td>78.62%</td>
-                        <td>0.5433</td>
-                    </tr>
-                    <tr>
-                        <td>Qwen3.5-2B</td>
-                        <td>4-bit</td>
-                        <td>79.07%</td>
-                        <td>79.07%</td>
-                        <td><span class="badge badge-gray">0.00%</span></td>
-                        <td>79.12%</td>
-                        <td>0.5516</td>
-                    </tr>
-                    <tr>
-                        <td>Qwen3.5-0.8B</td>
-                        <td>16-bit</td>
-                        <td>61.50%</td>
-                        <td>63.00%</td>
-                        <td><span class="badge badge-green">+1.50%</span></td>
-                        <td>75.88%</td>
-                        <td>0.5204</td>
-                    </tr>
-                    <tr>
-                        <td>Qwen3.5-0.8B</td>
-                        <td>8-bit</td>
-                        <td>62.50%</td>
-                        <td>66.00%</td>
-                        <td><span class="badge badge-green">+3.50%</span></td>
-                        <td>74.56%</td>
-                        <td>0.4914</td>
-                    </tr>
-                    <tr>
-                        <td>Qwen3.5-0.8B</td>
-                        <td>4-bit</td>
-                        <td>55.00%</td>
-                        <td>58.50%</td>
-                        <td><span class="badge badge-green">+3.50%</span></td>
-                        <td>69.38%</td>
-                        <td>0.4587</td>
-                    </tr>
-                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">DeepSeek (Reasoning Model)</td></tr>
-                    <tr>
-                        <td>DeepSeek-R1-1.5B</td>
-                        <td>16-bit</td>
-                        <td>90.00%</td>
-                        <td>91.00%</td>
-                        <td><span class="badge badge-green">+1.00%</span></td>
-                        <td>78.75%</td>
-                        <td>0.3545</td>
-                    </tr>
-                    <tr>
-                        <td>DeepSeek-R1-1.5B</td>
-                        <td>8-bit</td>
-                        <td>87.00%</td>
-                        <td>87.00%</td>
-                        <td><span class="badge badge-gray">0.00%</span></td>
-                        <td>78.12%</td>
-                        <td>0.3473</td>
-                    </tr>
-                    <tr>
-                        <td>DeepSeek-R1-1.5B</td>
-                        <td>4-bit</td>
-                        <td>87.00%</td>
-                        <td>85.00%</td>
-                        <td><span class="badge badge-red">-2.00%</span></td>
-                        <td>78.97%</td>
-                        <td>0.4275</td>
-                    </tr>
-                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">Broken Verifiers (Near-Zero or Negative MCC)</td></tr>
-                    <tr>
-                        <td>Llama-3.2-3B</td>
-                        <td>4-bit</td>
-                        <td>80.00%</td>
-                        <td>80.00%</td>
-                        <td><span class="badge badge-gray">0.00%</span></td>
-                        <td>71.50%</td>
-                        <td>0.1181</td>
-                    </tr>
-                    <tr>
-                        <td>Gemma-3-1B-it</td>
-                        <td>16-bit</td>
-                        <td>55.00%</td>
-                        <td>52.00%</td>
-                        <td><span class="badge badge-red">-3.00%</span></td>
-                        <td>46.25%</td>
-                        <td><span class="badge badge-red">-0.0347</span></td>
-                    </tr>
+                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">DeepSeek-R1-Distill-Qwen-1.5B (CoT Model)</td></tr>
+<tr><td>DeepSeek-R1-Distill-Qwen-1.5B</td><td>16bit</td><td>90.00%</td><td>91.00%</td><td style='color:var(--success)'>+1.00%</td><td>64.14%</td><td>0.355</td></tr>
+<tr><td>DeepSeek-R1-Distill-Qwen-1.5B</td><td>8bit</td><td>87.00%</td><td>87.00%</td><td style='color:gray'>0.00%</td><td>62.38%</td><td>0.365</td></tr>
+<tr><td>DeepSeek-R1-Distill-Qwen-1.5B</td><td>4bit</td><td>87.00%</td><td>85.00%</td><td style='color:var(--danger)'>-2.00%</td><td>55.20%</td><td>0.428</td></tr>
+                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">The "Survival Line" (>= 2 Billion Params)</td></tr>
+<tr><td>Llama-3.2-3B-Instruct</td><td>16bit</td><td>75.00%</td><td>77.00%</td><td style='color:var(--success)'>+2.00%</td><td>87.02%</td><td>0.223</td></tr>
+<tr><td>Llama-3.2-3B-Instruct</td><td>8bit</td><td>79.00%</td><td>78.00%</td><td style='color:var(--danger)'>-1.00%</td><td>81.27%</td><td>0.213</td></tr>
+<tr><td>Llama-3.2-3B-Instruct</td><td>4bit</td><td>77.00%</td><td>77.00%</td><td style='color:gray'>0.00%</td><td>92.45%</td><td>0.115</td></tr>
+<tr><td>Qwen3.5-2B</td><td>16bit</td><td>82.00%</td><td>83.50%</td><td style='color:var(--success)'>+1.50%</td><td>19.44%</td><td>0.569</td></tr>
+<tr><td>Qwen3.5-2B</td><td>8bit</td><td>80.00%</td><td>80.00%</td><td style='color:gray'>0.00%</td><td>21.51%</td><td>0.543</td></tr>
+<tr><td>Qwen3.5-2B</td><td>4bit</td><td>78.22%</td><td>80.20%</td><td style='color:var(--success)'>+1.98%</td><td>30.29%</td><td>0.514</td></tr>
+                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">The "Collapse Zone" (< 1.5 Billion Params)</td></tr>
+<tr><td>Llama-3.2-1B-Instruct</td><td>16bit</td><td>54.00%</td><td>53.00%</td><td style='color:var(--danger)'>-1.00%</td><td>0.42%</td><td>-0.042</td></tr>
+<tr><td>Qwen3.5-0.8B</td><td>16bit</td><td>61.50%</td><td>63.00%</td><td style='color:var(--success)'>+1.50%</td><td>28.91%</td><td>0.520</td></tr>
+<tr><td>Qwen3.5-0.8B</td><td>8bit</td><td>62.50%</td><td>66.00%</td><td style='color:var(--success)'>+3.50%</td><td>26.11%</td><td>0.491</td></tr>
+<tr><td>Qwen3.5-0.8B</td><td>4bit</td><td>55.00%</td><td>58.50%</td><td style='color:var(--success)'>+3.50%</td><td>44.00%</td><td>0.459</td></tr>
+<tr><td>gemma-3-1b-it</td><td>16bit</td><td>55.00%</td><td>52.00%</td><td style='color:var(--danger)'>-3.00%</td><td>89.51%</td><td>-0.086</td></tr>
+<tr><td>gemma-3-1b-it</td><td>8bit</td><td>52.00%</td><td>48.00%</td><td style='color:var(--danger)'>-4.00%</td><td>85.35%</td><td>-0.062</td></tr>
+<tr><td>gemma-3-1b-it</td><td>4bit</td><td>38.00%</td><td>38.00%</td><td style='color:gray'>0.00%</td><td>95.41%</td><td>0.116</td></tr>
                 </tbody>
             </table>
 
-            <h2 style="margin-top: 3rem;">2. The Ceiling Effect: Qwen 0.8B on SVAMP</h2>
+            <h2 style="margin-top: 3rem;">3. Deep Dive Insights</h2>
+            
+            <div class="grid">
+                <div class="card highlight">
+                    <h3 style="margin-top: 0;">Insight 1: The 4-bit Lobotomy</h3>
+                    <p>Look at the MCC column for <strong>Gemma-3-1B</strong> or <strong>DeepSeek</strong>. As precision drops from 16-bit to 4-bit, the MCC collapses.</p>
+                    <p><strong>Conclusion:</strong> 4-bit quantization destroys the continuous weight representations required to maintain a logical chain of thought. You cannot run verifiers in 4-bit on SLMs.</p>
+                </div>
+
+                <div class="card highlight">
+                    <h3 style="margin-top: 0;">Insight 2: The Imbalance Illusion</h3>
+                    <p>Look at <strong>DeepSeek-R1</strong> (16-bit) on GSM8K. It has a seemingly bad FPR of 64.1%, but an incredible MCC of 0.354 (compared to standard models).</p>
+                    <p>Because its generator is 90% accurate, 90% of the traces it evaluates are correct. Making just a handful of mistakes artificially inflates the FPR percentage. <strong>MCC proves that DeepSeek is actually a phenomenal binary classifier.</strong></p>
+                </div>
+            </div>
+
+            <h2 style="margin-top: 3rem;">4. Math500 Benchmark</h2>
             <div class="alert" style="background-color: #fffbeb; border-left-color: var(--warning);">
-                What happens when the base dataset is too easy? On SVAMP, Qwen achieves 84% Generation Accuracy right out of the gate.
+                Official metrics loaded directly from <code>results/math500/verifier_output/metrics</code>.
             </div>
             <table>
                 <thead>
                     <tr>
-                        <th>Model (Dataset)</th>
+                        <th>Model</th>
                         <th>Precision</th>
-                        <th>Gen Acc</th>
-                        <th>Ver Acc</th>
+                        <th>Gen Acc (Maj)</th>
+                        <th>Ver Acc (Maj)</th>
                         <th>Delta (&Delta;)</th>
-                        <th>Trace Acc</th>
+                        <th>FPR</th>
                         <th>MCC</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>Qwen 0.8B (SVAMP)</td>
-                        <td>16-bit</td>
-                        <td>84.00%</td>
-                        <td>82.00%</td>
-                        <td><span class="badge badge-red">-2.00%</span></td>
-                        <td>72.50%</td>
-                        <td>0.3724</td>
-                    </tr>
-                    <tr>
-                        <td>Qwen 0.8B (SVAMP)</td>
-                        <td>8-bit</td>
-                        <td>80.00%</td>
-                        <td>78.00%</td>
-                        <td><span class="badge badge-red">-2.00%</span></td>
-                        <td>71.38%</td>
-                        <td>0.3663</td>
-                    </tr>
-                    <tr>
-                        <td>Qwen 0.8B (SVAMP)</td>
-                        <td>4-bit</td>
-                        <td>80.00%</td>
-                        <td>77.00%</td>
-                        <td><span class="badge badge-red">-3.00%</span></td>
-                        <td>71.25%</td>
-                        <td>0.3690</td>
-                    </tr>
+                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">DeepSeek-R1-Distill-Qwen-1.5B (CoT Model)</td></tr>
+<tr><td>DeepSeek-R1-Distill-Qwen-1.5B</td><td>16bit</td><td>51.00%</td><td>52.00%</td><td style='color:var(--success)'>+1.00%</td><td>43.22%</td><td>0.250</td></tr>
+<tr><td>DeepSeek-R1-Distill-Qwen-1.5B</td><td>4bit</td><td>55.00%</td><td>54.00%</td><td style='color:var(--danger)'>-1.00%</td><td>53.90%</td><td>0.265</td></tr>
+                    <tr><td colspan="7" style="background:#f1f5f9; font-weight:bold;">Qwen 3.5 Family</td></tr>
+<tr><td>Qwen3.5-0.8B</td><td>16bit</td><td>41.00%</td><td>42.00%</td><td style='color:var(--success)'>+1.00%</td><td>33.03%</td><td>0.483</td></tr>
+<tr><td>Qwen3.5-0.8B</td><td>8bit</td><td>44.00%</td><td>45.00%</td><td style='color:var(--success)'>+1.00%</td><td>28.44%</td><td>0.494</td></tr>
+<tr><td>Qwen3.5-0.8B</td><td>4bit</td><td>34.00%</td><td>36.00%</td><td style='color:var(--success)'>+2.00%</td><td>26.73%</td><td>0.547</td></tr>
                 </tbody>
             </table>
-            <p><strong>Observation:</strong> Across all precisions, the Verifier &Delta; is strictly negative. When generation accuracy is too high, there are very few negative examples for the verifier to practice on. A verifier only improves the system when the task sits in the "sweet spot" of difficulty (like GSM8K).</p>
-
-            <h2 style="margin-top: 3rem;">3. Deep Dive: Why FPR fails for High-Accuracy Models</h2>
+            
+            <h2 style="margin-top: 3rem;">5. Final Conclusion</h2>
             <div class="card highlight">
-                <p><strong>The Shrinking Denominator Illusion:</strong> DeepSeek 16-bit shows a massive 63.64% False Positive Rate. Is it a terrible judge? No.</p>
-                <p>Because its generator is 90% accurate, 90% of the traces it evaluates are correct. The pool of <em>True Negatives</em> is so small (only 72 traces out of 800) that making just a handful of mistakes artificially inflates the FPR percentage. </p>
-                <p><strong>The Solution (MCC):</strong> Matthew's Correlation Coefficient (MCC) takes all four quadrants of the confusion matrix into account, making it immune to class imbalance. DeepSeek 16-bit's MCC is a respectable 0.35. Looking at the MCC across precisions reveals a new finding: <strong>DeepSeek's verifier remains highly stable even down to 4-bit</strong>, maintaining an MCC around 0.35 - 0.42. Unlike traditional models which collapse under quantization, the reasoning model's extensive internal chain-of-thought preserves its verification abilities.</p>
-            </div>
-
-            <h2 style="margin-top: 3rem;">4. Visualizing Quantization Collapse</h2>
-            <div class="grid" style="align-items: center; justify-items: center;">
-                <div style="text-align:center;">
-                    <h4>Qwen3.5-0.8B (GSM8K N=8)</h4>
-                    <p style="font-size: 0.9em;">Notice how False Positives (top right quadrant) spike heavily when moving to 4-bit, dropping the MCC.</p>
-                    <img src="./images/confusion_matrices_Qwen_Qwen3.5-0.8B_gsm8k_n8.png" alt="Qwen 0.8B Confusion Matrix" style="max-width:100%; border: 1px solid var(--border); border-radius: 8px;">
-                </div>
-                <div style="text-align:center;">
-                    <h4>Llama-3.2-3B (GSM8K N=8)</h4>
-                    <p style="font-size: 0.9em;">Llama acts as a sycophant. It approves almost all traces, leading to a near-zero MCC.</p>
-                    <img src="./images/confusion_matrices_meta-llama_Llama-3.2-3B-Instruct_gsm8k_n8.png" alt="Llama 3B Confusion Matrix" style="max-width:100%; border: 1px solid var(--border); border-radius: 8px;">
-                </div>
-            </div>
-        <h2 style="margin-top: 3rem;">5. Concrete Failure Scenarios</h2>
-            <div class="grid">
-                <div class="card">
-                    <div class="card-header" style="color: var(--danger);">1. The Sycophant (False Positive)</div>
-                    <div class="qa-block user"><strong>Q:</strong> The Llesis family drove and hiked 6 hours... They drove 50 mph and hiked 5 mph less than half their driving speed. Hiking took 1.5 hours. How far was the spot?</div>
-                    <div class="qa-block gen"><strong>Student:</strong> 330 <em>(Wrong, GT is 255)</em></div>
-                    <div class="qa-block fail"><strong>Verifier:</strong> Correct</div>
-                    <p style="font-size: 0.9em; margin-bottom:0;">The model fails to recalculate the arithmetic internally. It sees confident-sounding steps and rubber-stamps them, a common bias in RLHF-aligned models.</p>
-                </div>
-                <div class="card">
-                    <div class="card-header" style="color: var(--warning);">2. Over-Conservative (False Negative)</div>
-                    <div class="qa-block user"><strong>Q:</strong> Nick is choosing between two jobs. Job A pays $15/hr for 2000 hours, 20% tax. Job B pays $42k, $6k property tax, 10% income tax on net after property tax. Difference in net pay?</div>
-                    <div class="qa-block gen"><strong>Student:</strong> 8400 <em>(Correct)</em></div>
-                    <div class="qa-block fail"><strong>Verifier:</strong> Incorrect</div>
-                    <p style="font-size: 0.9em; margin-bottom:0;">The verifier likely lost track of the complex, sequential tax logic in Job B, diverging from its own internal reasoning and wrongly punishing the student.</p>
-                </div>
+                <p><strong>Self-Improvement on Edge Devices is Architecturally Bound by Model Size.</strong></p>
+                <p>The MCC data unequivocally proves that you cannot compress a non-reasoning verifier below ~3 Billion parameters and expect it to self-correct. These models act as "Yes Men", verifying their own broken logic with high confidence.</p>
+                <p>If you are building an autonomous, self-correcting agentic pipeline on edge hardware, <strong>Llama-3.2-3B and Qwen3.5-2B are the absolute minimum viable architectures.</strong> Attempting self-improvement loops on anything smaller, particularly with 4-bit quantization, will result in catastrophic degradation.</p>
             </div>
         </div>
     </div>

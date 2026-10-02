@@ -31,6 +31,17 @@ done
 echo "======================================================"
 echo " 4. Generate Reasoning Traces"
 echo "======================================================"
+
+if [[ "${MODEL}" == *"DeepSeek-R1"* ]]; then
+  MAX_NEW_TOKENS=8192
+  REP_PENALTY=1.0
+  echo "Detected DeepSeek R1 model: setting MAX_NEW_TOKENS=8192 to prevent CoT truncation."
+else
+  MAX_NEW_TOKENS=2048
+  REP_PENALTY=1.1
+  echo "Detected standard model: setting REP_PENALTY=1.1 to prevent hallucination loops."
+fi
+
 PYTHONPATH=. python scripts/run_experiment_d.py \
   --model "${MODEL}" \
   --precision "${PRECISION}" \
@@ -38,7 +49,9 @@ PYTHONPATH=. python scripts/run_experiment_d.py \
   --n_samples "${N_SAMPLES}" \
   --batch_size "${BATCH_SIZE}" \
   --output_dir "${BASE_DIR}" \
-  --limit "${LIMIT}"
+  --limit "${LIMIT}" \
+  --max_new_tokens "${MAX_NEW_TOKENS}" \
+  --repetition_penalty "${REP_PENALTY}"
 
 echo "======================================================"
 echo " 5. Extract Verifier Dataset"
@@ -62,14 +75,25 @@ else
     LIMIT_ARG=""
 fi
 
+# Verifier only needs enough tokens to review and conclude (not full 8k scratchpad generation)
+if [[ "${MODEL}" == *"DeepSeek-R1"* ]]; then
+  VERIFIER_MAX_NEW_TOKENS=1536
+  VERIFIER_BATCH_SIZE=16
+else
+  VERIFIER_MAX_NEW_TOKENS=512
+  VERIFIER_BATCH_SIZE="${BATCH_SIZE}"
+fi
+
 PYTHONPATH=. python scripts/run_verifier_benchmark.py \
     --directory "${BASE_DIR}" \
     --model_id "${MODEL}" \
     --precision "${PRECISION}" \
     --dataset "${DATASET}" \
     --n_samples "n${N_SAMPLES}" \
-    --batch_size "${BATCH_SIZE}" \
+    --batch_size "${VERIFIER_BATCH_SIZE}" \
     --output_dir "${BASE_DIR}" \
+    --max_new_tokens "${VERIFIER_MAX_NEW_TOKENS}" \
+    --repetition_penalty "${REP_PENALTY}" \
     ${LIMIT_ARG}
 
 echo "======================================================"
