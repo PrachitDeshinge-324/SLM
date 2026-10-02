@@ -1,5 +1,12 @@
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, set_seed
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    BitsAndBytesConfig,
+    StoppingCriteria,
+    StoppingCriteriaList,
+    set_seed,
+)
 import time
 
 
@@ -8,6 +15,33 @@ import os
 # Model families known to crash on MPS due to PyTorch MPS double-free bugs
 # (e.g., Qwen3.5 hybrid GatedDeltaNet + sparse attention architecture)
 _MPS_INCOMPATIBLE_FAMILIES = ["qwen3.5", "qwen3-5"]
+
+
+class _StopAfterBoxedAnswer(StoppingCriteria):
+    def __init__(self, tokenizer, prompt_length):
+        self.tokenizer = tokenizer
+        self.prompt_length = prompt_length
+
+    def __call__(self, input_ids, scores, **kwargs):
+        should_stop = []
+        for sequence in input_ids:
+            generated = sequence[self.prompt_length:][-256:]
+            text = self.tokenizer.decode(generated, skip_special_tokens=True)
+            start = text.rfind("\\boxed{")
+            if start < 0:
+                should_stop.append(False)
+                continue
+
+            depth = 0
+            for character in text[start + len("\\boxed{") - 1:]:
+                if character == "{" and (depth == 0 or character != "\\"):
+                    depth += 1
+                elif character == "}" and depth > 0:
+                    depth -= 1
+                    if depth == 0:
+                        break
+            should_stop.append(depth == 0)
+        return torch.tensor(should_stop, dtype=torch.bool, device=input_ids.device)
 
 
 def get_device(model_id: str = ""):
@@ -42,10 +76,17 @@ def load_model_and_tokenizer(model_id: str, precision: str = "16bit"):
     """
     device = get_device(model_id)
     print(f"Loading {model_id} on {device} with {precision} precision...")
+
+    if precision in {"8bit", "4bit"} and device != "cuda":
+        raise RuntimeError(
+            f"{precision} quantization requires CUDA; selected device is {device}."
+        )
     
     # Dynamically check for bfloat16 support to handle a mix of T4, L4, and A100 GPUs
     if device == "cuda" and torch.cuda.is_bf16_supported():
         best_dtype = torch.bfloat16
+    elif device == "cpu":
+        best_dtype = torch.float32
     else:
         best_dtype = torch.float16
 
@@ -60,13 +101,13 @@ def load_model_and_tokenizer(model_id: str, precision: str = "16bit"):
 
     # device_map="auto" for CUDA (handles sharding); explicit device for mps/cpu
     if device == "cuda":
-        model_kwargs["device_map"] = "auto"
+        # Colab normally has one GPU; keep the model there instead of allowing
+        # automatic CPU offload, which causes a severe per-token slowdown.
+        model_kwargs["device_map"] = "cuda" if torch.cuda.device_count() == 1 else "auto"
     else:
         model_kwargs["device_map"] = device
 
     if precision == "4bit":
-        if device != "cuda":
-            print("Warning: 4-bit quantization usually requires CUDA. Attempting anyway...")
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_compute_dtype=best_dtype,
@@ -76,8 +117,6 @@ def load_model_and_tokenizer(model_id: str, precision: str = "16bit"):
         model_kwargs["quantization_config"] = bnb_config
         model_kwargs["dtype"] = best_dtype  # For unquantized layers (LM head, embeds)
     elif precision == "8bit":
-        if device != "cuda":
-            print("Warning: 8-bit quantization usually requires CUDA. Attempting anyway...")
         bnb_config = BitsAndBytesConfig(
             load_in_8bit=True,
         )
@@ -87,8 +126,20 @@ def load_model_and_tokenizer(model_id: str, precision: str = "16bit"):
         # 16bit
         model_kwargs["dtype"] = best_dtype
 
-    model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
+    try:
+        model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
+    except (TypeError, ValueError, ImportError) as error:
+        if "attn_implementation" not in model_kwargs:
+            raise
+        print(f"SDPA is unavailable for {model_id}; retrying with the model default attention: {error}")
+        model_kwargs.pop("attn_implementation")
+        model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
     model.eval()
+    device_map = getattr(model, "hf_device_map", None)
+    if device_map and any(str(mapped_device) in {"cpu", "disk"} for mapped_device in device_map.values()):
+        print(f"Warning: model placement includes CPU/disk offload: {device_map}")
+    elif device_map:
+        print(f"Model device map: {device_map}")
 
     return model, tokenizer
 
@@ -105,6 +156,16 @@ def _get_model_device(model):
         return "cpu"
 
 
+def _generated_token_length(tokens, tokenizer):
+    """Return generated tokens before the first EOS or padding token."""
+    eos_token_id = tokenizer.eos_token_id
+    pad_token_id = tokenizer.pad_token_id
+    for index, token in enumerate(tokens.tolist()):
+        if token == eos_token_id or token == pad_token_id:
+            return index
+    return len(tokens)
+
+
 def generate_n_samples(
     model,
     tokenizer,
@@ -116,6 +177,7 @@ def generate_n_samples(
     max_new_tokens: int = 256,
     batch_size: int = 4,
     repetition_penalty: float = 1.0,
+    stop_on_boxed: bool = False,
 ):
     """
     Generates N samples for a given prompt using temperature sampling.
@@ -142,7 +204,11 @@ def generate_n_samples(
         input_ids = inputs["input_ids"].repeat(current_batch, 1)
         attention_mask = inputs["attention_mask"].repeat(current_batch, 1)
 
-        with torch.no_grad():
+        stopping_criteria = (
+            StoppingCriteriaList([_StopAfterBoxedAnswer(tokenizer, inputs["input_ids"].shape[1])])
+            if stop_on_boxed else None
+        )
+        with torch.inference_mode():
             outputs = model.generate(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
@@ -152,6 +218,8 @@ def generate_n_samples(
                 top_p=top_p,
                 repetition_penalty=repetition_penalty,
                 do_sample=True,
+                use_cache=True,
+                stopping_criteria=stopping_criteria,
                 pad_token_id=tokenizer.pad_token_id,
             )
 
@@ -163,7 +231,7 @@ def generate_n_samples(
         batch_valid_tokens = 0
         for i in range(current_batch):
             seq = generated_tokens[i]
-            valid_len = (seq != tokenizer.pad_token_id).sum().item()
+            valid_len = _generated_token_length(seq, tokenizer)
             generation_lengths.append(valid_len)
             batch_valid_tokens += valid_len
 
@@ -191,6 +259,7 @@ def generate_batch_prompts(
     max_new_tokens: int = 256,
     batch_size: int = 32,
     repetition_penalty: float = 1.0,
+    stop_on_boxed: bool = False,
 ):
     """
     Generates n_samples for multiple prompts at once to maximize GPU utilization.
@@ -222,7 +291,11 @@ def generate_batch_prompts(
             batch_input_ids = inputs["input_ids"].index_select(0, prompt_indices)
             batch_attention_mask = inputs["attention_mask"].index_select(0, prompt_indices)
             
-            with torch.no_grad():
+            stopping_criteria = (
+                StoppingCriteriaList([_StopAfterBoxedAnswer(tokenizer, batch_input_ids.shape[1])])
+                if stop_on_boxed else None
+            )
+            with torch.inference_mode():
                 outputs = model.generate(
                     input_ids=batch_input_ids,
                     attention_mask=batch_attention_mask,
@@ -232,6 +305,8 @@ def generate_batch_prompts(
                     top_p=top_p,
                     repetition_penalty=repetition_penalty,
                     do_sample=True,
+                    use_cache=True,
+                    stopping_criteria=stopping_criteria,
                     pad_token_id=tokenizer.pad_token_id,
                 )
                 
@@ -241,7 +316,7 @@ def generate_batch_prompts(
             batch_valid_tokens = 0
             for j in range(generated_tokens.shape[0]):
                 seq = generated_tokens[j]
-                valid_len = (seq != tokenizer.pad_token_id).sum().item()
+                valid_len = _generated_token_length(seq, tokenizer)
                 generation_lengths_flat.append(valid_len)
                 batch_valid_tokens += valid_len
                 

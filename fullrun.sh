@@ -36,10 +36,14 @@ if [[ "${MODEL}" == *"DeepSeek-R1"* ]]; then
   MAX_NEW_TOKENS=8192
   REP_PENALTY=1.0
   echo "Detected DeepSeek R1 model: setting MAX_NEW_TOKENS=8192 to prevent CoT truncation."
-else
+elif [[ "${DATASET}" == *"math500"* ]]; then
   MAX_NEW_TOKENS=2048
   REP_PENALTY=1.1
-  echo "Detected standard model: setting REP_PENALTY=1.1 to prevent hallucination loops."
+  echo "Detected math500: setting MAX_NEW_TOKENS=2048."
+else
+  MAX_NEW_TOKENS=512
+  REP_PENALTY=1.1
+  echo "Detected short-answer dataset: setting MAX_NEW_TOKENS=512 and REP_PENALTY=1.1."
 fi
 
 PYTHONPATH=. python scripts/run_experiment_d.py \

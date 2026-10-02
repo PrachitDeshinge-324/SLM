@@ -219,6 +219,7 @@ def main():
                             max_new_tokens=batch_max_new,
                             batch_size=current_batch_size,
                             repetition_penalty=args.repetition_penalty,
+                            stop_on_boxed=dataset_name.lower() == "math500",
                         )
                         break  # Success!
                     except RuntimeError as e:

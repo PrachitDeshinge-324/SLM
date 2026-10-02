@@ -15,11 +15,11 @@ from dotenv import load_dotenv
 # Ensure the repository root directory is in sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src.experiment_d.inference import _generated_token_length, get_device
 # Suppress harmless specific warnings for a cleaner console
 # (?s) allows '.' to match newlines across multiline warning messages
 warnings.filterwarnings("ignore", message=r"(?s).*MatMul8bitLt.*")
 warnings.filterwarnings("ignore", message=r"(?s).*torch_dtype.*")
-
 
 class HarmlessWarningFilter(logging.Filter):
     """Filter warnings emitted through the logging module (e.g. transformers logger)."""
@@ -79,6 +79,7 @@ def parse_verifier_output(output_text, student_answer=None):
     m = re.search(r'(?i)\b(?:the\s+student\'?s?\s+|this\s+)?solution\s+is\s+(?:\*{1,2})?\s*(correct|incorrect)\b', text)
     if m:
         return [], m.group(1).lower() == "correct"
+
 
     # 5. Tail check for explicit statement in the last 250 characters
     tail = text[-250:]
@@ -154,20 +155,26 @@ def main():
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
     
-    # Determine best dtype for the hardware (bfloat16 for A100/L4, float16 for T4)
-    # T4 GPUs do not support bfloat16 natively and will emulate it, causing massive slowdowns
-    if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
+    device = get_device(args.model_id)
+    if args.precision != "16bit" and device != "cuda":
+        raise RuntimeError(
+            f"{args.precision} verifier inference requires CUDA; selected device is {device}."
+        )
+
+    # Determine a dtype supported by the selected device.
+    if device == "cuda" and torch.cuda.is_bf16_supported():
         compute_dtype = torch.bfloat16
         print("Hardware supports bfloat16. Using bfloat16 for optimal precision.")
+    elif device == "cpu":
+        compute_dtype = torch.float32
+        print("Using float32 on CPU for broad operator support.")
     else:
         compute_dtype = torch.float16
-        print("Hardware does not support bfloat16 (e.g., T4/Mac). Falling back to float16.")
+        print("Using float16 on the selected accelerator.")
 
-    # Configure Quantization & Precision
-    # We use "cuda" instead of "auto" to prevent small models from being needlessly
-    # split across multiple GPUs (e.g. Dual T4), which causes massive PCIe overhead.
+    # Configure quantization and precision for the selected device.
     model_kwargs = {
-        "device_map": "cuda", 
+        "device_map": device,
         "dtype": compute_dtype,
         "attn_implementation": "sdpa"
     }
@@ -292,7 +299,7 @@ def main():
             
             # Check length and cutoff
             seq = generated_tokens[idx]
-            valid_len = (seq != tokenizer.eos_token_id).sum().item()
+            valid_len = _generated_token_length(seq, tokenizer)
             is_cutoff = (valid_len >= args.max_new_tokens)
             
             _, final_conclusion = parse_verifier_output(response_text, student_answer=item.get('generated_answer'))
