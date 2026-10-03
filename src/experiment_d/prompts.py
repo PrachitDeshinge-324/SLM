@@ -77,15 +77,41 @@ def get_cqa_messages(question: str, choices: list[dict]) -> list[dict]:
     ]
 
 
+# Fixed date so templates that print "Today Date" (Llama 3.x) render identically on every run.
+FIXED_TEMPLATE_DATE = "01 Jan 2026"
+
+# Model cards that ask for all instructions in the user turn (no system message).
+_NO_SYSTEM_PROMPT_FAMILIES = ("deepseek-r1",)
+
+
+def _fold_system_into_user(messages: list[dict]) -> list[dict]:
+    """Prepend the system text to the first user turn and drop the system message."""
+    if not messages or messages[0]["role"] != "system":
+        return messages
+    system, rest = messages[0]["content"], list(messages[1:])
+    for i, message in enumerate(rest):
+        if message["role"] == "user":
+            rest[i] = {"role": "user", "content": f"{system}\n\n{message['content']}"}
+            break
+    return rest
+
+
 def build_prompt(tokenizer, messages: list[dict]) -> str:
     """
     Renders a message list into the model's native chat format using the
     tokenizer's built-in template. Works for Llama, Qwen, Mistral, etc.
+
+    The rendered string already contains BOS where the template writes one, so callers
+    must tokenize it with add_special_tokens=False.
     """
+    name = getattr(tokenizer, "name_or_path", "").lower()
+    if any(family in name for family in _NO_SYSTEM_PROMPT_FAMILIES):
+        messages = _fold_system_into_user(messages)
     return tokenizer.apply_chat_template(
         messages,
         tokenize=False,
         add_generation_prompt=True,
+        date_string=FIXED_TEMPLATE_DATE,
     )
 
 MATH500_SYSTEM = "You are a helpful math tutor. Solve the problem step by step and enclose the final answer in \\boxed{}."
@@ -121,7 +147,7 @@ def get_generic_messages(question: str, choices: list = None) -> list[dict]:
 
 def get_messages(dataset_name: str, question: str, choices: list = None):
     name = dataset_name.lower()
-    if name == "gsm8k":
+    if name == "gsm8k" or "svamp" in name:
         return get_gsm8k_messages(question)
     elif name == "cqa":
         return get_cqa_messages(question, choices)

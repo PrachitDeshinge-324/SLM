@@ -44,6 +44,7 @@ for _h in tf_logging.get_logger().handlers:
     _h.addFilter(_warning_filter)
 
 from src.experiment_d.prompts import get_messages, build_prompt
+from src.experiment_d.inference import _get_model_device
 from src.experiment_d.inference import load_model_and_tokenizer, generate_batch_prompts
 from src.experiment_d.extractors import get_extractor
 from src.experiment_d.metrics import compute_metrics
@@ -140,20 +141,30 @@ def main():
             "total_questions": len(data),
             "dataset_fingerprint": dataset_fingerprint,
             "model_revision": getattr(model.config, "_commit_hash", None),
+            # Everything below is needed to audit that runs are comparable.
+            "prompt_sha256": hashlib.sha256(build_prompt(
+                tokenizer, get_messages(dataset_name, "PROBE QUESTION", [{"label": "A", "text": "x"}] if dataset_name.lower() == "cqa" else None)
+            ).encode("utf-8")).hexdigest(),
+            "model_dtype": str(getattr(model, "dtype", None)),
+            "device": str(_get_model_device(model)),
+            "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+            "torch_version": torch.__version__,
+            "transformers_version": __import__("transformers").__version__,
         }
         # Scientific parameters that MUST match for resume to be valid
         # Operational parameters like batch_size are hardware-dependent and allowed to change
         scientific_keys = [
             "model", "precision", "dataset", "n_samples",
             "temperature", "top_k", "top_p", "seed",
-            "repetition_penalty", "dataset_fingerprint"
+            "repetition_penalty", "dataset_fingerprint", "max_new_tokens", "prompt_sha256"
         ]
 
         if processed_ids and existing_config is None:
             raise RuntimeError(f"Cannot safely resume {output_file}: existing records have no run_config header. Move the file or start a fresh output directory.")
         if existing_config is not None:
             mismatches = [key for key in scientific_keys
-                          if key in expected_config and existing_config.get(key) != expected_config.get(key)]
+                          if key in expected_config and key in existing_config
+                          and existing_config.get(key) != expected_config.get(key)]
             if mismatches:
                 raise RuntimeError(f"Cannot resume {output_file}: run settings differ for {', '.join(mismatches)}. Use a fresh output directory.")
             if existing_config.get("batch_size") != args.batch_size:
@@ -246,9 +257,10 @@ def main():
                     max_new = max_news[q_idx]
                     
                     extracted = [extractor(resp) for resp in responses]
-                    metrics = compute_metrics(extracted, item['ground_truth'])
-                    
                     cutoffs = [l >= max_new for l in gen_lengths]
+                    # Truncated samples are partial scratchpads: they must not vote.
+                    metrics = compute_metrics(extracted, item['ground_truth'],
+                                              cutoffs=cutoffs, drop_truncated=True)
                     metrics["cutoff_rate"] = sum(cutoffs) / len(cutoffs) if len(cutoffs) > 0 else 0.0
 
                     record = {

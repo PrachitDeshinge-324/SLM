@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.experiment_d.utils import answers_match
+from src.experiment_d.extractors import get_extractor
 
 
 def main():
@@ -66,6 +67,7 @@ def main():
         raise RuntimeError(f"No question records found in {filepath}")
     sampled_items = random.sample(dataset, min(200, len(dataset)))
     
+    extractor = get_extractor("ChilleD/SVAMP" if "SVAMP" in args.dataset else args.dataset)
     output_data = []
     for item in sampled_items:
         question = item['question']
@@ -77,7 +79,8 @@ def main():
         # Extract ALL generated traces for this question
         for trace_idx, trace in enumerate(item['raw_samples']):
             student_solution = trace['response']
-            generated_answer = trace.get('extracted', '')
+            # Re-extract with the current extractor: stored 'extracted' came from older code.
+            generated_answer = extractor(student_solution)
             
             # Determine if the generated trace is correct by comparing to ground truth
             is_correct = answers_match(generated_answer, gt_answer)
@@ -90,6 +93,7 @@ def main():
                 'generated_answer': generated_answer,
                 'student_solution': student_solution,
                 'is_correct': is_correct,
+                'cutoff': bool(trace.get('cutoff', False)),
                 'label_basis': 'final_answer_match',
                 'precision': args.precision
             })

@@ -332,12 +332,14 @@ def compute_quantization_deltas(df: pd.DataFrame) -> pd.DataFrame:
     for _, row in df.iterrows():
         if str(row["precision"]).lower() == "16bit":
             key = (row["dataset"], row["model"], row["n_samples"])
-            baselines[key] = (row["accuracy"], row["pass@k"])
+            baselines[key] = (row["accuracy"], row["pass@k"], row["n_questions"])
 
     for _, row in df.iterrows():
         key = (row["dataset"], row["model"], row["n_samples"])
-        if key in baselines:
-            base_acc, base_passk = baselines[key]
+        # Deltas are only meaningful on the same question set; otherwise leave blank
+        # (use scripts/rescore_paired.py for paired deltas with confidence intervals).
+        if key in baselines and baselines[key][2] == row["n_questions"]:
+            base_acc, base_passk, _ = baselines[key]
             acc_deltas.append(round(row["accuracy"] - base_acc, 4))
             passk_deltas.append(round(row["pass@k"] - base_passk, 4))
         else:

@@ -16,6 +16,8 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.experiment_d.inference import _generated_token_length, get_device
+from src.experiment_d.prompts import build_prompt
+from src.experiment_d.verifier import VERIFIER_PROMPT_TEMPLATE, VERIFIER_SYSTEM, parse_verdict
 # Suppress harmless specific warnings for a cleaner console
 # (?s) allows '.' to match newlines across multiline warning messages
 warnings.filterwarnings("ignore", message=r"(?s).*MatMul8bitLt.*")
@@ -40,71 +42,9 @@ for _h in tf_logging.get_logger().handlers:
 
 load_dotenv()
 
-VERIFIER_PROMPT_TEMPLATE = """You are an objective math evaluator.
-Question: {question}
-
-<student_solution>
-{student_solution}
-</student_solution>
-
-Read the student's solution carefully. Is this solution correct or not?
-
-Output exactly one line:
-Final Conclusion: Correct (or Final Conclusion: Incorrect)"""
-
 def parse_verifier_output(output_text, student_answer=None):
-    if not output_text:
-        return [], None
-    
-    text = output_text
-    # Strip <think> blocks completely to avoid parsing internal monologue
-    text = re.sub(r'<think>.*?(?:</think>|$)', '', text, flags=re.DOTALL).strip()
-
-    # 1. Direct "Final Conclusion: Correct / Incorrect" (supports markdown ** and optional punctuation)
-    m = re.search(r'(?i)(?:\*{1,2})?Final\s+Conclusion(?:\*{1,2})?\s*:\s*(?:\*{1,2})?\s*(Correct|Incorrect)\b', text)
-    if m:
-        return [], m.group(1).lower() == "correct"
-
-    # 2. XML tags: <final_conclusion>Correct</final_conclusion>
-    m = re.search(r'(?i)<final_conclusion>\s*(Correct|Incorrect)\s*</final_conclusion>', text)
-    if m:
-        return [], m.group(1).lower() == "correct"
-
-    # 3. "Conclusion: The student's solution is Correct/Incorrect"
-    m = re.search(r'(?i)(?:\*{1,2})?Conclusion(?:\*{1,2})?\s*:\s*(?:the\s+student\'?s?\s+solution\s+is\s+)?(?:\*{1,2})?\s*(Correct|Incorrect)\b', text)
-    if m:
-        return [], m.group(1).lower() == "correct"
-
-    # 4. "[student's] solution is correct/incorrect"
-    m = re.search(r'(?i)\b(?:the\s+student\'?s?\s+|this\s+)?solution\s+is\s+(?:\*{1,2})?\s*(correct|incorrect)\b', text)
-    if m:
-        return [], m.group(1).lower() == "correct"
-
-
-    # 5. Tail check for explicit statement in the last 250 characters
-    tail = text[-250:]
-    m_inc = re.search(r'(?i)\b(?:is\s+|judged\s+as\s+|marked\s+as\s+)(?:\*{1,2})?incorrect\b', tail)
-    if m_inc:
-        return [], False
-    m_cor = re.search(r'(?i)\b(?:is\s+|judged\s+as\s+|marked\s+as\s+)(?:\*{1,2})?correct\b', tail)
-    if m_cor:
-        return [], True
-
-    # 6. Fallback for Reasoning/Thinking models (e.g. DeepSeek-R1) that re-solve the problem:
-    # If the model produced a mathematical final answer instead of a verbal judgment,
-    # compare its derived answer to the student's solution.
-    if student_answer is not None:
-        try:
-            from src.experiment_d.extractors import extract_gsm8k_answer
-            from scripts.extract_verifier_dataset import answers_match
-            ver_ans = extract_gsm8k_answer(text)
-            if ver_ans:
-                return [], answers_match(ver_ans, str(student_answer))
-        except Exception:
-            pass
-
-    # 7. Ultimate fallback: if completely unparseable, assume None (unparseable)
-    return [], None
+    """Kept for call-site compatibility; student_answer is intentionally unused (see verifier.parse_verdict)."""
+    return [], parse_verdict(output_text)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -261,13 +201,13 @@ def main():
                 student_solution=item['student_solution']
             )
             messages = [
-                {"role": "system", "content": "You are a helpful, strict, and precise math teacher."},
+                {"role": "system", "content": VERIFIER_SYSTEM},
                 {"role": "user", "content": prompt}
             ]
-            text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            text = build_prompt(tokenizer, messages)
             batch_texts.append(text)
             
-        inputs = tokenizer(batch_texts, return_tensors="pt", padding=True).to(model.device)
+        inputs = tokenizer(batch_texts, return_tensors="pt", padding=True, add_special_tokens=False).to(model.device)
         
         try:
             with torch.no_grad():

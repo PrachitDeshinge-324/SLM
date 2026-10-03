@@ -11,41 +11,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src.experiment_d.verifier import parse_verdict
 
-def parse_verifier_output(output_text: str, student_answer=None):
-    """Parse the constrained verifier response without importing plotting dependencies."""
-    if not output_text:
-        return [], None
-    text = re.sub(r"<think>.*?(?:</think>|$)", "", output_text, flags=re.DOTALL).strip()
 
-    patterns = (
-        r"(?i)(?:\*{1,2})?Final\s+Conclusion(?:\*{1,2})?\s*:\s*(?:\*{1,2})?\s*(Correct|Incorrect)\b",
-        r"(?i)<final_conclusion>\s*(Correct|Incorrect)\s*</final_conclusion>",
-        r"(?i)(?:\*{1,2})?Conclusion(?:\*{1,2})?\s*:\s*(?:the\s+student'?s?\s+solution\s+is\s+)?(?:\*{1,2})?\s*(Correct|Incorrect)\b",
-        r"(?i)\b(?:the\s+student'?s?\s+|this\s+)?solution\s+is\s+(?:\*{1,2})?\s*(correct|incorrect)\b",
-    )
-    for pattern in patterns:
-        match = re.search(pattern, text)
-        if match:
-            return [], match.group(1).lower() == "correct"
-
-    tail = text[-250:]
-    if re.search(r"(?i)\b(?:is\s+|judged\s+as\s+|marked\s+as\s+)(?:\*{1,2})?incorrect\b", tail):
-        return [], False
-    if re.search(r"(?i)\b(?:is\s+|judged\s+as\s+|marked\s+as\s+)(?:\*{1,2})?correct\b", tail):
-        return [], True
-
-    if student_answer is not None:
-        try:
-            from src.experiment_d.extractors import extract_gsm8k_answer
-            from src.experiment_d.utils import answers_match
-
-            verifier_answer = extract_gsm8k_answer(text)
-            if verifier_answer:
-                return [], answers_match(verifier_answer, str(student_answer))
-        except Exception:
-            pass
-    return [], None
+def parse_verifier_output(output_text, student_answer=None):
+    return [], parse_verdict(output_text)
 
 
 PRECISION_ORDER = {"16bit": 0, "8bit": 1, "4bit": 2}
@@ -94,7 +64,7 @@ def summarize(records: list[dict], selected_questions: set[str]) -> dict:
 
     for record in records:
         question = record["question"]
-        generated_answer = str(record.get("generated_answer"))
+        generated_answer = record.get("generated_answer")
         conclusion = record.get("verifier_final_conclusion")
         if "verifier_raw_response" in record:
             _, conclusion = parse_verifier_output(
@@ -112,6 +82,10 @@ def summarize(records: list[dict], selected_questions: set[str]) -> dict:
         else:
             tn += 1
 
+        if generated_answer is None:
+            by_question.setdefault(question, [])
+            continue
+        generated_answer = str(generated_answer)
         by_question.setdefault(question, []).append(
             {
                 "answer": generated_answer,
@@ -122,6 +96,8 @@ def summarize(records: list[dict], selected_questions: set[str]) -> dict:
 
     generator_correct = verifier_correct = 0
     for traces in by_question.values():
+        if not traces:
+            continue
         all_answers = [trace["answer"] for trace in traces]
         generator_answer = Counter(all_answers).most_common(1)[0][0]
         if any(trace["correct"] for trace in traces if trace["answer"] == generator_answer):

@@ -75,3 +75,5 @@ notebooks/
 Docs/
 archive/
 results/
+# Keep the audit report tracked
+!AUDIT_AND_DIRECTION.md

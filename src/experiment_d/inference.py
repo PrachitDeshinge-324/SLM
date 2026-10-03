@@ -190,7 +190,8 @@ def generate_n_samples(
         generation_lengths: list[int] of lengths of newly generated tokens.
     """
     device = _get_model_device(model)
-    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    # The chat template already writes BOS; do not let the tokenizer add a second one.
+    inputs = tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(device)
 
     all_responses = []
     generation_lengths = []
@@ -272,7 +273,8 @@ def generate_batch_prompts(
     tokenizer.padding_side = 'left'
     
     try:
-        inputs = tokenizer(prompts, return_tensors="pt", padding=True).to(device)
+        # The chat template already writes BOS; do not let the tokenizer add a second one.
+        inputs = tokenizer(prompts, return_tensors="pt", padding=True, add_special_tokens=False).to(device)
         
         # Expand prompts lazily per generation mini-batch. Materializing every
         # repeated prompt up front can waste substantial VRAM at large batch sizes.
