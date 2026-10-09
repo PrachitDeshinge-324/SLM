@@ -1,0 +1,49 @@
+=== extraction path x precision (complete samples only): share of samples, accuracy within path
+
+ChilleD_SVAMP Qwen3.5-0.8B nQ=100
+  16bit eq:0.99(acc 0.70)  dollar:0.01(acc 0.25)  last:0.00(acc 1.00)  boxed:0.00(acc 1.00)
+  8bit  eq:0.99(acc 0.67)  dollar:0.01(acc 0.40)  last:0.00(acc 1.00)  boxed:0.00(acc 0.00)
+  4bit  eq:0.99(acc 0.68)  dollar:0.01(acc 0.50)  text:0.00(acc 0.50)  last:0.00(acc 1.00)
+
+gsm8k Qwen3.5-0.8B nQ=1319
+  16bit hash:0.97(acc 0.58)  eq:0.03(acc 0.60)  last:0.00(acc 0.00)  dollar:0.00(acc 0.00)
+  8bit  hash:0.98(acc 0.56)  eq:0.02(acc 0.45)  dollar:0.00(acc 0.71)  boxed:0.00(acc 0.00)
+  4bit  hash:1.00(acc 0.49)  eq:0.00(acc 0.40)  last:0.00(acc 0.00)
+
+gsm8k Qwen3.5-2B nQ=100
+  16bit hash:1.00(acc 0.84)  dollar:0.00(acc 0.00)
+  8bit  hash:1.00(acc 0.80)  eq:0.00(acc 0.00)
+  4bit  hash:0.99(acc 0.76)  eq:0.01(acc 1.00)
+
+gsm8k DS-R1-1.5B nQ=200
+  16bit eq:0.46(acc 0.83)  hash:0.39(acc 0.83)  boxed:0.13(acc 0.87)  last:0.01(acc 0.83)  dollar:0.00(acc 1.00)  text:0.00(acc 0.00)
+  8bit  hash:0.46(acc 0.82)  eq:0.39(acc 0.83)  boxed:0.13(acc 0.88)  dollar:0.01(acc 0.93)  last:0.01(acc 0.62)  text:0.00(acc 0.67)
+  4bit  hash:0.52(acc 0.82)  eq:0.35(acc 0.81)  boxed:0.11(acc 0.91)  last:0.02(acc 0.81)  dollar:0.01(acc 0.60)  text:0.00(acc 1.00)
+
+gsm8k gemma-3-1b-it nQ=200
+  16bit boxed:0.70(acc 0.77)  hash:0.17(acc 0.41)  eq:0.13(acc 0.40)  last:0.00(acc 1.00)
+  8bit  boxed:0.61(acc 0.76)  eq:0.20(acc 0.40)  hash:0.19(acc 0.39)
+  4bit  eq:0.74(acc 0.29)  boxed:0.26(acc 0.72)  last:0.00(acc 0.00)  hash:0.00(acc 0.00)
+
+gsm8k Llama-1B nQ=1000
+  16bit eq:0.69(acc 0.36)  hash:0.31(acc 0.42)  last:0.00(acc 0.10)  boxed:0.00(acc 0.00)  dollar:0.00(acc 0.00)  text:0.00(acc 0.00)
+  8bit  eq:0.69(acc 0.34)  hash:0.31(acc 0.41)  last:0.00(acc 0.16)  boxed:0.00(acc 0.00)  none:0.00(acc 0.00)  dollar:0.00(acc 0.00)  text:0.00(acc 0.00)
+  4bit  hash:0.54(acc 0.38)  eq:0.45(acc 0.31)  last:0.00(acc 0.17)  dollar:0.00(acc 0.00)
+
+gsm8k Llama-3B nQ=1319
+  16bit hash:0.80(acc 0.74)  eq:0.20(acc 0.64)  last:0.00(acc 0.86)
+  8bit  hash:0.81(acc 0.74)  eq:0.19(acc 0.65)  last:0.00(acc 0.50)  dollar:0.00(acc 1.00)
+  4bit  hash:0.85(acc 0.73)  eq:0.15(acc 0.57)  last:0.00(acc 0.25)  dollar:0.00(acc 1.00)
+
+math500 Qwen3.5-0.8B nQ=20
+  16bit boxed:1.00(acc 0.61)
+  8bit  boxed:1.00(acc 0.67)
+  4bit  boxed:0.99(acc 0.45)  fb_eq:0.01(acc 0.00)
+
+math500 DS-R1-1.5B nQ=100
+  16bit boxed:0.97(acc 0.85)  fb_eq:0.03(acc 0.88)
+  8bit  boxed:0.78(acc 0.89)  fb_eq:0.21(acc 0.64)  fb_last:0.01(acc 1.00)  fb_text:0.00(acc 0.50)
+  4bit  boxed:0.84(acc 0.91)  fb_eq:0.15(acc 0.59)  fb_last:0.01(acc 0.25)
+
+math500 Llama-3B nQ=100
+  16bit boxed:0.76(acc 0.44)  fb_eq:0.20(acc 0.23)  fb_last:0.02(acc 0.12)  fb_dollar:0.01(acc 0.10)  fb_text:0.00(acc 0.67)

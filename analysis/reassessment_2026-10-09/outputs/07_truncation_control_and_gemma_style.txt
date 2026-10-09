@@ -1,0 +1,29 @@
+=== (1) agreement-shift estimator restricted to questions with NO truncated sample at either precision (truncation control); target = per-sample accuracy
+   cqa    Qwen3.5-0.8B  n8  8bit nQ=1193 dMaj  -1.2 dSingle  -2.1 dConf  -2.8
+   cqa    Qwen3.5-0.8B  n8  4bit nQ=1209 dMaj  -2.2 dSingle  -4.8 dConf  -6.3
+   cqa    Qwen3.5-0.8B  n16 8bit nQ=1163 dMaj  +0.3 dSingle  -0.7 dConf  -2.6
+   cqa    Qwen3.5-0.8B  n16 4bit nQ=1202 dMaj  -2.6 dSingle  -4.4 dConf  -5.6
+   cqa    Llama-1B      n16 4bit nQ=1221 dMaj  +0.2 dSingle  -1.4 dConf  -1.1
+   gsm8k  Qwen3.5-0.8B  n8  8bit nQ= 489 dMaj  -1.4 dSingle  -2.2 dConf  -1.4
+   gsm8k  Qwen3.5-0.8B  n8  4bit nQ= 457 dMaj  -4.2 dSingle -10.0 dConf  -8.7
+   gsm8k  Qwen3.5-0.8B  n16 8bit nQ= 363 dMaj  +0.0 dSingle  -0.4 dConf  -0.5
+   gsm8k  Qwen3.5-0.8B  n16 4bit nQ= 330 dMaj  -3.6 dSingle  -6.9 dConf  -7.2
+   gsm8k  Llama-1B      n8  8bit nQ= 979 dMaj  -1.1 dSingle  -1.7 dConf  -1.0
+   gsm8k  Llama-1B      n8  4bit nQ= 984 dMaj  -0.8 dSingle  -2.7 dConf  -3.3
+   gsm8k  Llama-3B      n8  8bit nQ=1268 dMaj  +0.2 dSingle  +0.1 dConf  -0.2
+   gsm8k  Llama-3B      n8  4bit nQ=1276 dMaj  -0.1 dSingle  -1.1 dConf  -1.1
+  cells=13  target majority: r=0.91 MAE=2.0 no-change=1.4 | target per-sample: r=0.95 MAE=0.8 no-change=3.0
+
+=== (2) per-sample accuracy among COMPLETE samples only (to compare with published pass@1 numbers that use a 32k token limit)
+  Qwen3.5-0.8B  16bit: 0.581 8bit: 0.556 4bit: 0.487
+  Qwen3.5-2B    16bit: 0.826 8bit: 0.799 4bit: 0.761
+  DS-R1-1.5B    16bit: 0.836 8bit: 0.830 4bit: 0.826
+  gemma-3-1b-it 16bit: 0.661 8bit: 0.617 4bit: 0.398
+  Llama-1B      16bit: 0.377 8bit: 0.358 4bit: 0.344
+  Llama-3B      16bit: 0.721 8bit: 0.722 4bit: 0.709
+
+=== (3) Gemma-1B: is answer style a marker of the question or of the sample? Within-question comparison, questions having both styles among complete samples
+  16bit questions with both styles:  67; within-question acc(boxed) - acc(other) = +0.155 (se 0.046); questions all-boxed 0.52, none-boxed 0.11
+  8bit  questions with both styles:  77; within-question acc(boxed) - acc(other) = +0.144 (se 0.046); questions all-boxed 0.39, none-boxed 0.19
+  4bit  questions with both styles:  63; within-question acc(boxed) - acc(other) = +0.140 (se 0.054); questions all-boxed 0.18, none-boxed 0.49
+  per-question boxed share 16-bit vs 4-bit: r = 0.28 (n=174)

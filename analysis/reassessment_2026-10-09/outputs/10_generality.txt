@@ -1,0 +1,57 @@
+=== (a) Random-effects pooling over model x dataset cells (8-sample runs, token limits matched).
+    mean = pooled effect in points; tau = between-cell SD (how much a new cell is expected to differ); I2 = share of variation that is real rather than sampling error
+
+--- 4bit: 10 cells: Chille/Qwen3.5-0.8B, cqa/Qwen3.5-0.8B, cqa/Llama-1B, gsm8k/Qwen3.5-0.8B, gsm8k/Qwen3.5-2B, gsm8k/DS-R1-1.5B, gsm8k/gemma-3-1b-it, gsm8k/Llama-1B, gsm8k/Llama-3B, math50/DS-R1-1.5B
+effect                                         | pooled mean [95% CI] | tau  | I2   | 95% prediction interval for a new cell | same sign | range over cells | pooled without Gemma
+per-sample accuracy                            |  -4.47 [ -6.69, -2.25] | 3.29 | 0.94 | [-11.29, +2.35] | 10/10 |  -19.5..  -0.9 |  -3.21 (tau 2.75)
+majority accuracy                              |  -3.46 [ -6.23, -0.68] | 3.92 | 0.87 | [-11.62, +4.71] | 7/10 |  -23.0..  +0.9 |  -1.87 (tau 2.36)
+coverage (pass@n)                              |  -1.91 [ -3.95, +0.12] | 2.73 | 0.83 | [ -7.64, +3.82] | 8/10 |  -17.0..  +1.8 |  -1.02 (tau 1.98)
+masking (majority - per-sample)                |  +1.40 [ +0.61, +2.20] | 0.40 | 0.09 | [ +0.29, +2.51] | 7/10 |   -3.5..  +3.3 |  +1.53 (tau 0.00)
+yield at agreement>=0.75                       |  -6.19 [ -9.55, -2.82] | 4.81 | 0.89 | [-16.20, +3.83] | 10/10 |  -19.0..  -0.5 |  -5.02 (tau 4.32)
+label precision at >=0.75                      |  +0.25 [ -0.80, +1.30] | 0.83 | 0.27 | [ -1.69, +2.19] | 7/10 |   -9.5..  +5.7 |  +0.31 (tau 0.50)
+AUROC of agreement                             |  -0.92 [ -2.36, +0.52] | 1.28 | 0.33 | [ -3.82, +1.98] | 6/10 |   -7.4..  +8.7 |  -0.93 (tau 1.44)
+estimator error (d agreement - d per-sample)   |  +0.35 [ -0.40, +1.09] | 0.91 | 0.67 | [ -1.59, +2.28] | 7/10 |   -1.5..  +5.3 |  +0.14 (tau 0.69)
+
+--- 8bit: 9 cells: Chille/Qwen3.5-0.8B, cqa/Qwen3.5-0.8B, gsm8k/Qwen3.5-0.8B, gsm8k/Qwen3.5-2B, gsm8k/DS-R1-1.5B, gsm8k/gemma-3-1b-it, gsm8k/Llama-1B, gsm8k/Llama-3B, math50/DS-R1-1.5B
+effect                                         | pooled mean [95% CI] | tau  | I2   | 95% prediction interval for a new cell | same sign | range over cells | pooled without Gemma
+per-sample accuracy                            |  -1.29 [ -2.12, -0.47] | 0.87 | 0.60 | [ -3.19, +0.60] | 6/9 |   -3.4..  +2.4 |  -1.15 (tau 0.83)
+majority accuracy                              |  -0.41 [ -1.30, +0.47] | 0.00 | 0.00 | [ -1.30, +0.47] | 5/9 |   -2.0..  +5.0 |  -0.36 (tau 0.00)
+coverage (pass@n)                              |  +0.42 [ -0.83, +1.68] | 1.30 | 0.54 | [ -2.42, +3.27] | 6/9 |   -4.0..  +3.0 |  +0.44 (tau 1.39)
+masking (majority - per-sample)                |  +0.69 [ -0.08, +1.46] | 0.00 | 0.00 | [ -0.08, +1.46] | 7/9 |   -0.1..  +2.9 |  +0.67 (tau 0.00)
+yield at agreement>=0.75                       |  -2.17 [ -3.44, -0.91] | 0.89 | 0.23 | [ -4.32, -0.03] | 8/9 |   -6.0..  +3.0 |  -1.99 (tau 0.74)
+label precision at >=0.75                      |  +0.45 [ -0.28, +1.17] | 0.00 | 0.00 | [ -0.28, +1.17] | 6/9 |   -2.0..  +1.3 |  +0.44 (tau 0.00)
+AUROC of agreement                             |  -0.40 [ -1.44, +0.63] | 0.00 | 0.00 | [ -1.44, +0.63] | 5/9 |   -4.7..  +2.0 |  -0.41 (tau 0.00)
+estimator error (d agreement - d per-sample)   |  +0.03 [ -0.30, +0.37] | 0.00 | 0.00 | [ -0.30, +0.37] | 4/9 |   -0.7..  +1.0 |  +0.05 (tau 0.00)
+
+=== (b) Would a 100- or 200-question study have reached the same conclusion? Full-set cells, 4-bit vs 16-bit.
+cell | full set: d per-sample, d majority | first 100 | first 200 | questions 201+ | 95% range of d majority over 2000 random 100-question subsets | share of those subsets with |d majority| < 3 pts
+gsm8k Qwen3.5-0.8B n8  |  -8.4,  -7.2 |  -9.4, -16.0 | -10.5, -14.0 |  -8.0,  -6.0 | [-15.0, +1.0] | 0.11
+      16-bit majority accuracy: first 100 = 0.680, first 200 = 0.685, rest = 0.663
+gsm8k Qwen3.5-0.8B n16 |  -7.6,  -7.4 |  -6.1,  -4.0 |  -7.6,  -7.0 |  -7.6,  -7.4 | [-15.0, +0.0] | 0.12
+      16-bit majority accuracy: first 100 = 0.650, first 200 = 0.685, rest = 0.680
+gsm8k Llama-1B     n8  |  -2.7,  -0.8 |  -2.0,  +4.0 |  -2.9,  -0.5 |  -2.6,  -0.9 | [ -9.0, +7.0] | 0.47
+      16-bit majority accuracy: first 100 = 0.430, first 200 = 0.465, rest = 0.484
+gsm8k Llama-3B     n8  |  -1.1,  -0.1 |  -2.9,  -3.0 |  -2.2,  +0.0 |  -0.9,  -0.1 | [ -7.0, +6.0] | 0.58
+      16-bit majority accuracy: first 100 = 0.810, first 200 = 0.820, rest = 0.805
+cqa Qwen3.5-0.8B n8  |  -4.8,  -2.1 |  +0.0,  +2.0 |  -1.1,  +2.5 |  -5.6,  -3.0 | [-10.0, +5.0] | 0.45
+
+=== (c) Agreement-shift estimator, leave one model out. Zero-parameter rule: d per-sample = d agreement. Fitted rule: line fitted on the other models' cells.
+held-out model | cells | zero-parameter error | fitted-line error (slope, intercept from the rest) | 'assume no change' error
+DS-R1-1.5B     |  4 | 0.31 | 0.76 (slope 1.22, intercept +0.58) | 1.45
+Llama-1B       |  3 | 0.55 | 0.78 (slope 1.20, intercept +0.42) | 1.91
+Llama-3B       |  2 | 0.17 | 0.13 (slope 1.19, intercept +0.37) | 0.58
+Qwen3.5-0.8B   | 10 | 0.79 | 1.71 (slope 1.32, intercept -0.01) | 3.74
+Qwen3.5-2B     |  2 | 1.34 | 1.74 (slope 1.22, intercept +0.58) | 2.17
+gemma-3-1b-it  |  2 | 2.88 | 3.29 (slope 0.92, intercept -0.18) | 11.47
+all, held out  | 23 | 0.85 | 1.42 | 3.36
+
+=== (d) Per-question change in per-sample accuracy at 4-bit: do models agree on WHICH questions break? (GSM8K)
+correlation of per-question 4-bit change (upper) and of 16-bit per-question accuracy (lower); n questions in brackets
+                  Qwen-0.8B n8   Qwen-0.8B n16        Llama-1B        Llama-3B        Gemma-1B      DS-R1-1.5B
+Qwen-0.8B n8                 -    +0.40 (1319)    +0.07 (1000)    +0.03 (1319)    -0.04 ( 200)    -0.07 ( 200)
+Qwen-0.8B n16     +0.90 (1319)               -    +0.02 (1000)    +0.01 (1319)    +0.15 ( 200)    -0.11 ( 200)
+Llama-1B          +0.67 (1000)    +0.69 (1000)               -    +0.04 (1000)    +0.01 ( 200)    -0.06 ( 200)
+Llama-3B          +0.64 (1319)    +0.66 (1319)    +0.59 (1000)               -    +0.06 ( 200)    -0.09 ( 200)
+Gemma-1B          +0.63 ( 200)    +0.70 ( 200)    +0.58 ( 200)    +0.55 ( 200)               -    +0.02 ( 200)
+DS-R1-1.5B        +0.50 ( 200)    +0.53 ( 200)    +0.44 ( 200)    +0.60 ( 200)    +0.48 ( 200)               -
+Qwen-0.8B n8 vs n16 is the same model on independent runs: it is the ceiling a cross-model correlation could reach.

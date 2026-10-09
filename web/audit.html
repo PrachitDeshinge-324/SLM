@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Audit &amp; New Direction - Agentic AI</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        table { font-size: 0.9rem; }
+        td.num, th.num { text-align: right; white-space: nowrap; }
+        .drop { color: var(--danger); font-weight: 700; }
+        .step { counter-increment: step; }
+        .takeaways { padding-left: 1.2rem; }
+        .takeaways li { margin-bottom: 0.6rem; }
+        .small { font-size: 0.85rem; color: var(--text-light); }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Audit &amp; New Direction</h1>
+        <p>What was wrong, what the data really shows, and the one idea worth a paper.</p>
+    </header>
+
+    <nav>
+        <div class="nav-container">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="proposal.html" class="nav-link">Original Proposal</a>
+            <a href="problem_statement.html" class="nav-link">Problem &amp; Datasets</a>
+            <a href="generation.html" class="nav-link">Phase 1: Generation</a>
+            <a href="verifier.html" class="nav-link">Phase 2: Verifier</a>
+            <a href="audit.html" class="nav-link active">Audit &amp; New Direction</a>
+            <a href="next_steps.html" class="nav-link">Next Steps</a>
+        </div>
+    </nav>
+
+    <div class="container">
+
+        <div class="content-box">
+            <h2>1. The short version</h2>
+            <div class="alert" style="background-color:#f0fdf4; border-left-color: var(--success);">
+                <ul class="takeaways" style="margin:0;">
+                    <li><strong>Original question:</strong> does shrinking a small model (8-bit / 4-bit) break its ability to judge its own answers?</li>
+                    <li><strong>Answer so far: mostly no.</strong> 8-bit is indistinguishable from full precision. 4-bit costs accuracy for the weakest models, but the model's agreement signal ("my 8 samples agree, so I'm probably right") still works about as well as before.</li>
+                    <li><strong>Best finding:</strong> when 4-bit hurts accuracy, self-agreement drops by almost the same amount. That is a label-free damage detector.</li>
+                    <li><strong>What failed:</strong> the model-as-judge ("is this solution correct?") is weak for every model. It never beats a free rule: "approve if the answer matches the most common answer".</li>
+                    <li><strong>Not done:</strong> the self-improvement training loop (Experiment B) was never run, so nothing here says anything about it.</li>
+                </ul>
+            </div>
+            <p class="small">Numbers on this page are re-scored from the stored raw responses with the fixed scoring code. The older Phase 1 and Phase 2 pages show the pre-fix numbers.</p>
+        </div>
+
+        <div class="content-box">
+            <h2>2. What was wrong with the pipeline</h2>
+            <h3>Fixed in code and tested</h3>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Problem</th><th>Fix</th></tr></thead>
+                    <tbody>
+                        <tr><td>Old MATH-500 answers were cut at the first brace, so the 16-bit baseline was scored by different code than 8/4-bit</td><td>Re-score every run from stored responses with the same extractor</td></tr>
+                        <tr><td>Truncated generations (hit the token limit) were graded as if they were answers</td><td>Truncated samples no longer vote</td></tr>
+                        <tr><td><code>#### **Answer:** \$18</code> was read as the wrong number</td><td>Tolerant <code>####</code> pattern, last marker wins, <code>\boxed{}</code> also read</td></tr>
+                        <tr><td><code>18</code> and <code>18.00</code> (or <code>\dfrac</code> and <code>\frac</code>) split the vote</td><td>Votes use a normalised answer</td></tr>
+                        <tr><td>Precisions were compared on different question sets</td><td>Paired comparison on common questions with bootstrap intervals</td></tr>
+                        <tr><td>Fragile MATH-500 matching; no timeout on symbolic parsing</td><td>Better matcher (tuples, <code>\left/\right</code>) and a 2 s SymPy timeout</td></tr>
+                        <tr><td><strong>Start-of-text token written twice</strong> for Llama and Gemma (template + tokenizer)</td><td><code>add_special_tokens=False</code></td></tr>
+                        <tr><td><strong>Llama prompt contained the run date</strong>, so prompts differed from day to day</td><td>Date pinned to a fixed value</td></tr>
+                        <tr><td><strong>DeepSeek got a system prompt</strong> although its model card says to use the user turn</td><td>System text folded into the user turn</td></tr>
+                        <tr><td><strong>SVAMP had a different prompt</strong> (no example, no answer format)</td><td>Same prompt as GSM8K</td></tr>
+                        <tr><td>Verifier parser counted "model re-solved the problem" and the echoed instruction line as verdicts</td><td>One shared strict parser for all scripts</td></tr>
+                        <tr><td>Runs did not record prompt, dtype, GPU or library versions</td><td>All stored in the run header, plus a prompt hash</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>Not fixed (needs new runs)</h3>
+            <div class="alert">
+                <ul style="margin:0; padding-left:1.2rem;">
+                    <li><strong>Every stored generation used the old prompts.</strong> Comparisons <em>within</em> a model across precisions are still valid (same bug in all three), but absolute accuracy for Llama, Gemma and DeepSeek is suspect.</li>
+                    <li><strong>Truncation is still high</strong> (13&ndash;18% Qwen/DeepSeek GSM8K, 27&ndash;31% Gemma, 34&ndash;56% MATH-500) and differs by precision. Needs a larger token limit.</li>
+                    <li><strong>Verifier trace pool differs by precision.</strong> A clean test freezes one set of traces and lets every precision judge it.</li>
+                    <li>One seed; units in answers; unpinned library versions.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="content-box">
+            <h2>3. What the data shows</h2>
+            <p>Standard 100 questions (first 100 of each test set), 8 samples each, truncated samples dropped. Cells are majority-vote accuracy %, with average agreement in brackets.</p>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Model, dataset</th><th class="num">16-bit</th><th class="num">8-bit</th><th class="num">4-bit</th></tr></thead>
+                    <tbody>
+                        <tr><td>Qwen-0.8B, GSM8K</td><td class="num">68 (0.54)</td><td class="num">63 (0.54)</td><td class="num drop">52 (0.48)</td></tr>
+                        <tr><td>Qwen-2B, GSM8K</td><td class="num">78 (0.73)</td><td class="num">79 (0.72)</td><td class="num">78 (0.72)</td></tr>
+                        <tr><td>DeepSeek-1.5B, GSM8K</td><td class="num">88 (0.72)</td><td class="num">86 (0.74)</td><td class="num">86 (0.75)</td></tr>
+                        <tr><td>Gemma-1B, GSM8K</td><td class="num">56 (0.57)</td><td class="num">50 (0.51)</td><td class="num drop">31 (0.43)</td></tr>
+                        <tr><td>Llama-1B, GSM8K</td><td class="num">43 (0.49)</td><td class="num">43 (0.49)</td><td class="num">47 (0.45)</td></tr>
+                        <tr><td>Llama-3B, GSM8K</td><td class="num">81 (0.78)</td><td class="num">80 (0.78)</td><td class="num">78 (0.78)</td></tr>
+                        <tr><td>Qwen-0.8B, MATH-500</td><td class="num">56 (0.43)</td><td class="num">59 (0.44)</td><td class="num drop">42 (0.31)</td></tr>
+                        <tr><td>DeepSeek-1.5B, MATH-500</td><td class="num">68 (0.56)</td><td class="num">73 (0.58)</td><td class="num">68 (0.54)</td></tr>
+                        <tr><td>Qwen-0.8B, SVAMP</td><td class="num">83 (0.70)</td><td class="num">81 (0.67)</td><td class="num">78 (0.65)</td></tr>
+                        <tr><td>Qwen-0.8B, CQA</td><td class="num">52 (0.74)</td><td class="num">52 (0.70)</td><td class="num">54 (0.71)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>Takeaways</h3>
+            <ol class="takeaways">
+                <li><strong>8-bit is safe.</strong> Nothing differs from 16-bit beyond noise in any of the ten cells.</li>
+                <li><strong>4-bit lowers accuracy by about 5 points on average</strong> (95% CI 3.8&ndash;6.6), in 8 of 10 cells, concentrated in the weakest models.</li>
+                <li><strong>Agreement still predicts correctness equally well</strong> at every precision (AUROC change under 0.01 on average). The "confidently wrong" outcome did not happen.</li>
+                <li><strong>Agreement drops when accuracy drops.</strong> Across 20 quantized runs the two drops correlate at r&nbsp;=&nbsp;0.93 (0.79 without the three largest). Predicting a held-out model's accuracy change from its agreement change is off by 1.8 points, against 3.4 for "assume no change".</li>
+                <li><strong>Most answer flips are sampling noise.</strong> Two independent 4-sample votes from the same model disagree on 10&ndash;26% of questions. 16-bit vs 8-bit flips sit at that floor; at 4-bit only Gemma (+16 points) and MATH-500 (+5 to +7) clearly exceed it.</li>
+                <li><strong>Self-verification is weak.</strong> No model beats the free "approve if the answer equals the most common answer" rule. DeepSeek's judge is unusable (22&ndash;36% of outputs contain a verdict, almost all "Correct").</li>
+                <li><strong>One verifier lead:</strong> 4-bit judges approve more wrong answers (false-positive rate +0.155 Qwen-0.8B GSM8K, +0.144 Gemma-1B), with true-positive rate rising too, which looks like a shift toward "Correct" rather than lost skill. One seed, different trace pools: treat as a lead.</li>
+            </ol>
+
+            <h3>Where the evidence is weak</h3>
+            <ul>
+                <li>Six models, mostly GSM8K, one seed, 100 questions per cell.</li>
+                <li>The agreement&ndash;accuracy correlation leans on three large-drop cells.</li>
+                <li>MATH-500 at 4-bit has more than half its samples truncated.</li>
+                <li>No 3-bit and no non-bitsandbytes quantizer, so little real damage outside 4-bit on weak models.</li>
+            </ul>
+        </div>
+
+        <div class="content-box">
+            <h2>4. What earlier papers did, and what we reuse</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Paper</th><th>What they did</th><th>We reuse</th><th>They leave open</th></tr></thead>
+                    <tbody>
+                        <tr><td><a href="https://arxiv.org/abs/2510.10964">Not All Bits Are Equal</a></td><td>Qwen3 0.6&ndash;32B, GPTQ 4/8-bit, AIME25/GPQA, vote sizes 1&ndash;16</td><td>GPTQ; vote-size sweep</td><td>No error bars; never asks if agreement tracks correctness</td></tr>
+                        <tr><td><a href="https://arxiv.org/abs/2607.10855">Reliability Scaling Laws</a></td><td>6 quantizers, 2&ndash;8 bit, 5 seeds, token-level uncertainty</td><td>More quantizers, a 3-bit point, 5 seeds</td><td>No reasoning tasks, no sampled agreement</td></tr>
+                        <tr><td><a href="https://arxiv.org/abs/2607.08734">Illusion of Equivalency</a></td><td>llama.cpp Q8&ndash;Q2, correctness agreement with base model</td><td>GGUF formats; the agreement metric</td><td>No sampling-noise baseline for flips</td></tr>
+                        <tr><td><a href="https://arxiv.org/abs/2501.03035">Quantization Meets Reasoning</a></td><td>Llama 1B/3B/8B, AWQ/GPTQ 4-bit, MATH; error taxonomy</td><td>Same Llama sizes; error types</td><td>Greedy only; repair uses full-precision answers</td></tr>
+                        <tr><td><a href="https://arxiv.org/abs/2605.02915">When Should a Model Trust Itself?</a></td><td>Verifier score from True/False logit; AUROC, AURC, bootstrap</td><td>Logit-based verdict instead of text parsing</td><td>Quantization is not a variable</td></tr>
+                        <tr><td><a href="https://arxiv.org/abs/2608.11403">When Self-Consistency Backfires</a></td><td>GPQA, 64 samples, pre-registered, locked prompt</td><td>Hash-checked prompt; pre-registration</td><td>Full precision only</td></tr>
+                        <tr><td><a href="https://arxiv.org/abs/2607.08065">When LLMs Agree, Are They Right?</a></td><td>GPT-4.1 tiers, 50 samples; Spearman, ECE, AURC</td><td>Metric set; clustered bootstrap</td><td>No compression</td></tr>
+                        <tr><td><a href="https://arxiv.org/abs/2505.21444">Can Large Reasoning Models Self-Train?</a></td><td>Majority-vote reward training; collapse analysis</td><td>Track vote vs sample accuracy if we train</td><td>Full precision only</td></tr>
+                        <tr><td><a href="https://arxiv.org/abs/2601.00282">Self-explanations under quantization</a></td><td>GPTQ/AWQ/bnb, Llama3/Qwen2.5 7&ndash;72B, greedy</td><td>Three quantizers</td><td>No self-consistency</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="small">Also close: <a href="https://arxiv.org/abs/2407.09141">Accuracy Is Not All You Need</a>, <a href="https://arxiv.org/abs/2606.01850">Does Compression Preserve Uncertainty?</a>, <a href="https://arxiv.org/abs/2603.25450">Cross-Model Disagreement as a Label-Free Correctness Signal</a>, <a href="https://arxiv.org/abs/2206.13089">Agreement-on-the-Line</a>. The searches were quick, so "not found" means not found, not "does not exist". Re-check before submitting.</p>
+        </div>
+
+        <div class="content-box">
+            <h2>5. Proposed contribution</h2>
+            <div class="alert" style="background-color:#eff6ff; border-left-color: var(--primary);">
+                <p style="margin:0;"><strong>For sampled reasoning, quantization damage shows up as a drop in the model's own self-agreement, roughly one-for-one with the accuracy drop. That lets you estimate how much accuracy a quantized model lost without any labels.</strong></p>
+            </div>
+            <div class="grid" style="margin-top:1.5rem;">
+                <div class="card highlight">
+                    <div class="card-header">Why it may be new</div>
+                    <p>Reliability papers use token-level uncertainty or greedy flips. Self-consistency papers stay at full precision. We found none that uses the <em>shift in sampled agreement</em> as a label-free damage estimator for quantization.</p>
+                </div>
+                <div class="card">
+                    <div class="card-header">What we already have</div>
+                    <ul>
+                        <li>Unchanged agreement-to-correctness AUROC</li>
+                        <li>r&nbsp;=&nbsp;0.93 between agreement drop and accuracy drop</li>
+                        <li>Flip rates corrected against a sampling-noise floor</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <div class="card-header">What would kill it</div>
+                    <p>On new models or quantizers, predicting the accuracy change from the agreement change is no better than "assume no change", or the correlation falls below about 0.5.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-box">
+            <h2>6. What to run next (inference only)</h2>
+            <ol class="takeaways">
+                <li>Rerun with the fixed prompts and a token limit large enough that truncation is below 5%. Run all three precisions of a model together.</li>
+                <li>Add a second quantizer (GPTQ or GGUF Q4) and a 3-bit point, so there are more cells with real damage.</li>
+                <li>Three seeds per cell, 100&ndash;200 questions.</li>
+                <li>Compare the agreement-shift estimator against two label-free baselines: flip rate against the 16-bit model, and cross-model disagreement.</li>
+                <li>Optional short negative result: freeze 16-bit traces and let each precision judge them, to settle the verifier question.</li>
+            </ol>
+        </div>
+
+    </div>
+</body>
+</html>

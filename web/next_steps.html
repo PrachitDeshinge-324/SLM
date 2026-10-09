@@ -18,6 +18,7 @@
             <a href="problem_statement.html" class="nav-link">Problem & Datasets</a>
             <a href="generation.html" class="nav-link">Phase 1: Generation</a>
             <a href="verifier.html" class="nav-link">Phase 2: Verifier</a>
+            <a href="audit.html" class="nav-link">Audit &amp; New Direction</a>
             <a href="next_steps.html" class="nav-link active">Next Steps</a>
         </div>
     </nav>
@@ -25,32 +26,39 @@
     <div class="container">
         <div class="content-box">
             <h2>Future Research Pathways</h2>
-            
+
             <div class="alert" style="background-color: #f0fdf4; border-left-color: var(--success);">
-                <h3 style="margin-top:0; color: #166534;">Executive Summary</h3>
-                <p style="margin-bottom:0;">Based on Experiment D, Qwen 0.8B is the only viable candidate for autonomous self-improvement under quantization. The next immediate step is to either <strong>(A) execute the full QLoRA self-training loop</strong> to see if the 4-bit FPR spike poisons the model, or <strong>(B) swap to a harder dataset</strong> to measure DeepSeek without the ceiling effect.</p>
+                <h3 style="margin-top:0; color: #166534;">Executive Summary (updated after the audit)</h3>
+                <p style="margin-bottom:0;">The earlier plan (self-improvement loop on Qwen 0.8B, or a harder dataset for DeepSeek) is superseded. After fixing the scoring, 8-bit is safe, 4-bit costs accuracy mainly in weak models, and the model-as-judge is weak everywhere. The promising result is that <strong>the drop in self-agreement tracks the drop in accuracy</strong> (r = 0.93 over 20 runs). Next: confirm it with a second quantizer, a 3-bit point and three seeds. See <a href="audit.html">Audit &amp; New Direction</a>.</p>
             </div>
 
             <div class="grid" style="margin-top: 2rem;">
                 <div class="card highlight">
-                    <div class="card-header">Option A: Experiment B (Self-Improvement Loop)</div>
-                    <p>The original proposal outlined moving from Inference-only verification (Experiment D) to an actual Self-Improvement Training Loop (Experiment B).</p>
+                    <div class="card-header">Step 1: Clean rerun</div>
                     <ul>
-                        <li>Take the quantized Qwen 0.8B model.</li>
-                        <li>Generate multiple samples, keep the ones matching the majority-vote answer.</li>
-                        <li>Fine-tune (using QLoRA) on those self-generated, self-approved traces.</li>
-                        <li>Compare the resulting model's accuracy after 1-3 iterations against the quantized baseline. Does the training loop break down, or does the 8-bit regularization hold up?</li>
+                        <li>Use the fixed prompts (no double start token, pinned Llama date, DeepSeek instructions in the user turn, shared SVAMP prompt).</li>
+                        <li>Raise the token limit until truncation is below 5%.</li>
+                        <li>Run all precisions of a model together; three seeds; 100&ndash;200 questions.</li>
                     </ul>
                 </div>
-                
                 <div class="card">
-                    <div class="card-header">Option B: New Dataset Sweet Spot</div>
-                    <p>Because GSM8K generated a ceiling effect for models like DeepSeek-1.5B (90% accuracy), we are unable to accurately measure its verifier usefulness.</p>
+                    <div class="card-header">Step 2: More damage to measure</div>
                     <ul>
-                        <li>Run Experiment D again on a slightly harder dataset like <strong>EleutherAI/asdiv</strong> (Asian Math Word Problems) or <strong>MAWPS</strong>.</li>
-                        <li>Find the dataset where DeepSeek's base accuracy sits around 60-70%.</li>
-                        <li>This will remove the "Shrinking Denominator" effect and allow us to cleanly measure its False Positive Rate without class imbalance distortion.</li>
+                        <li>Add GPTQ or GGUF Q4 and a 3-bit point.</li>
+                        <li>Keep the models where 4-bit actually hurts (Qwen-0.8B, Gemma-1B) and add one more weak family.</li>
                     </ul>
+                </div>
+                <div class="card">
+                    <div class="card-header">Step 3: Test the estimator</div>
+                    <ul>
+                        <li>Predict each quantized model's accuracy change from its agreement change, on held-out models.</li>
+                        <li>Beat two label-free baselines: flip rate against 16-bit, and cross-model disagreement.</li>
+                        <li>Falsified if the held-out error is no better than "assume no change".</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <div class="card-header">Later: Experiment B</div>
+                    <p>The self-improvement training loop is still unrun. Only start it if the estimator holds up, and track vote accuracy against sample accuracy each round to catch collapse early.</p>
                 </div>
             </div>
         </div>

@@ -15,6 +15,16 @@ Read the student's solution carefully. Is this solution correct or not?
 Output exactly one line:
 Final Conclusion: Correct (or Final Conclusion: Incorrect)"""
 
+
+
+def get_verifier_messages(question: str, student_solution: str) -> list[dict]:
+    """Returns the message list that asks a model to judge one solution."""
+    return [
+        {"role": "system", "content": VERIFIER_SYSTEM},
+        {"role": "user", "content": VERIFIER_PROMPT_TEMPLATE.format(question=question, student_solution=student_solution)},
+    ]
+
+
 # The model sometimes repeats the instruction line verbatim; it contains both words and is not a verdict.
 _ECHO = re.compile(r"(?i)Final\s+Conclusion\s*:\s*Correct\s*\(or\s*Final\s+Conclusion\s*:\s*Incorrect\)")
 

@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.experiment_d.extractors import extract_gsm8k_answer
+from src.experiment_d.answer_extraction import extract_gsm8k_answer
 from src.experiment_d.prompts import build_prompt, get_messages
 from src.experiment_d.verifier import parse_verdict
 

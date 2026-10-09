@@ -1,0 +1,102 @@
+=== A. Generator CSVs versus rescoring (each file's own question set, as in the CSV)
+dataset | model | n | prec | nQ | CSV/stored acc | all-vote acc | strict acc | stored - strict | samples whose extracted answer changed
+ChilleD Qwen3.5-0.8B  n8  16bit  100 |  84.0 |  84.0 |  83.0 |  +1.0 |  0.0%
+ChilleD Qwen3.5-0.8B  n8  4bit   100 |  80.0 |  80.0 |  78.0 |  +2.0 |  0.0%
+ChilleD Qwen3.5-0.8B  n8  8bit   100 |  80.0 |  80.0 |  81.0 |  -1.0 |  0.0%
+cqa     Qwen3.5-0.8B  n16 16bit 1221 |  59.8 |  59.8 |  59.8 |  +0.0 |  0.0%
+cqa     Qwen3.5-0.8B  n8  16bit 1221 |  58.8 |  58.8 |  58.8 |  +0.0 |  0.0%
+cqa     Qwen3.5-0.8B  n16 4bit  1221 |  57.2 |  57.2 |  57.3 |  -0.1 |  0.0%
+cqa     Qwen3.5-0.8B  n8  4bit  1221 |  56.7 |  56.7 |  56.7 |  +0.0 |  0.0%
+cqa     Qwen3.5-0.8B  n16 8bit  1221 |  60.0 |  60.0 |  60.0 |  +0.0 |  0.0%
+cqa     Qwen3.5-0.8B  n8  8bit  1221 |  57.7 |  57.7 |  57.8 |  -0.1 |  0.0%
+cqa     Llama-1B      n16 16bit 1221 |  61.5 |  61.5 |  61.5 |  +0.0 |  0.0%
+cqa     Llama-1B      n16 4bit  1221 |  61.7 |  61.7 |  61.7 |  +0.0 |  0.0%
+cqa     Llama-1B      n8  4bit  1221 |  60.4 |  60.4 |  60.4 |  +0.0 |  0.0%
+cqa     Llama-1B      n8  8bit  1221 |  59.1 |  59.1 |  59.1 |  +0.0 |  0.0%
+cqa     Llama-3B      n8  4bit  1221 |  73.1 |  73.1 |  73.1 |  +0.0 |  0.0%
+gsm8k   Qwen3.5-0.8B  n16 16bit 1319 |  66.5 |  66.9 |  68.1 |  -1.6 |  0.0%
+gsm8k   Qwen3.5-0.8B  n8  16bit 1319 |  65.0 |  66.0 |  66.6 |  -1.6 |  1.6%
+gsm8k   Qwen3.5-0.8B  n16 4bit  1319 |  57.8 |  60.4 |  60.7 |  -3.0 |  0.3%
+gsm8k   Qwen3.5-0.8B  n8  4bit  1319 |  55.1 |  58.1 |  59.4 |  -4.3 |  0.3%
+gsm8k   Qwen3.5-0.8B  n16 8bit  1319 |  66.3 |  67.2 |  68.6 |  -2.4 |  0.2%
+gsm8k   Qwen3.5-0.8B  n8  8bit  1319 |  63.7 |  64.5 |  65.0 |  -1.3 |  0.1%
+gsm8k   Qwen3.5-2B    n8  16bit  200 |  81.0 |  82.0 |  82.0 |  -1.0 |  0.1%
+gsm8k   Qwen3.5-2B    n8  4bit   112 |  76.8 |  77.7 |  78.6 |  -1.8 |  0.1%
+gsm8k   Qwen3.5-2B    n8  8bit   100 |  79.0 |  80.0 |  79.0 |  +0.0 |  0.2%
+gsm8k   DS-R1-1.5B    n8  16bit  200 |  83.5 |  88.0 |  89.0 |  -5.5 |  3.2%
+gsm8k   DS-R1-1.5B    n8  4bit   200 |  83.0 |  86.0 |  86.5 |  -3.5 |  2.5%
+gsm8k   DS-R1-1.5B    n8  8bit   200 |  80.5 |  86.5 |  89.0 |  -8.5 |  4.0%
+gsm8k   gemma-3-1b-it n8  16bit  200 |  51.0 |  58.0 |  60.0 |  -9.0 |  4.4%
+gsm8k   gemma-3-1b-it n8  4bit   200 |  35.5 |  38.5 |  37.0 |  -1.5 |  2.4%
+gsm8k   gemma-3-1b-it n8  8bit   200 |  48.5 |  56.0 |  58.0 |  -9.5 |  4.4%
+gsm8k   Llama-1B      n16 16bit 1319 |  51.2 |  52.6 |  52.6 |  -1.4 |  0.0%
+gsm8k   Llama-1B      n8  16bit 1000 |  46.7 |  48.0 |  48.0 |  -1.3 |  0.0%
+gsm8k   Llama-1B      n8  4bit  1319 |  45.3 |  46.2 |  46.2 |  -1.0 |  0.0%
+gsm8k   Llama-1B      n8  8bit  1319 |  45.6 |  46.9 |  46.9 |  -1.2 |  0.0%
+gsm8k   Llama-3B      n8  16bit 1319 |  80.5 |  80.7 |  80.7 |  -0.2 |  0.0%
+gsm8k   Llama-3B      n8  4bit  1319 |  80.6 |  80.7 |  80.7 |  -0.1 |  0.0%
+gsm8k   Llama-3B      n8  8bit  1319 |  80.7 |  81.2 |  81.1 |  -0.4 |  0.0%
+math500 Qwen3.5-0.8B  n8  16bit  100 |  58.0 |  54.0 |  58.0 |  +0.0 |  0.0%
+math500 Qwen3.5-0.8B  n8  4bit    20 |  35.0 |  30.0 |  35.0 |  +0.0 |  0.0%
+math500 Qwen3.5-0.8B  n8  8bit   100 |  42.0 |  56.0 |  59.0 | -17.0 | 11.0%
+math500 DS-R1-1.5B    n8  16bit  100 |  47.0 |  67.0 |  68.0 | -21.0 | 15.4%
+math500 DS-R1-1.5B    n8  4bit   100 |  55.0 |  66.0 |  68.0 | -13.0 |  1.1%
+math500 DS-R1-1.5B    n8  8bit   100 |  61.0 |  75.0 |  73.0 | -12.0 |  0.9%
+math500 Llama-3B      n8  16bit  100 |  49.0 |  50.0 |  50.0 |  -1.0 |  0.0%
+
+=== B. Deltas versus 16-bit: what the CSV reports (unpaired, stored metrics) against paired strict rescoring on common questions
+dataset | model | n | prec | CSV delta | stored, common q | all-vote, common q | strict, common q | n common
+ChilleD Qwen3.5-0.8B  n8  8bit |      -4.0 |   -4.0 |   -4.0 |   -2.0 | 100
+ChilleD Qwen3.5-0.8B  n8  4bit |      -4.0 |   -4.0 |   -4.0 |   -5.0 | 100
+cqa     Qwen3.5-0.8B  n8  8bit |     -1.06 |   -1.1 |   -1.1 |   -1.0 | 1221
+cqa     Qwen3.5-0.8B  n8  4bit |     -2.13 |   -2.1 |   -2.1 |   -2.1 | 1221
+cqa     Qwen3.5-0.8B  n16 8bit |      0.25 |   +0.2 |   +0.2 |   +0.2 | 1221
+cqa     Qwen3.5-0.8B  n16 4bit |     -2.54 |   -2.5 |   -2.5 |   -2.5 | 1221
+cqa     Llama-1B      n16 4bit |      0.16 |   +0.2 |   +0.2 |   +0.2 | 1221
+gsm8k   Qwen3.5-0.8B  n8  8bit |     -1.36 |   -1.4 |   -1.5 |   -1.7 | 1319
+gsm8k   Qwen3.5-0.8B  n8  4bit |     -9.93 |   -9.9 |   -8.0 |   -7.2 | 1319
+gsm8k   Qwen3.5-0.8B  n16 8bit |     -0.23 |   -0.2 |   +0.2 |   +0.5 | 1319
+gsm8k   Qwen3.5-0.8B  n16 4bit |     -8.72 |   -8.7 |   -6.5 |   -7.4 | 1319
+gsm8k   Qwen3.5-2B    n8  8bit |   (blank) |   +1.0 |   +1.0 |   +1.0 | 100
+gsm8k   Qwen3.5-2B    n8  4bit |   (blank) |   -0.9 |   -1.8 |   +0.9 | 112
+gsm8k   DS-R1-1.5B    n8  8bit |      -3.0 |   -3.0 |   -1.5 |   +0.0 | 200
+gsm8k   DS-R1-1.5B    n8  4bit |      -0.5 |   -0.5 |   -2.0 |   -2.5 | 200
+gsm8k   gemma-3-1b-it n8  8bit |      -2.5 |   -2.5 |   -2.0 |   -2.0 | 200
+gsm8k   gemma-3-1b-it n8  4bit |     -15.5 |  -15.5 |  -19.5 |  -23.0 | 200
+gsm8k   Llama-1B      n8  8bit |   (blank) |   -0.7 |   -0.7 |   -0.7 | 1000
+gsm8k   Llama-1B      n8  4bit |   (blank) |   -0.5 |   -0.8 |   -0.8 | 1000
+gsm8k   Llama-3B      n8  8bit |      0.23 |   +0.2 |   +0.5 |   +0.4 | 1319
+gsm8k   Llama-3B      n8  4bit |      0.08 |   +0.1 |   -0.1 |   -0.1 | 1319
+math500 Qwen3.5-0.8B  n8  8bit |     -16.0 |  -16.0 |   +2.0 |   +1.0 | 100
+math500 Qwen3.5-0.8B  n8  4bit |   (blank) |  -25.0 |  -20.0 |  -25.0 | 20
+math500 DS-R1-1.5B    n8  8bit |      14.0 |  +14.0 |   +8.0 |   +5.0 | 100
+math500 DS-R1-1.5B    n8  4bit |       8.0 |   +8.0 |   -1.0 |   +0.0 | 100
+
+=== C. Verifier CSVs: stored trace labels versus labels from the current extractor; share of traces that are truncated
+dataset | model | prec | traces | stored-correct | relabelled-correct | labels changed | no verdict parsed | truncated (joined to generator file) | traces not found in current generator file
+ChilleD Qwen3.5-0.8B  16bit   800 | 0.652 | 0.652 |  0.0% |  0.0% |  7.6% |   0.0%
+ChilleD Qwen3.5-0.8B  4bit    800 | 0.624 | 0.624 |  0.0% |  0.0% | 11.5% |   0.0%
+ChilleD Qwen3.5-0.8B  8bit    800 | 0.634 | 0.634 |  0.0% |  0.0% |  7.5% |   0.0%
+gsm8k   Qwen3.5-0.8B  16bit  1600 | 0.496 | 0.497 |  0.1% |  0.0% | 17.9% |   0.0%
+gsm8k   Qwen3.5-0.8B  4bit   1600 | 0.401 | 0.401 |  0.1% |  0.0% | 17.9% |   0.0%
+gsm8k   Qwen3.5-0.8B  8bit   1600 | 0.478 | 0.479 |  0.1% |  0.0% | 17.3% |   0.0%
+gsm8k   Qwen3.5-2B    16bit  1600 | 0.708 | 0.708 |  0.0% |  0.0% | 17.5% |   0.0%
+gsm8k   Qwen3.5-2B    4bit    800 | 0.675 | 0.674 |  0.1% |  0.0% | 14.2% |   0.0%
+gsm8k   Qwen3.5-2B    8bit    800 | 0.686 | 0.685 |  0.1% |  0.0% | 16.6% |   0.0%
+gsm8k   DS-R1-1.5B    16bit   800 | 0.752 | 0.774 |  2.1% | 69.1% | 15.5% |   0.0%
+gsm8k   DS-R1-1.5B    4bit    800 | 0.723 | 0.744 |  2.1% | 62.2% | 14.6% |   0.0%
+gsm8k   DS-R1-1.5B    8bit    800 | 0.748 | 0.782 |  3.5% | 70.1% | 14.8% |   0.0%
+gsm8k   gemma-3-1b-it 16bit   800 | 0.464 | 0.499 |  3.5% |  2.8% | 30.2% |   0.0%
+gsm8k   gemma-3-1b-it 4bit    800 | 0.290 | 0.302 |  1.2% |  6.4% | 32.0% |   0.0%
+gsm8k   gemma-3-1b-it 8bit    800 | 0.421 | 0.464 |  4.2% |  4.1% | 29.5% |   0.0%
+gsm8k   Llama-1B      16bit   800 | 0.407 | 0.407 |  0.0% |  0.4% |  0.1% |   0.0%
+gsm8k   Llama-3B      16bit   800 | 0.672 | 0.672 |  0.0% |  0.0% |  0.2% |   0.0%
+gsm8k   Llama-3B      4bit    800 | 0.669 | 0.669 |  0.0% |  0.0% |  0.0% |   0.0%
+gsm8k   Llama-3B      8bit    800 | 0.686 | 0.686 |  0.0% |  0.0% |  0.2% |   0.0%
+math500 Qwen3.5-0.8B  16bit   800 | 0.311 | 0.389 |  7.8% |  0.0% |  0.0% | 100.0%
+math500 Qwen3.5-0.8B  4bit    800 | 0.242 | 0.284 |  4.1% |  0.0% |  0.0% | 100.0%
+math500 Qwen3.5-0.8B  8bit    800 | 0.319 | 0.399 |  8.0% |  0.0% | 39.5% |   0.0%
+math500 DS-R1-1.5B    16bit   800 | 0.456 | 0.600 | 14.4% | 73.9% | 37.9% |   0.0%
+math500 DS-R1-1.5B    4bit    800 | 0.487 | 0.559 |  7.1% | 60.9% | 41.4% |   0.0%
+math500 DS-R1-1.5B    8bit    800 | 0.526 | 0.615 |  8.9% | 67.1% | 34.5% |   0.0%
+math500 Llama-3B      16bit   800 | 0.381 | 0.381 |  0.0% |  0.0% |  1.6% |   0.0%

@@ -1,0 +1,16 @@
+=== (g2) does the agreement shift track per-sample accuracy shift better than majority accuracy shift?
+  all cells  n=23 target=majority acc: r=0.92 MAE=1.8 (no-change 2.9) | target=per-sample acc: r=0.96 MAE=0.9 (no-change 3.4)
+  gsm8k      n=14 target=majority acc: r=0.96 MAE=1.6 (no-change 3.4) | target=per-sample acc: r=0.98 MAE=0.9 (no-change 3.7)
+  cqa        n= 5 target=majority acc: r=0.91 MAE=2.7 (no-change 1.2) | target=per-sample acc: r=0.91 MAE=1.2 (no-change 2.7)
+  cells with |dSingle|<5pt (n=20): r(dSingle,dConf)=0.91 MAE=0.6 no-change=2.1
+
+=== (i) is the fallback ('last = N') extraction itself a source of error? Alternative: last number in the final non-empty line.
+  gemma-3-1b-it 16bit fallback-path samples   151: current extractor acc 0.411 | alt extractor acc 0.404 | two extractors agree 0.934 | correct under either 0.411
+  gemma-3-1b-it 8bit  fallback-path samples   225: current extractor acc 0.396 | alt extractor acc 0.369 | two extractors agree 0.911 | correct under either 0.396
+  gemma-3-1b-it 4bit  fallback-path samples   831: current extractor acc 0.288 | alt extractor acc 0.279 | two extractors agree 0.852 | correct under either 0.294
+  Llama-1B      16bit fallback-path samples  5524: current extractor acc 0.359 | alt extractor acc 0.357 | two extractors agree 0.912 | correct under either 0.367
+  Llama-1B      8bit  fallback-path samples  7355: current extractor acc 0.339 | alt extractor acc 0.337 | two extractors agree 0.913 | correct under either 0.348
+  Llama-1B      4bit  fallback-path samples  4813: current extractor acc 0.298 | alt extractor acc 0.289 | two extractors agree 0.875 | correct under either 0.306
+  DS-R1-1.5B    16bit fallback-path samples   568: current extractor acc 0.822 | alt extractor acc 0.859 | two extractors agree 0.856 | correct under either 0.900
+  DS-R1-1.5B    8bit  fallback-path samples   470: current extractor acc 0.832 | alt extractor acc 0.872 | two extractors agree 0.881 | correct under either 0.900
+  DS-R1-1.5B    4bit  fallback-path samples   485: current extractor acc 0.804 | alt extractor acc 0.845 | two extractors agree 0.889 | correct under either 0.868

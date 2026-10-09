@@ -1,0 +1,109 @@
+=== (f) pseudo-label audit on stored data. Filter = keep question if majority share (of all n samples) >= tau; pseudo-label = majority answer.
+    yield = share of questions kept; prec = share of kept questions whose label is correct; trace_prec = share of kept traces (those matching the label) that are correct
+
+ChilleD_SVAMP Qwen3.5-0.8B n8 nQ=100
+  tau=0.50 | 16bit yield 0.840 prec 0.905 [0.835,0.964] wrong-labels/1000q  80.0 | 8bit  yield 0.780 prec 0.872 [0.797,0.938] wrong-labels/1000q 100.0 | 4bit  yield 0.730 prec 0.918 [0.851,0.973] wrong-labels/1000q  60.0 
+  tau=0.75 | 16bit yield 0.530 prec 0.943 [0.879,1.000] wrong-labels/1000q  30.0 | 8bit  yield 0.520 prec 0.923 [0.842,0.982] wrong-labels/1000q  40.0 | 4bit  yield 0.510 prec 1.000 [1.000,1.000] wrong-labels/1000q   0.0 
+  tau=1.00 | 16bit yield 0.210 prec 0.952 [0.842,1.000] wrong-labels/1000q  10.0 | 8bit  yield 0.220 prec 0.955 [0.857,1.000] wrong-labels/1000q  10.0 | 4bit  yield 0.220 prec 1.000 [1.000,1.000] wrong-labels/1000q   0.0 
+
+cqa Qwen3.5-0.8B n8 nQ=1221
+  tau=0.50 | 16bit yield 0.886 prec 0.626 [0.599,0.655] wrong-labels/1000q 331.7 | 8bit  yield 0.872 prec 0.618 [0.589,0.650] wrong-labels/1000q 333.3 | 4bit  yield 0.846 prec 0.604 [0.575,0.635] wrong-labels/1000q 335.0 
+  tau=0.75 | 16bit yield 0.583 prec 0.725 [0.691,0.759] wrong-labels/1000q 160.5 | 8bit  yield 0.536 prec 0.720 [0.687,0.756] wrong-labels/1000q 149.9 | 4bit  yield 0.467 prec 0.730 [0.691,0.765] wrong-labels/1000q 126.1 
+  tau=1.00 | 16bit yield 0.284 prec 0.841 [0.802,0.881] wrong-labels/1000q  45.0 | 8bit  yield 0.230 prec 0.854 [0.809,0.894] wrong-labels/1000q  33.6 | 4bit  yield 0.172 prec 0.848 [0.799,0.894] wrong-labels/1000q  26.2 
+
+cqa Qwen3.5-0.8B n16 nQ=1221
+  tau=0.50 | 16bit yield 0.821 prec 0.644 [0.614,0.676] wrong-labels/1000q 292.4 | 8bit  yield 0.801 prec 0.664 [0.634,0.695] wrong-labels/1000q 269.5 | 4bit  yield 0.767 prec 0.635 [0.601,0.667] wrong-labels/1000q 280.1 
+  tau=0.75 | 16bit yield 0.509 prec 0.763 [0.727,0.799] wrong-labels/1000q 120.4 | 8bit  yield 0.457 prec 0.778 [0.742,0.814] wrong-labels/1000q 101.6 | 4bit  yield 0.415 prec 0.746 [0.704,0.783] wrong-labels/1000q 105.7 
+  tau=1.00 | 16bit yield 0.210 prec 0.864 [0.821,0.904] wrong-labels/1000q  28.7 | 8bit  yield 0.147 prec 0.883 [0.833,0.930] wrong-labels/1000q  17.2 | 4bit  yield 0.102 prec 0.848 [0.784,0.912] wrong-labels/1000q  15.6 
+
+cqa Llama-1B n16 nQ=1221
+  tau=0.50 | 16bit yield 0.903 prec 0.657 [0.628,0.685] wrong-labels/1000q 309.6 | 4bit  yield 0.890 prec 0.649 [0.619,0.677] wrong-labels/1000q 312.0 
+  tau=0.75 | 16bit yield 0.576 prec 0.748 [0.717,0.781] wrong-labels/1000q 145.0 | 4bit  yield 0.571 prec 0.752 [0.719,0.784] wrong-labels/1000q 141.7 
+  tau=1.00 | 16bit yield 0.197 prec 0.892 [0.851,0.929] wrong-labels/1000q  21.3 | 4bit  yield 0.167 prec 0.873 [0.825,0.917] wrong-labels/1000q  21.3 
+
+gsm8k Qwen3.5-0.8B n8 nQ=1319
+  tau=0.50 | 16bit yield 0.602 prec 0.885 [0.863,0.907] wrong-labels/1000q  69.0 | 8bit  yield 0.590 prec 0.866 [0.842,0.891] wrong-labels/1000q  78.8 | 4bit  yield 0.508 prec 0.878 [0.852,0.901] wrong-labels/1000q  62.2 
+  tau=0.75 | 16bit yield 0.383 prec 0.968 [0.952,0.982] wrong-labels/1000q  12.1 | 8bit  yield 0.356 prec 0.966 [0.948,0.983] wrong-labels/1000q  12.1 | 4bit  yield 0.279 prec 0.951 [0.929,0.971] wrong-labels/1000q  13.6 
+  tau=1.00 | 16bit yield 0.143 prec 0.989 [0.972,1.000] wrong-labels/1000q   1.5 | 8bit  yield 0.137 prec 0.978 [0.953,0.995] wrong-labels/1000q   3.0 | 4bit  yield 0.083 prec 1.000 [1.000,1.000] wrong-labels/1000q   0.0 
+
+gsm8k Qwen3.5-0.8B n16 nQ=1319
+  tau=0.50 | 16bit yield 0.568 prec 0.917 [0.896,0.937] wrong-labels/1000q  47.0 | 8bit  yield 0.547 prec 0.914 [0.893,0.934] wrong-labels/1000q  47.0 | 4bit  yield 0.454 prec 0.903 [0.878,0.927] wrong-labels/1000q  44.0 
+  tau=0.75 | 16bit yield 0.327 prec 0.974 [0.958,0.988] wrong-labels/1000q   8.3 | 8bit  yield 0.331 prec 0.966 [0.949,0.982] wrong-labels/1000q  11.4 | 4bit  yield 0.252 prec 0.973 [0.955,0.988] wrong-labels/1000q   6.8 
+  tau=1.00 | 16bit yield 0.083 prec 0.991 [0.969,1.000] wrong-labels/1000q   0.8 | 8bit  yield 0.069 prec 0.956 [0.908,0.990] wrong-labels/1000q   3.0 | 4bit  yield 0.051 prec 1.000 [1.000,1.000] wrong-labels/1000q   0.0 
+
+gsm8k Qwen3.5-2B n8 nQ=100
+  tau=0.50 | 16bit yield 0.770 prec 0.909 [0.840,0.971] wrong-labels/1000q  70.0 | 8bit  yield 0.790 prec 0.899 [0.831,0.962] wrong-labels/1000q  80.0 | 4bit  yield 0.790 prec 0.886 [0.812,0.951] wrong-labels/1000q  90.0 
+  tau=0.75 | 16bit yield 0.680 prec 0.941 [0.877,0.986] wrong-labels/1000q  40.0 | 8bit  yield 0.660 prec 0.955 [0.896,1.000] wrong-labels/1000q  30.0 | 4bit  yield 0.630 prec 0.921 [0.845,0.982] wrong-labels/1000q  50.0 
+  tau=1.00 | 16bit yield 0.410 prec 1.000 [1.000,1.000] wrong-labels/1000q   0.0 | 8bit  yield 0.370 prec 1.000 [1.000,1.000] wrong-labels/1000q   0.0 | 4bit  yield 0.350 prec 1.000 [1.000,1.000] wrong-labels/1000q   0.0 
+
+gsm8k DS-R1-1.5B n8 nQ=200
+  tau=0.50 | 16bit yield 0.850 prec 0.971 [0.944,0.994] wrong-labels/1000q  25.0 | 8bit  yield 0.845 prec 0.959 [0.926,0.983] wrong-labels/1000q  35.0 | 4bit  yield 0.840 prec 0.970 [0.942,0.994] wrong-labels/1000q  25.0 
+  tau=0.75 | 16bit yield 0.690 prec 0.986 [0.962,1.000] wrong-labels/1000q  10.0 | 8bit  yield 0.670 prec 0.993 [0.976,1.000] wrong-labels/1000q   5.0 | 4bit  yield 0.655 prec 0.992 [0.975,1.000] wrong-labels/1000q   5.0 
+  tau=1.00 | 16bit yield 0.295 prec 0.983 [0.944,1.000] wrong-labels/1000q   5.0 | 8bit  yield 0.290 prec 1.000 [1.000,1.000] wrong-labels/1000q   0.0 | 4bit  yield 0.305 prec 0.984 [0.946,1.000] wrong-labels/1000q   5.0 
+
+gsm8k gemma-3-1b-it n8 nQ=200
+  tau=0.50 | 16bit yield 0.595 prec 0.824 [0.748,0.886] wrong-labels/1000q 105.0 | 8bit  yield 0.545 prec 0.807 [0.733,0.881] wrong-labels/1000q 105.0 | 4bit  yield 0.415 prec 0.687 [0.588,0.785] wrong-labels/1000q 130.0 
+  tau=0.75 | 16bit yield 0.445 prec 0.899 [0.835,0.960] wrong-labels/1000q  45.0 | 8bit  yield 0.385 prec 0.909 [0.843,0.968] wrong-labels/1000q  35.0 | 4bit  yield 0.255 prec 0.804 [0.692,0.907] wrong-labels/1000q  50.0 
+  tau=1.00 | 16bit yield 0.300 prec 0.950 [0.887,1.000] wrong-labels/1000q  15.0 | 8bit  yield 0.210 prec 1.000 [1.000,1.000] wrong-labels/1000q   0.0 | 4bit  yield 0.100 prec 0.850 [0.682,1.000] wrong-labels/1000q  15.0 
+
+gsm8k Llama-1B n8 nQ=1000
+  tau=0.50 | 16bit yield 0.515 prec 0.732 [0.694,0.772] wrong-labels/1000q 138.0 | 8bit  yield 0.507 prec 0.748 [0.708,0.786] wrong-labels/1000q 128.0 | 4bit  yield 0.480 prec 0.752 [0.710,0.792] wrong-labels/1000q 119.0 
+  tau=0.75 | 16bit yield 0.288 prec 0.868 [0.827,0.905] wrong-labels/1000q  38.0 | 8bit  yield 0.269 prec 0.881 [0.844,0.920] wrong-labels/1000q  32.0 | 4bit  yield 0.240 prec 0.900 [0.860,0.935] wrong-labels/1000q  24.0 
+  tau=1.00 | 16bit yield 0.129 prec 0.946 [0.902,0.984] wrong-labels/1000q   7.0 | 8bit  yield 0.110 prec 0.936 [0.883,0.976] wrong-labels/1000q   7.0 | 4bit  yield 0.083 prec 0.964 [0.920,1.000] wrong-labels/1000q   3.0 
+
+gsm8k Llama-1B n16 nQ=1319
+  tau=0.50 | 16bit yield 0.459 prec 0.784 [0.752,0.816] wrong-labels/1000q  99.3 
+  tau=0.75 | 16bit yield 0.244 prec 0.913 [0.884,0.942] wrong-labels/1000q  21.2 
+  tau=1.00 | 16bit yield 0.061 prec 0.963 [0.915,1.000] wrong-labels/1000q   2.3 
+
+gsm8k Llama-3B n8 nQ=1319
+  tau=0.50 | 16bit yield 0.857 prec 0.888 [0.870,0.906] wrong-labels/1000q  95.5 | 8bit  yield 0.851 prec 0.889 [0.870,0.906] wrong-labels/1000q  94.8 | 4bit  yield 0.839 prec 0.900 [0.882,0.919] wrong-labels/1000q  84.2 
+  tau=0.75 | 16bit yield 0.679 prec 0.948 [0.933,0.962] wrong-labels/1000q  35.6 | 8bit  yield 0.675 prec 0.954 [0.940,0.966] wrong-labels/1000q  31.1 | 4bit  yield 0.665 prec 0.948 [0.932,0.962] wrong-labels/1000q  34.9 
+  tau=1.00 | 16bit yield 0.453 prec 0.977 [0.963,0.988] wrong-labels/1000q  10.6 | 8bit  yield 0.451 prec 0.980 [0.968,0.990] wrong-labels/1000q   9.1 | 4bit  yield 0.424 prec 0.979 [0.966,0.989] wrong-labels/1000q   9.1 
+
+math500 DS-R1-1.5B n8 nQ=100
+  tau=0.50 | 16bit yield 0.620 prec 0.935 [0.871,0.985] wrong-labels/1000q  40.0 | 8bit  yield 0.630 prec 0.952 [0.896,1.000] wrong-labels/1000q  30.0 | 4bit  yield 0.590 prec 0.949 [0.890,1.000] wrong-labels/1000q  30.0 
+  tau=0.75 | 16bit yield 0.490 prec 0.939 [0.865,1.000] wrong-labels/1000q  30.0 | 8bit  yield 0.520 prec 0.942 [0.875,1.000] wrong-labels/1000q  30.0 | 4bit  yield 0.450 prec 0.956 [0.889,1.000] wrong-labels/1000q  20.0 
+  tau=1.00 | 16bit yield 0.290 prec 0.931 [0.829,1.000] wrong-labels/1000q  20.0 | 8bit  yield 0.230 prec 1.000 [1.000,1.000] wrong-labels/1000q   0.0 | 4bit  yield 0.270 prec 0.963 [0.885,1.000] wrong-labels/1000q  10.0 
+
+math500 Llama-3B n8 nQ=100
+  tau=0.50 | 16bit yield 0.520 prec 0.788 [0.683,0.902] wrong-labels/1000q 110.0 
+  tau=0.75 | 16bit yield 0.330 prec 0.848 [0.718,0.968] wrong-labels/1000q  50.0 
+  tau=1.00 | 16bit yield 0.120 prec 0.833 [0.625,1.000] wrong-labels/1000q  20.0 
+
+=== (g) label-free accuracy-change estimators per quantized cell (all cells with >=100 common questions)
+cell | prec | dAcc(majority) | dConfAll | dConfValid | dSingle | abs err: ConfAll  ConfValid  no-change
+ChilleD Qwen3.5-0.8B  n8  | 8bit |  -2.0 |  -2.2 |  -2.3 |  -2.4 |  0.3   0.3   2.0
+ChilleD Qwen3.5-0.8B  n8  | 4bit |  -5.0 |  -4.6 |  -1.5 |  -4.3 |  0.4   3.5   5.0
+cqa     Qwen3.5-0.8B  n8  | 8bit |  -1.0 |  -2.9 |  -2.8 |  -2.2 |  1.9   1.8   1.0
+cqa     Qwen3.5-0.8B  n8  | 4bit |  -2.1 |  -6.4 |  -6.3 |  -4.8 |  4.2   4.2   2.1
+cqa     Qwen3.5-0.8B  n16 | 8bit |  +0.2 |  -2.8 |  -2.7 |  -0.7 |  3.0   2.9   0.2
+cqa     Qwen3.5-0.8B  n16 | 4bit |  -2.5 |  -5.6 |  -5.6 |  -4.3 |  3.1   3.1   2.5
+cqa     Llama-1B      n16 | 4bit |  +0.2 |  -1.1 |  -0.9 |  -1.4 |  1.3   1.1   0.2
+gsm8k   Qwen3.5-0.8B  n8  | 8bit |  -1.7 |  -1.3 |  -1.8 |  -1.5 |  0.4   0.1   1.7
+gsm8k   Qwen3.5-0.8B  n8  | 4bit |  -7.2 |  -7.2 |  -7.6 |  -8.4 |  0.0   0.4   7.2
+gsm8k   Qwen3.5-0.8B  n16 | 8bit |  +0.5 |  -1.1 |  -1.1 |  -1.1 |  1.6   1.7   0.5
+gsm8k   Qwen3.5-0.8B  n16 | 4bit |  -7.4 |  -7.1 |  -7.6 |  -7.6 |  0.2   0.2   7.4
+gsm8k   Qwen3.5-2B    n8  | 8bit |  +1.0 |  -0.9 |  -0.0 |  -1.9 |  1.9   1.0   1.0
+gsm8k   Qwen3.5-2B    n8  | 4bit |  +0.9 |  -0.8 |  -1.5 |  -2.5 |  1.7   2.4   0.9
+gsm8k   DS-R1-1.5B    n8  | 8bit |  +0.0 |  -0.1 |  -0.8 |  +0.1 |  0.1   0.8   0.0
+gsm8k   DS-R1-1.5B    n8  | 4bit |  -2.5 |  -0.6 |  -1.6 |  -0.9 |  1.9   0.9   2.5
+gsm8k   gemma-3-1b-it n8  | 8bit |  -2.0 |  -3.9 |  -4.0 |  -3.4 |  1.9   2.0   2.0
+gsm8k   gemma-3-1b-it n8  | 4bit | -23.0 | -14.2 | -13.5 | -19.5 |  8.8   9.5  23.0
+gsm8k   Llama-1B      n8  | 8bit |  -0.7 |  -0.9 |  -0.8 |  -1.6 |  0.2   0.1   0.7
+gsm8k   Llama-1B      n8  | 4bit |  -0.8 |  -3.3 |  -3.3 |  -2.7 |  2.5   2.5   0.8
+gsm8k   Llama-3B      n8  | 8bit |  +0.4 |  -0.2 |  -0.2 |  +0.0 |  0.6   0.6   0.4
+gsm8k   Llama-3B      n8  | 4bit |  -0.1 |  -1.1 |  -1.1 |  -1.1 |  1.0   1.0   0.1
+math500 DS-R1-1.5B    n8  | 8bit |  +5.0 |  +2.3 |  +3.4 |  +2.4 |  2.7   1.6   5.0
+math500 DS-R1-1.5B    n8  | 4bit |  +0.0 |  -1.7 |  +4.1 |  -2.5 |  1.7   4.1   0.0
+  all        cells=23  r(dAcc,dConfAll)=0.92  r(dAcc,dConfValid)=0.85  MAE ConfAll=1.8  ConfValid=2.0  no-change=2.9
+  gsm8k only cells=14  r(dAcc,dConfAll)=0.96  r(dAcc,dConfValid)=0.95  MAE ConfAll=1.6  ConfValid=1.7  no-change=3.4
+  cqa only   cells= 5  r(dAcc,dConfAll)=0.91  r(dAcc,dConfValid)=0.91  MAE ConfAll=2.7  ConfValid=2.6  no-change=1.2
+
+=== (h) is truncation tied to question difficulty? GSM8K, 16-bit runs: questions with 0 truncated samples vs >=1
+  Qwen3.5-0.8B  no-trunc questions  662: per-sample acc of complete samples 0.681, mean question length 213 chars | questions with truncation  657: 0.433, 267 chars
+  Qwen3.5-2B    no-trunc questions  102: per-sample acc of complete samples 0.903, mean question length 214 chars | questions with truncation   98: 0.700, 272 chars
+  DS-R1-1.5B    no-trunc questions  103: per-sample acc of complete samples 0.893, mean question length 211 chars | questions with truncation   97: 0.750, 276 chars
+  gemma-3-1b-it no-trunc questions   92: per-sample acc of complete samples 0.774, mean question length 197 chars | questions with truncation  108: 0.459, 281 chars
+  Llama-1B      no-trunc questions  990: per-sample acc of complete samples 0.379, mean question length 237 chars | questions with truncation   10: 0.130, 280 chars
+  Llama-3B      no-trunc questions 1293: per-sample acc of complete samples 0.727, mean question length 238 chars | questions with truncation   26: 0.377, 332 chars

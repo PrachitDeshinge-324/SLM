@@ -1,0 +1,70 @@
+=== (a) Cell-level outliers at 4-bit: change versus 16-bit in points, one row per model x dataset cell
+                     per-sample  majority  coverage  yield  label precision  agreement  estimator residual
+cell                                                                                                      
+Chille/Qwen3.5-0.8B        -4.2      -5.0      -3.0   -2.0              5.7       -4.6                -0.4
+cqa/Qwen3.5-0.8B           -4.8      -2.1       1.8  -11.6              0.5       -6.4                -1.5
+cqa/Llama-1B               -1.4       0.2      -1.1   -0.5              0.4       -1.1                 0.3
+gsm8k/Qwen3.5-0.8B         -8.4      -7.2      -5.6  -10.4             -1.7       -7.2                 1.2
+gsm8k/Qwen3.5-2B           -2.5       0.9       1.8   -4.5             -1.8       -0.8                 1.7
+gsm8k/DS-R1-1.5B           -0.9      -2.5      -1.0   -3.5              0.7       -0.6                 0.3
+gsm8k/gemma-3-1b-it       -19.5     -23.0     -17.0  -19.0             -9.5      -14.2                 5.3
+gsm8k/Llama-1B             -2.7      -0.8      -0.4   -4.8              3.2       -3.3                -0.6
+gsm8k/Llama-3B             -1.1      -0.1      -0.5   -1.4              0.0       -1.1                 0.1
+math50/DS-R1-1.5B          -2.5       0.0      -1.0   -4.0              1.7       -1.8                 0.7
+
+robust z-score of each cell = (value - median) / (1.4826 * MAD); |z| > 3.5 flagged
+  per-sample          : gsm8k/gemma-3-1b-it (value -19.5, z -7.3)
+  majority            : gsm8k/gemma-3-1b-it (value -23.0, z -9.4)
+  coverage            : gsm8k/gemma-3-1b-it (value -17.0, z -8.3)
+  yield               : gsm8k/gemma-3-1b-it (value -19.0, z -4.0)
+  label precision     : gsm8k/gemma-3-1b-it (value -9.5, z -3.9)
+  agreement           : gsm8k/gemma-3-1b-it (value -14.2, z -4.4)
+  estimator residual  : gsm8k/gemma-3-1b-it (value +5.3, z +4.5)
+
+=== (a2) Do the headline numbers depend on single cells? Estimator (all 8-bit and 4-bit cells): leave one cell out
+all 23 cells: Pearson r = 0.957, Spearman = 0.877, mean abs error = 0.85
+leave-one-out: r ranges 0.936..0.964 (lowest when dropping gsm8k/gemma-3-1b-it/n8/4bit); error ranges 0.65..0.89
+without the three largest-change cells (gsm8k/Qwen3.5-0.8B/n16/4bit, gsm8k/Qwen3.5-0.8B/n8/4bit, gsm8k/gemma-3-1b-it/n8/4bit): r = 0.909, error = 0.63, 'no change' error = 2.09
+largest residuals (d per-sample - d agreement): gsm8k/gemma-3-1b-it/n8/4bit -5.3; cqa/Qwen3.5-0.8B/n16/8bit +2.1; gsm8k/Qwen3.5-2B/n8/4bit -1.7; cqa/Qwen3.5-0.8B/n8/4bit +1.5
+
+=== (b1) Unanimous but wrong: questions where all complete samples agree (agreement = 1.0 over all 8) on a wrong answer. GSM8K, 8-sample runs
+  Qwen3.5-0.8B  | 16bit: 2/188 unanimous are wrong (1.1%) | 8bit: 4/181 unanimous are wrong (2.2%) | 4bit: 0/110 unanimous are wrong (0.0%)
+  Qwen3.5-2B    | 16bit: 0/79 unanimous are wrong (0.0%) | 8bit: 0/37 unanimous are wrong (0.0%) | 4bit: 0/39 unanimous are wrong (0.0%)
+  DS-R1-1.5B    | 16bit: 1/59 unanimous are wrong (1.7%) | 8bit: 0/58 unanimous are wrong (0.0%) | 4bit: 1/61 unanimous are wrong (1.6%)
+  gemma-3-1b-it | 16bit: 3/60 unanimous are wrong (5.0%) | 8bit: 0/42 unanimous are wrong (0.0%) | 4bit: 3/20 unanimous are wrong (15.0%)
+  Llama-1B      | 16bit: 7/129 unanimous are wrong (5.4%) | 8bit: 7/132 unanimous are wrong (5.3%) | 4bit: 4/109 unanimous are wrong (3.7%)
+  Llama-3B      | 16bit: 14/597 unanimous are wrong (2.3%) | 8bit: 12/595 unanimous are wrong (2.0%) | 4bit: 12/559 unanimous are wrong (2.1%)
+
+=== (b2) The same wrong answer from several models: 16-bit runs, majority wrong with agreement >= 0.75. Candidates for a faulty gold label or an ambiguous question
+questions where >=3 models confidently give the SAME wrong answer: 1 of 1319 questions seen
+  gsm8k_3: gold 540, 4 of 6 models answer 180 | James decides to run 3 sprints 3 times a week.  He runs 60 meters each sprint.  How many total meters does he run a week?...
+questions with a confident wrong majority in at least one model: 102; in exactly one model: 90
+
+=== (b3) Catastrophic 4-bit drops for Qwen-0.8B (24 samples per precision, n8+n16 pooled): what distinguishes these questions?
+group | n | question length (chars) | gold solution steps | numbers in question | gold answer >= 1000 (share) | question has % or decimal (share) | 16-bit per-sample accuracy | 16-bit truncation share | 4-bit truncation share
+drop >= 0.5    |   23 | 217.39 | 3.13 | 3.17 | 0.09 | 0.13 | 0.82 | 0.04 | 0.12
+drop 0.25-0.5  |  196 | 236.63 | 3.18 | 3.65 | 0.08 | 0.17 | 0.66 | 0.09 | 0.16
+within +-0.25  | 1075 | 240.98 | 3.26 | 3.39 | 0.10 | 0.21 | 0.45 | 0.18 | 0.18
+gain >= 0.25   |   25 | 238.16 | 3.12 | 3.92 | 0.12 | 0.28 | 0.30 | 0.15 | 0.07
+among questions the 16-bit model usually solves (p>=0.5, n=680): share dropping by >=0.5 = 0.034; correlation of drop with steps -0.10, with question length -0.13, with 4-bit minus 16-bit truncation -0.40
+
+=== (c) Sample-level outliers, GSM8K 8-sample runs: share of samples that are truncated / extreme / duplicated
+model | prec | truncated | complete samples with answer magnitude > 1e6 | complete samples with no answer | exact duplicate of another sample of the same question
+  Qwen3.5-0.8B  16bit | 0.161 | 0.0016 | 0.0000 | 0.0000
+  Qwen3.5-0.8B  8bit  | 0.150 | 0.0018 | 0.0000 | 0.0000
+  Qwen3.5-0.8B  4bit  | 0.172 | 0.0014 | 0.0000 | 0.0000
+  Qwen3.5-2B    16bit | 0.175 | 0.0000 | 0.0000 | 0.0006
+  Qwen3.5-2B    8bit  | 0.166 | 0.0015 | 0.0000 | 0.0000
+  Qwen3.5-2B    4bit  | 0.146 | 0.0000 | 0.0000 | 0.0000
+  DS-R1-1.5B    16bit | 0.144 | 0.0000 | 0.0000 | 0.0000
+  DS-R1-1.5B    8bit  | 0.137 | 0.0022 | 0.0000 | 0.0000
+  DS-R1-1.5B    4bit  | 0.144 | 0.0000 | 0.0000 | 0.0000
+  gemma-3-1b-it 16bit | 0.284 | 0.0000 | 0.0000 | 0.0163
+  gemma-3-1b-it 8bit  | 0.287 | 0.0000 | 0.0000 | 0.0144
+  gemma-3-1b-it 4bit  | 0.299 | 0.0018 | 0.0000 | 0.0175
+  Llama-1B      16bit | 0.001 | 0.0025 | 0.0000 | 0.0036
+  Llama-1B      8bit  | 0.002 | 0.0018 | 0.0001 | 0.0020
+  Llama-1B      4bit  | 0.001 | 0.0031 | 0.0000 | 0.0010
+  Llama-3B      16bit | 0.004 | 0.0013 | 0.0000 | 0.0034
+  Llama-3B      8bit  | 0.005 | 0.0015 | 0.0000 | 0.0028
+  Llama-3B      4bit  | 0.003 | 0.0015 | 0.0000 | 0.0023
