@@ -1,4 +1,125 @@
-# Experiment D — Research Dossier
+# Does Compressing a Small AI Model Break Its Ability to Learn From Itself?
+
+*Experiment D research dossier. Living document, last full revision 9 Oct 2026. Code map: `README.md`.*
+
+**How this document is organised.** Part A is written for anyone: an abstract, an introduction, the findings in plain words, and what happens next. No statistics background is needed. Part B is the full technical record for readers who want to check or build on the work: every number, every paper read, every mistake found, and the exact commands to reproduce it. Each Part A statement points to the Part B section that backs it up.
+
+| If you are… | Read |
+|---|---|
+| In a hurry (2 minutes) | A.1 Abstract only |
+| A supervisor, examiner or non-specialist | All of Part A (about 10 minutes) |
+| A researcher who wants the evidence | Part B, sections 1 and 2, then 4 |
+| Checking how this fits the literature | Part B, sections 3 and 4 |
+| Planning the next experiments | Part B, sections 5, 6 and 10 |
+| Reproducing the numbers | Part B, section 8 and `README.md` |
+
+---
+
+# Part A — Summary for everyone
+
+## A.1 Abstract
+
+Small language models, the kind that fit on a laptop or phone, are often *compressed* (quantized) by storing their internal numbers with fewer bits. Compression makes them cheaper to run, but it can make them slightly worse. A separate line of research asks whether a model can improve itself without human help: it answers each question several times, trusts the answer most of its attempts agree on, and learns from those trusted answers. We asked what compression does to that self-checking signal.
+
+We tested six small models on four question sets (mostly grade-school maths) at full precision, 8-bit and 4-bit. Our main result is that **compression makes a model less often right and less often sure, but when it is sure it is still just as trustworthy.** At 4-bit, a model's single attempts were correct about 4.5 percentage points less often in every one of ten model-and-dataset comparisons, and it produced about 6 points fewer "confident" answers. The confident answers that remained were as accurate as before (a change of +0.3 points, indistinguishable from zero). Taking a vote across attempts hides roughly 1.4 points of the damage. 8-bit compression left voted answers essentially unchanged.
+
+We cannot yet say *how much* damage to expect for a new model: it ranged from 1 to nearly 20 points depending on the model. Our results come from one compression method, small question sets in places, and no actual self-training; the next step is a larger, cleaner confirmation run.
+
+## A.2 Introduction: why this question matters
+
+**The problem.** Getting a language model to improve normally needs people to write or check many correct answers, which is slow and expensive. One cheaper idea is *self-improvement*: ask the model the same question many times, and if most attempts reach the same answer, treat that answer as probably correct and train on it. Nobody has to supply the right answer. This works best when the model's agreement is a reliable hint that it is right.
+
+**The twist.** Small models are rarely used at full precision. To fit them on cheap hardware, their weights are *quantized*: each stored number is rounded to 8 or 4 bits instead of 16. This usually costs a little accuracy. What nobody had checked carefully is whether rounding also damages the *agreement signal* that self-improvement depends on. If it did, a compressed model could teach itself wrong answers with great confidence.
+
+**What was already known** (details in Part B, section 3):
+
+- Compression lowers the accuracy of small reasoning models, and the effect is larger below 4 bits. This is established by earlier work, including a paper on the same DeepSeek model we use ("Quantization Hurts Reasoning?"), so we do not claim it as new.
+- Models can improve themselves from majority-vote signals, and one earlier study did this on a 4-bit model. But it did not compare different precisions. So "nobody has combined compression and self-improvement" would be an overstatement, and we avoid it.
+- What we found no one reporting is how compression changes the *quality of the self-generated labels* (how many there are, how correct they are, and how well they can be trusted).
+
+**Our question.** Does compressing a small model break the machinery it would use to improve itself?
+
+## A.3 What we did
+
+| Step | In plain words |
+|---|---|
+| Models | Six small models from four families, 0.8 to 3 billion parameters |
+| Compression levels | Full 16-bit, 8-bit, and 4-bit (using the common `bitsandbytes` tool) |
+| Questions | Grade-school maths (GSM8K, SVAMP), harder competition maths (MATH-500), and common-sense multiple choice |
+| Procedure | Each question answered 8 times by each model; the majority answer and the level of agreement were recorded |
+| A second check | The same model was asked to judge whether its own solutions were right ("verifier") |
+| Comparison | Always the *same questions* at different precisions, with uncertainty ranges from resampling the questions |
+
+**An important honest step.** While analysing, we found that the scores in our first saved result tables had been computed with old versions of the answer-reading code, and some were off by up to 21 points. We rebuilt every number from the raw model outputs and fixed the report scripts so this cannot recur. Everything below uses the corrected numbers (Part B, section 2.1).
+
+## A.4 What we found
+
+| # | Finding | Confidence | Where |
+|---|---|---|---|
+| 1 | **At 4-bit, single attempts are right less often.** On average 4.5 points lower, and lower in all 10 comparisons. | High for direction, low for size | B 2.10 |
+| 2 | **At 4-bit, the model is "confident" less often.** About 6 points fewer questions reach a strong majority (at least 6 of 8 attempts agree), also in all 10 comparisons. | High for direction | B 2.10 |
+| 3 | **When it is confident, it is still just as right.** The accuracy of confident answers changed by +0.3 points (range −0.8 to +1.3). | Medium to high | B 2.6, 2.10 |
+| 4 | **Voting hides damage.** The majority answer looks about 1.4 points better than single attempts suggest, so reporting only voted accuracy understates the harm. | High | B 2.10 |
+| 5 | **The drop in agreement estimates the drop in accuracy, with no answer key needed.** Predicting a held-out model's loss this way was off by 0.85 points on average, against 3.4 for guessing "no change". | Medium | B 2.7, 2.10 |
+| 6 | **8-bit is nearly harmless to voted answers** (−0.4 points, indistinguishable from zero), with a small loss in single attempts. | Medium (a 16-bit vs 8-bit number-format difference is mixed in) | B 2.10 |
+| 7 | **The size of the damage depends on the model, and we cannot predict it.** From about 1 point (Llama-3B, DeepSeek) to 19.5 (Gemma-1B). The questions that break in one model are unrelated to those that break in another. | High | B 2.10, 2.11 |
+| 8 | **One outlier, with an explanation.** Gemma-1B at 4-bit mostly changed *how it writes answers* (it stopped using the boxed format our reader looks for), so part of its drop is a formatting change, not lost reasoning. Removing it changes sizes but no conclusion. | Medium | B 2.4, 2.11 |
+| 9 | **The model-judging-itself check is not yet usable.** Some models approve everything, reject everything, or do not answer in a parseable way, so this part reflects the checker as much as compression. | Low | B 2.8 |
+
+**Plain-language reading of finding 3.** Think of a student who, after being slightly "scrambled", gets fewer questions right and is less often certain, but whose certain answers are as reliable as before. Compression reduces the *amount* of trustworthy material, not its trustworthiness.
+
+## A.5 What this means
+
+- **For the research question.** The step that turns a model's attempts into training labels *survives* 4-bit compression. The expectation, not yet tested, is that a compressed model would self-improve **more slowly and plateau lower**, rather than being poisoned by bad labels.
+- **For anyone compressing a small model.** Do not trust voted accuracy alone, because it hides some damage. Check the model itself, because damage is not predictable from other models. The drop in agreement is a cheap, label-free way to estimate the loss.
+- **For the project.** Our measurement choices (which answer reader, how many questions, how long a model may write) changed results as much as compression did. Fixing and recording these choices is the first priority.
+
+## A.6 What we do not know (limits)
+
+1. **One compression tool.** All results use `bitsandbytes`. Other common methods (AWQ, GPTQ, GGUF) and anything below 4 bits are untested.
+2. **Small models and small question sets.** Models are 0.8 to 3B parameters. Several comparisons use only 100 to 200 questions, which can mislead by many points: the first 100 GSM8K questions showed a 16-point drop where the full set shows 7.
+3. **No actual self-training yet.** We measured the ingredients (label quantity, accuracy, trust), not a training loop. The prediction in A.5 is a hypothesis.
+4. **Length limit.** Models were limited to 512 tokens (word pieces) on most tests, which cut off a large share of some models' answers.
+5. **Prompts and answer reading.** One prompt per task, and a rule-based answer reader.
+6. **Literature.** I (the AI assistant) read 13 papers in full and 9 through summaries; the document labels which is which, and any quoted number from a summary should be rechecked before citing.
+
+## A.7 What happens next
+
+**Next step: a clean confirmation run** (Part B, section 6, phase 1):
+
+1. Use the **full GSM8K test set** (1,319 questions), not 100 to 200.
+2. Set the **length limit from a short pilot** so almost nothing is cut off.
+3. Add **one more compression method** (AWQ or GPTQ) at 4-bit, and **one 3-bit** setting.
+4. Run **five models**, the fragile and the robust ones.
+5. Fix the measures in advance and log the full configuration with every run.
+
+**If it holds**, a second phase runs one real self-training round at 16-bit and 4-bit to test the prediction in A.5. **Possible venues**: a workshop paper first, then a fuller journal-style version (Part B, section 9).
+
+**Decisions that are yours** (Part B, section 10): your compute and time budget, the target venue, whether the mentor's PDFs in `Docs/` add constraints (they are image-only and could not be read), and whether the project web pages should be updated to the corrected numbers.
+
+## A.8 Glossary
+
+| Term | Meaning |
+|---|---|
+| Quantization | Storing a model's numbers with fewer bits (16 → 8 → 4) to make it smaller and cheaper, at some cost in accuracy |
+| Self-consistency / majority vote | Answer the same question several times and pick the most common answer |
+| Agreement (confidence) | The share of attempts that gave the majority answer |
+| Per-sample accuracy | How often a single attempt is correct |
+| Majority accuracy | How often the voted answer is correct |
+| Pseudo-label | A model-made answer used as if it were a correct label for training |
+| Label precision / yield | Of the pseudo-labels kept, how many are correct / how many questions produce one |
+| Coverage | Whether at least one of the attempts is correct (the room available for improvement) |
+| Verifier | The model asked to judge whether a solution is right |
+| Flip | A question whose voted answer changes between two runs |
+| Replicate noise floor | How much answers change just from re-running the same model, so that real changes can be told apart |
+| Truncation | An answer cut off by the length limit before the model finished |
+| Paired comparison / bootstrap | Compare the same questions under both settings, and resample the questions to get an uncertainty range |
+| Percentage points (pts) | Differences between two percentages, e.g. 60% → 55.5% is −4.5 pts |
+| τ (tau) | How much a true effect differs from one model or dataset to another |
+
+---
+
+# Part B — Technical record
 
 *Living document. Last full revision: 9 Oct 2026 (night). Supersedes the direction section of the 3 Oct audit (now `archive/2026-10-03_audit/AUDIT_AND_DIRECTION.md`) and my plan of 3 Oct. Code map: `README.md`.*
 
@@ -291,109 +412,17 @@ The verifier emits one greedy line (median 26 characters), so it is a one-token 
 
 ## 3. Literature: critical review
 
-"How read": **F** = I read the relevant sections of the full text; **S** = tool summary of the full text; **A** = abstract only.
+The paper-by-paper review now lives in its own file: **[RESEARCH_DOSSIER_PAPERS.md](RESEARCH_DOSSIER_PAPERS.md)**. Section numbers are unchanged, so references to "section 3" or "3.x" in this document point there.
 
-### 3.1 Quantization and reasoning accuracy
+| Section | Covers |
+|---|---|
+| 3.1 | Quantization and reasoning accuracy |
+| 3.2 | Quantization and reliability |
+| 3.3 | Self-consistency and self-verification (full precision) |
+| 3.4 | Self-training |
+| 3.5 | Method references |
 
-**Quantization Hurts Reasoning?** ([2504.04823](https://arxiv.org/abs/2504.04823)) — F
-- *Design:* DeepSeek-R1-Distill 1.5B–70B, QwQ-32B, Qwen3-8B; AWQ, GPTQ, KV-cache and weight-activation methods at 3/4/8-bit; AIME-120, MATH-500, GSM8K, GPQA, LiveCodeBench; temperature 0.6, 32,768-token limit, 3 seeds, mean ± sd.
-- *Finds:* 4-bit weight-only is near lossless (1.5B: GSM8K 84.5 to 82.7/83.3); 3-bit is risky (64.5 AWQ, 77.8 GPTQ); smaller models and harder tasks lose more; aggressive quantization lengthens outputs in small models; GPTQ needs reasoning-domain calibration data (+9.8 points at 3-bit).
-- *Weak points:* pass@1 only; no voting, confidence, verification or training; three seeds but no paired test.
-- *For us:* settles the accuracy question. Gives a reference number, public quantized checkpoints for our anchor model, and a warning that our 512–2048-token caps are far too small for reasoning models.
-
-**Not All Bits Are Equal** ([2510.10964](https://arxiv.org/abs/2510.10964)) — F
-- *Design:* Qwen3 0.6–32B, GPTQ 4/8-bit, AIME25 and GPQA-Diamond, temperature 0.6, majority voting with 1–16 samples, memory as the budget.
-- *Finds:* for mathematical reasoning 4-bit is memory-inefficient and 8-bit is optimal for 0.6B and 1.7B models; parallel voting is memory-inefficient below an "8-bit 4B" effective size.
-- *Weak points:* point estimates without intervals; accuracy only; verifiers excluded by design.
-- *For us:* agrees with our Qwen-0.8B result. Leaves open everything about agreement as a *signal*.
-
-**Quantization Meets Reasoning** ([2501.03035](https://arxiv.org/abs/2501.03035); follow-up [2505.11574](https://arxiv.org/abs/2505.11574) A) — S
-- *Finds:* Llama-3.2-1B/3B and 3.1-8B lose 5–32% on MATH under AWQ/GPTQ 4-bit; repair with DPO + QLoRA on 545 *labelled* failures.
-- *Weak points:* error labels come from five judge models; recovery needs ground truth.
-- *For us:* shows fine-tuning a quantized model on curated data works. Our question is whether *self-generated* labels suffice.
-
-**Dettmers & Zettlemoyer** ([2212.09720](https://arxiv.org/abs/2212.09720)) A; **Lee et al.** ([2409.11055](https://arxiv.org/abs/2409.11055)) A; **Decoding Compressed Trust** ([2403.15447](https://arxiv.org/abs/2403.15447)) A
-- 4-bit is near-optimal for zero-shot accuracy per bit; quantized models struggle with instruction following; 4-bit preserves trust dimensions, 3-bit does not. Background only.
-
-### 3.2 Quantization and reliability
-
-**Does Compression Preserve Uncertainty?** ([2606.01850](https://arxiv.org/abs/2606.01850)) — F (design, limitations) + S
-- *Design:* 12 models 1–70B; RTN/AWQ/GPTQ and weight-activation methods, pruning; five six-option multiple-choice tasks; conformal set size from one forward pass.
-- *Finds:* accuracy and set size decouple; small models inflate more; inflation is threshold-like.
-- *Weak points:* no seeds or intervals; needs labelled calibration data; authors state open-ended generation is future work.
-- *For us:* closest "uncertainty under compression" benchmark; does not touch sampled reasoning.
-
-**Reliability Scaling Laws** ([2607.10855](https://arxiv.org/abs/2607.10855)) — F (setup, future work) + S
-- *Design:* six quantizers at 2–8 bit; TriviaQA and CoQA with 20-token answers; token-entropy AUROC.
-- *Finds:* reliability is non-monotonic in total bits; 4-bit is a good trade-off.
-- *Weak points:* short factual answers; authors list the effect of fine-tuning on reliability as future work.
-- *For us:* includes bitsandbytes and Llama-3.2-1B/3B, so our quantizer is defensible as one of several.
-
-**When Quantization Affects Confidence** ([2405.00632](https://arxiv.org/abs/2405.00632)) — F
-- *Finds:* GPTQ 4-bit lowers true-class confidence, raises entropy, and moves low-confidence items most.
-- *Weak points:* 4-bit GPTQ only; multiple choice; no intervals on the bin analysis.
-- *For us:* partial disagreement with our absolute-loss pattern (section 2.5); agreement on flattening.
-
-**Accuracy Is Not All You Need** ([2407.09141](https://arxiv.org/abs/2407.09141)) — F (definitions, noise argument) + S
-- *Finds:* answers flip in both directions while accuracy is preserved; flips correlate with KL divergence (ρ = 0.98 on MMLU); models quantization as symmetric noise.
-- *Weak points:* deterministic evaluation, so no sampling floor; calls predicting degradation "a challenging and open problem".
-- *For us:* our replicate floor is the missing control for sampled generation.
-
-**Illusion of Equivalency** ([2607.08734](https://arxiv.org/abs/2607.08734)) S; **Self-explanations** ([2601.00282](https://arxiv.org/abs/2601.00282)) S; **Quantization Undoes Alignment** ([2605.15208](https://arxiv.org/abs/2605.15208)) S; **BitCal-TTS** ([2605.05561](https://arxiv.org/abs/2605.05561)) A
-- GGUF correctness agreement without a noise floor; greedy self-explanations on 7–72B models; 3-bit lowers abstention in bias probes; 4-bit miscalibrates early-halting confidence (54 and 35 GSM8K questions). Adjacent; none studies agreement or verification.
-
-### 3.3 Self-consistency and self-verification (full precision)
-
-**When Should a Language Model Trust Itself?** ([2605.02915](https://arxiv.org/abs/2605.02915)) — F (methods, limitations) + S
-- *Design:* same-model True/False logit verifier; ARC-Challenge and TruthfulQA-MC; AUROC and risk–coverage with bootstrap.
-- *Finds:* large gains over likelihood on ARC; harmful for TinyLlama and DeepSeek-R1-8B on TruthfulQA.
-- *Weak points:* "larger" models are loaded in 4-bit and the paper does not say which, so precision is an uncontrolled factor in its own comparisons; multiple choice only; authors ask for open-ended tasks and self-consistency baselines.
-- *For us:* a logit verifier on free-form GSM8K traces, compared against the vote, at controlled precision, answers three of their stated limitations.
-
-**Language Models (Mostly) Know What They Know** ([2207.05221](https://arxiv.org/abs/2207.05221)) A — origin of the P(True) probe.
-
-**When Self-Consistency Backfires** ([2608.11403](https://arxiv.org/abs/2608.11403)) S; **When LLMs Agree, Are They Right?** ([2607.08065](https://arxiv.org/abs/2607.08065)) S; **Decomposing Wrong-Consensus** ([2608.18795](https://arxiv.org/abs/2608.18795)) S
-- On hard multiple-choice science, agreement is a weak or non-monotone confidence signal; wrong-run agreement is mostly per-question answer preference.
-- *For us:* agreement is strong on GSM8K (AUROC ≈ 0.87) and weak on CommonsenseQA (0.72), matching their task dependence. A reviewer will ask whether our conclusions survive a hard benchmark.
-
-**Cross-Model Disagreement** ([2603.25450](https://arxiv.org/abs/2603.25450)) S — verifier perplexity on another model's answer; never pairs a model with its own quantized copy. A natural baseline if a full-precision model is available.
-
-### 3.4 Self-training
-
-**Sharpening Mechanism** ([2412.01951](https://arxiv.org/abs/2412.01951)) — F (definitions) + S
-- *Finds:* the sample cost of self-improvement scales with a coverage coefficient; theory assumes a clean self-reward.
-- *For us:* justifies reporting coverage; says nothing about a biased verifier.
-
-**LMSI** ([2210.11610](https://arxiv.org/abs/2210.11610)) — F (method) 
-- Keeps every path that reaches the majority answer, with no threshold, relying on agreement being calibrated (their Fig. 2); a 540B model.
-- *For us:* the canonical vote filter. Calibration at 540B does not transfer to 1B models; ours is the small-model check.
-
-**Can Large Reasoning Models Self-Train?** ([2505.21444](https://arxiv.org/abs/2505.21444)) — F (§4.2, limitations, A.1, G.4) + S
-- *Finds:* majority-vote reward matches ground-truth RL, then collapses into a template answer; fewer rollouts per prompt delay collapse (untested hypothesis: noisier votes are harder to hack); asks for better verifiers.
-- *Weak points:* 4–14B models at full precision on large GPUs.
-- *For us:* two-sided prediction for a quantized loop (section 6, phase 2).
-
-**MACA** ([2509.15172](https://arxiv.org/abs/2509.15172)) — F (appendices D, E, G, I, L, N) + S
-- *Design:* 4-bit bitsandbytes QLoRA, 256-token cap, 1,500 train / 500 test per dataset.
-- *Finds:* majority-vote labels train as well as ground truth; iterations 2–3 add 1–3 points; no collapse in three iterations; Table 16 shows gains of similar size evaluated at 4-bit and at full precision.
-- *Weak points:* base truncation rates of 75–83% under the 256-token cap; up to 38 of 60 points of one gain is formatting (their own Table 22); precision never varied in training.
-- *For us:* establishes that a 4-bit model can self-train. Supplies the decomposition (completion / format / reasoning) any loop of ours must report.
-
-**On the Generalization Gap in Self-Evolving LMs** ([2606.01075](https://arxiv.org/abs/2606.01075)) — F
-- *Design:* same generator–verifier game as ours, but 8 candidates × 16 sampled verdicts with a threshold; DPO; full fine-tuning.
-- *Finds:* Gemma-3-1B gains 0.6 points, 4B gains 31% relative; verifier recall is the bottleneck; pass@1 rises while pass@32 stays flat.
-- *Weak points:* verifier accuracy measured on 60–100 examples.
-- *For us:* a threshold over sampled verdicts is the literature's way to get a graded verifier score. Coverage as ceiling supports our reading of 2.3.
-
-**Self-Improvement Reversal** ([2407.05013](https://arxiv.org/abs/2407.05013)) S; **Rise-and-Collapse** ([2606.21090](https://arxiv.org/abs/2606.21090)) S; **QuRL** ([2602.13953](https://arxiv.org/abs/2602.13953)) S; **STaR** ([2203.14465](https://arxiv.org/abs/2203.14465)) A
-- pass@1 gains can hide falling diversity and OOD accuracy; collapse within a training campaign; with a quantized actor, weight updates are far smaller than quantization error (ground-truth rewards). Supply metrics and cautions for phase 2.
-
-### 3.5 Method references
-
-- Difference of Confidences ([2107.03315](https://arxiv.org/abs/2107.03315)) F (definition); Agreement-on-the-Line ([2206.13089](https://arxiv.org/abs/2206.13089)) A — label-free accuracy estimation.
-- xFinder ([2405.11874](https://arxiv.org/abs/2405.11874)) A — regex answer extraction reached 74% accuracy in the best framework they tested.
-- Adding Error Bars to Evals ([2411.00640](https://arxiv.org/abs/2411.00640)) A — formulas for comparing two models and planning sample size. My recollection that it recommends paired, question-clustered analysis is from memory, not from this session's reading.
-- Signal detection theory (Green & Swets 1966; Macmillan & Creelman, *Detection Theory*) — textbook, cited from memory.
+It reviews 34 arXiv papers and two textbooks. The main ones get their design, findings, weak points and what they mean for us; the rest get a line each. Every entry is marked with how it was read (**F** full text, **S** tool summary, **A** abstract only). What the literature adds up to is in section 4 below.
 
 ---
 

@@ -78,6 +78,7 @@ results/
 # Keep the code map and the research record tracked (the 3 Oct audit they replace is in archive/)
 !/README.md
 !/RESEARCH_DOSSIER.md
+!/RESEARCH_DOSSIER_PAPERS.md
 
 # Regenerable analysis cache
 analysis/**/cache.pkl

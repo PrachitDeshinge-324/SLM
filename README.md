@@ -2,7 +2,7 @@
 
 A small model answers each question several times, the answers are put to a vote, and the model is asked to judge its own solutions. This is done at 16-bit, 8-bit and 4-bit weight precision to see what quantization does to those self-judgment signals.
 
-Findings, literature review, decisions and open questions: [RESEARCH_DOSSIER.md](RESEARCH_DOSSIER.md).
+Findings, decisions and open questions: [RESEARCH_DOSSIER.md](RESEARCH_DOSSIER.md). Paper-by-paper literature review: [RESEARCH_DOSSIER_PAPERS.md](RESEARCH_DOSSIER_PAPERS.md).
 
 ## Layout
 
