@@ -1,5 +1,5 @@
 /* Quantization and reasoning models; quantization, calibration and reliability. */
-(window.PW_PAPERS = window.PW_PAPERS || []).push(
+window.PW.papers.push(
 
 /* ================= QUANTIZATION AND REASONING MODELS ================= */
 {
@@ -87,33 +87,6 @@
     read: 'main', note: 'Version history: v1 (May 2025) had a different title; v3\'s PDF header says "Published as a conference paper at ICLR 2026" while v4 (Jan 2026) says "Under review as a conference paper at ICLR 2026". Acceptance could not be confirmed, so it is shown as a preprint.'
 },
 {
-    id: 'quantlrm', title: 'QuantLRM: Quantization of Large Reasoning Models via Fine-Tuning Signals',
-    year: 2026, posted: '2026-01', authors: 'Nan Zhang, Eugene Kwek, Yusen Zhang, Muyu Pan, Suhang Wang, Prasenjit Mitra, Rui Zhang',
-    venue: 'arXiv preprint', status: 'preprint', cat: 'quant-reasoning', origin: 'site', prio: 2, arxiv: '2602.02581',
-    tags: ['3-bit', 'weight updates', 'sft', 'dpo', 'rlvr', 'awq', 'gptq', 'channel importance'],
-    summary: 'AWQ and GPTQ were designed for general LLMs and are weaker for large reasoning models at 3 bits. QuantLRM uses the weight updates produced by reasoning fine-tuning (SFT, DPO or RL) as the importance signal for protecting channels during weight-only quantization.',
-    method: [
-        'Channel importance from the absolute update |W\' - W| between the fine-tuned and pre-fine-tuned model, mapped by two restricted quadratics around the median (Eqs. 1 to 6); zero updates get the minimum score and count towards importance.',
-        'AWQ-style scale search s = I^alpha over 20 candidates; W3A16 main setting, W4A16 in Sec. 5.5; pseudo-fine-tuning of Qwen3-1.7B on OpenR1-Math when no base checkpoint exists.',
-        'Models R1-Llama-70B, R1-Qwen-32B, R1-0528-Qwen3-8B (SFT), Olmo-3-7B-Think-DPO (DPO), Olmo-3-7B-Think (RLVR); AIME-120, FOLIO, BBH temporal sequences, GPQA-Diamond; baselines GPTQ, GPTAQ, AWQ, ANY3.'
-    ],
-    results: [
-        '3-bit averages: R1-Llama-70B 71.30 against best baseline AWQ 69.18 (16-bit 74.28); R1-Qwen-32B 73.58 against ANY3 70.55; Olmo-3-7B-Think (RLVR) 63.23 against GPTQ 56.68 (Table 2).',
-        'At W4A16 on R1-Llama-70B QuantLRM is not the best (75.35 against AWQ 75.60, Table 4).',
-        'Search takes 6m35s against AWQ\'s 6m28s and decoding speed is equal at 4-bit (Table 5).'
-    ],
-    limits: [
-        'Needs fine-tuning traces (or a few thousand steps of pseudo-fine-tuning); gains are small on DPO (+0.22).',
-        'Calibration sizes differ across baselines; per-model adaptations tuned on a small validation set; AIME-120 means one question is about 0.83 points; no variance reporting.'
-    ],
-    relevance: 'A quantization technique informed by training, the opposite direction to Experiment D, which asks what happens when self-improvement runs on an already-quantized model. Useful as evidence that reasoning fine-tuning leaves a signal in the weights that quantizers can exploit.',
-    links: [
-        { l: 'arXiv', u: 'https://arxiv.org/abs/2602.02581' },
-        { l: 'PDF', u: 'https://arxiv.org/pdf/2602.02581' }
-    ],
-    read: 'full', note: 'The arXiv HTML carries an "ICML" keyword template line but no venue statement, so it is treated as an unreviewed preprint.'
-},
-{
     id: 'quantized-think-longer', title: 'Quantized Reasoning Models Think They Need to Think Longer, but They Do Not',
     year: 2026, posted: '2026-05', authors: 'Sanae Lotfi, Polina Kirichenko, Steven Li, Zechun Liu',
     venue: 'arXiv preprint', status: 'preprint', cat: 'quant-reasoning', origin: 'new', prio: 1, arxiv: '2606.00206',
@@ -193,35 +166,6 @@
         { l: 'PDF', u: 'https://arxiv.org/pdf/2601.14888' }
     ],
     read: 'full', note: 'Table 6 (hyperparameter column mapping) was garbled in retrieval; values come from the main text.'
-},
-
-/* ================= QUANTIZATION, CALIBRATION AND RELIABILITY ================= */
-{
-    id: 'decoding-compressed-trust', title: 'Decoding Compressed Trust: Scrutinizing the Trustworthiness of Efficient LLMs Under Compression',
-    year: 2024, posted: '2024-03', authors: 'Junyuan Hong, Jinhao Duan, Chenhui Zhang, Zhangheng Li, Chulin Xie, Kelsey Lieberman, James Diffenderfer, Brian Bartoldson, Ajay Jaiswal, Kaidi Xu, Bhavya Kailkhura, Dan Hendrycks, Dawn Song, Zhangyang Wang, Bo Li',
-    venue: 'ICML 2024', status: 'published', cat: 'quant-reliability', origin: 'dossier', dossier: '§3.1', prio: 2, arxiv: '2403.15447',
-    tags: ['trustworthiness', 'decodingtrust', 'pruning', 'gptq', 'awq', 'toxicity', 'fairness', 'privacy'],
-    summary: 'Compressed LLMs are rarely tested for trustworthiness. The paper evaluates pruned and quantized LLaMA2/Vicuna 13B models across the eight DecodingTrust dimensions and MMLU and derives recommendations.',
-    method: [
-        'LLaMA2 13b, LLaMA2 13b Chat and Vicuna 13b Chat; also LLaMA2 Chat 7b and 70b with GPTQ. Pruning: magnitude, SparseGPT, Wanda at 2:4 sparsity. Quantization: GPTQ and AWQ at 3, 4 and 8 bits; calibration 128 C4 samples, three random subsets for key settings.',
-        'Eight DecodingTrust dimensions (stereotype, privacy, toxicity, fairness, AdvGLUE++, OOD, AdvDemo, ethics) plus MMLU; modified refusal handling for fairness and ethics.'
-    ],
-    results: [
-        'The abstract says 4-bit models keep their source model\'s trustworthiness while pruning at 50% degrades it; 4-bit keeps all dimensions within about 5 points for LLaMA2 Chat 13b (Sec. 5.1).',
-        'Ethics for LLaMA2 13b Chat rises from 54.1 to 76.3 with 4-bit GPTQ and to 62.8 with AWQ.',
-        '3-bit GPTQ shows about a 30-point OOD drop and a 50-point toxicity drop with only about 8 MMLU points lost; MT-Bench falls from 7.00 (16-bit) to 2.89 (GPTQ 3-bit) and 6.42 (AWQ 3-bit) (Table 4).'
-    ],
-    limits: [
-        'Only three 13B models and only N:M sparsity; variance across calibration sets reaches about 15 points for 3-bit GPTQ.',
-        'The authors changed DecodingTrust\'s refusal and fairness handling, so numbers are not comparable to the original benchmark; the instruction-following explanation is a conjecture.'
-    ],
-    relevance: 'Source of the dossier\'s note that 4-bit preserves trust dimensions while 3-bit does not, which is why the plan adds a 3-bit point. It never samples repeatedly, so agreement and verification are not covered.',
-    links: [
-        { l: 'ICML 2024 proceedings (PMLR 235)', u: 'https://proceedings.mlr.press/v235/hong24a.html', o: true },
-        { l: 'arXiv', u: 'https://arxiv.org/abs/2403.15447' },
-        { l: 'PDF', u: 'https://arxiv.org/pdf/2403.15447' }
-    ],
-    read: 'main'
 },
 {
     id: 'compression-uncertainty', title: 'Does Compression Preserve Uncertainty? A Unified Benchmark for Quantized and Sparse LLMs via Conformal Prediction',
@@ -359,33 +303,6 @@
     read: 'full'
 },
 {
-    id: 'quant-undoes-alignment', title: 'Quantization Undoes Alignment: Bias Emergence in Compressed LLMs Across Models and Precision Levels',
-    year: 2026, posted: '2026-05', authors: 'Plawan Kumar Rath, Rahul Maliakkal',
-    venue: 'IEEE Cloud Summit 2026', status: 'published', cat: 'quant-reliability', origin: 'dossier', dossier: '§3.2', alsoSite: true, prio: 3, arxiv: '2605.15208',
-    tags: ['bias', 'bbq', 'mlx', '3-bit', 'stereotype', 'alignment', 'perplexity'],
-    summary: 'Shows that 3-bit quantization makes 6 to 21% of previously unbiased items develop stereotyped answers on BBQ, while perplexity barely moves.',
-    method: [
-        'Qwen2.5-7B-Instruct, Mistral-7B-Instruct-v0.3, Phi-3.5-Mini-Instruct; weight-only MLX quantization at BF16, 8, 6, 4 and 3 bits, group size 64; temperature 0.3, 5 tokens, five seeds.',
-        'BBQ ambiguous condition, 5 of 9 categories, 12,148 items and 911,100 records; Stereotype Reliance Score and Unknown Selection Rate; chi-squared tests, Cohen\'s h, Wilson intervals, logistic regression on bit-width.'
-    ],
-    results: [
-        'Mean Stereotype Reliance rose from 0.175 (BF16) to 0.242 (3-bit), a 37.8% relative increase; 12 of 15 comparisons significant.',
-        'Among BF16-unbiased items, 21.1% (Phi), 17.7% (Mistral) and 6.0% (Qwen) became biased at 3-bit; at 4-bit 3.4%, 5.6% and 2.2%.',
-        'Unknown-selection rate fell from 0.764 to 0.631; perplexity at 3-bit rose 27.5% (Qwen), 10.2% (Mistral) and 83.3% (Phi).'
-    ],
-    limits: [
-        'One PTQ method (MLX weight-only), three models with a size confound, 5 of 9 BBQ categories, Apple Silicon only.',
-        'Internal inconsistencies: the abstract says perplexity rises under 3% at 4-bit but Table III shows +10.5% for Phi-3.5; the mechanism is interpretive, not tested.'
-    ],
-    relevance: 'Another example of the "looks fine on the headline metric, breaks something nobody checked" pattern this project extends to self-improvement signals. It is about stereotyping in single answers, not sampling or self-judgment.',
-    links: [
-        { l: 'Version of record (IEEE DOI)', u: 'https://doi.org/10.1109/CloudSummit68932.2026.00016', o: true },
-        { l: 'arXiv', u: 'https://arxiv.org/abs/2605.15208' },
-        { l: 'PDF', u: 'https://arxiv.org/pdf/2605.15208' }
-    ],
-    read: 'full', note: 'Venue from the arXiv comments ("Accepted at IEEE Cloud Summit 2026") and the related-DOI field; the IEEE Xplore page was not opened.'
-},
-{
     id: 'quantized-calibrated', title: 'Quantized Can Still Be Calibrated: A Unified Framework to Calibration in Quantized Large Language Models',
     year: 2025, posted: '2025-07', authors: 'Mingyu Zhong, Guanchu Wang, Yu-Neng Chuang, Na Zou',
     venue: 'ACL 2025 (Long Papers)', status: 'published', cat: 'quant-reliability', origin: 'new', prio: 1, arxiv: '',
@@ -435,57 +352,6 @@
         { l: 'ACL Anthology (IJCNLP-AACL 2025)', u: 'https://aclanthology.org/2025.ijcnlp-long.123/', o: true },
         { l: 'arXiv', u: 'https://arxiv.org/abs/2508.16785' },
         { l: 'PDF', u: 'https://arxiv.org/pdf/2508.16785' }
-    ],
-    read: 'full'
-},
-{
-    id: 'calibration-scoring-rule', title: 'When Calibration Depends on the Scoring Rule: Quantized Biomedical LLM Classification',
-    year: 2026, posted: '2026-08', authors: 'Anton Rasmussen, Hong Qin',
-    venue: 'AAAI 2026 Fall Symposium Series (AT-AI4H-NW)', status: 'workshop', cat: 'quant-reliability', origin: 'new', prio: 3, arxiv: '2608.03854',
-    tags: ['calibration', 'int8', 'int4', 'nf4', 'scoring rule', 'prompt template', 'biomedical', 'temperature scaling'],
-    summary: 'Quantized 7B biomedical LLMs can look more or less calibrated depending only on whether label log-likelihoods are summed or averaged over tokens. Switching the scoring rule reverses which model looks better calibrated, with little accuracy change.',
-    method: [
-        'Mistral-7B-v0.3, BioMistral-7B and Mistral-7B-Instruct-v0.3 at FP16, INT8 (LLM.int8()) and INT4 (NF4 with double quantization); PubMed RCT five-class sentence classification, n = 2,000 test sentences.',
-        'Summed and mean-token label log-likelihood scoring; four prompt templates, two chosen by an AlphaEvolve search that used test-split examples; temperature scaling on 200 validation items; ECE (15 bins), Brier, NLL; abstract-cluster bootstrap for accuracy and F1 differences.'
-    ],
-    results: [
-        'Under summed scoring BioMistral Bare-Cont FP16 ECE is 0.104 and Instruct Struct-Delim FP16 is 0.270; under mean-token scoring Instruct falls to 0.041 and BioMistral Struct-Delim rises from 0.117 to 0.259.',
-        'INT8 changes accuracy by at most 1.1 points for the adapted models; INT4 effects are mixed with no catastrophic degradation; template choice moves accuracy by about 3 to 18 points.'
-    ],
-    limits: [
-        'Single task, 7B decoders, bitsandbytes only; primary prompts were chosen with test-derived examples, so absolute numbers are exploratory.',
-        'No uncertainty on ECE, Brier or NLL; Instruct evaluated without its chat template; checkpoint identifiers were not recorded.'
-    ],
-    relevance: 'A warning that calibration conclusions under quantization depend on scoring and prompt choices. This is the reason the dossier freezes the protocol and reports a logit-margin verifier on a fixed trace pool.',
-    links: [
-        { l: 'arXiv', u: 'https://arxiv.org/abs/2608.03854' },
-        { l: 'PDF', u: 'https://arxiv.org/pdf/2608.03854' }
-    ],
-    read: 'full'
-},
-{
-    id: 'bigger-or-cheaper', title: 'Bigger or Cheaper? Scale and Quantization Effects on Uncertainty Signals in Vision-Language Models Under Image Degradation',
-    year: 2026, posted: '2026-07', authors: 'M M Asif Ferdous',
-    venue: 'arXiv preprint', status: 'preprint', cat: 'quant-reliability', origin: 'new', prio: 3, arxiv: '2607.24440',
-    tags: ['vision-language', 'nf4', 'verbalized confidence', 'internal confidence', 'auroc', 'food101'],
-    summary: 'Compares a 2B model in fp16 and 4-bit with a 7B model in 4-bit under six image degradations, and finds scale mainly improves the internal confidence signal while verbalized confidence stays weak, and 4-bit hurts uncertainty far more than accuracy.',
-    method: [
-        'Qwen2-VL-2B-Instruct (fp16 and NF4 4-bit) and Qwen2-VL-7B-Instruct (NF4); greedy decoding with a 32-token cap on one 16 GB T4.',
-        '100 Food101 test items as four-option multiple choice under JPEG, motion blur, low light, glare, rotation and resample at three severities (19 conditions, 5,700 predictions); verbalized confidence 0 to 100 against internal mean token probability; AUROC, AURC, ECE, Brier.'
-    ],
-    results: [
-        'Mean accuracy 0.904 (2B fp16), 0.888 (2B 4-bit), 0.935 (7B 4-bit).',
-        'Internal-confidence AUROC 0.95 (2B fp16), 0.80 (2B 4-bit), 0.98 (7B 4-bit); the verbalized-confidence parse rate falls from 0.99 to 0.64 at 4-bit.',
-        'ECE stays low for all arms and does not separate them; AUROC is the diagnostic metric.'
-    ],
-    limits: [
-        'Two scale points, one model family, 100 items per condition with wide intervals, 4-way multiple choice only, synthetic degradations.',
-        'Quantization tested at one model size only.'
-    ],
-    relevance: 'An unusually clean statement of our thesis in another domain: 4-bit costs about 1.6 accuracy points but a large part of the usable confidence signal. It is a vision-language model on multiple choice, so it supports the direction but not the text-reasoning claim.',
-    links: [
-        { l: 'arXiv', u: 'https://arxiv.org/abs/2607.24440' },
-        { l: 'PDF', u: 'https://arxiv.org/pdf/2607.24440' }
     ],
     read: 'full'
 }

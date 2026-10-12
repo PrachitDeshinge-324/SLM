@@ -1,159 +1,69 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Experiment D: Verifier Reliability Analysis</title>
-    <link rel="stylesheet" href="style.css">
-    <script>MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };</script>
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <style>
-        .research-summary { background: #f8fafc; border-left: 4px solid #3b82f6; padding: 1.5rem; margin-bottom: 2rem; }
-        .data-table-container { margin: 2rem 0; overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; font-size: 0.9rem; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
-        th { background: #f1f5f9; font-weight: 600; color: #1e293b; }
-        .positive { color: #16a34a; font-weight: bold; }
-        .negative { color: #dc2626; font-weight: bold; }
-        .metric-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; }
-        .ul-bullets { margin-top: 10px; margin-left: 20px; }
-        .ul-bullets li { margin-bottom: 8px; }
-    </style>
+    <link rel="stylesheet" href="assets/css/site.css">
 </head>
 <body>
-<header>
-    <h1>Experiment D: Verifier Reliability Analysis</h1>
-    <p>Does quantization break the reliability of self-judgment in small language models?</p>
-</header>
-<nav>
-    <div class="nav-container">
-        <a href="index.html" class="nav-link">Home</a>
-        <a href="proposal.html" class="nav-link">Original Proposal</a>
-        <a href="problem_statement.html" class="nav-link">Problem &amp; Datasets</a>
-        <a href="previous_works.html" class="nav-link">Previous Works</a>
-        <a href="generation.html" class="nav-link">Phase 1: Generation</a>
-        <a href="verifier.html" class="nav-link active">Phase 2: Verifier</a>
-        <a href="audit.html" class="nav-link">Audit &amp; New Direction</a>
-        <a href="next_steps.html" class="nav-link">Next Steps</a>
-    </div>
-</nav>
-    <div class="container" style="padding-bottom:0;">
-        <div class="alert"><strong>Note:</strong> the numbers on this page predate the audit. Several were affected by scoring bugs (truncated samples graded as answers, stale extractors, unpaired question sets). Corrected, paired numbers are on the <a href="audit.html">Audit &amp; New Direction</a> page.</div>
-    </div>
+<script src="assets/js/site.js"></script>
+<main id="results-root">
+    <noscript><div class="callout warning">The tables on this page are drawn from <code>assets/data/results.js</code> and need JavaScript.</div></noscript>
 
-<main class="container">
-    <section class="research-summary">
-        <h2>Executive Research Summary</h2>
-        <p>In direct response to the project plan's core question—<em>"Does compression break the reliability of self-judgment?"</em>—we evaluated candidate SLMs by comparing their 16-bit self-verification performance directly against their 8-bit and 4-bit states.</p>
-        
-        <ul class="ul-bullets">
-            <li><strong>The "Delta Illusion":</strong> We cannot measure verifier survival by Selection Delta alone. If a 4-bit verifier yields a higher Delta than 16-bit, it is often because the 4-bit <em>generator</em> collapsed, making it artificially easy for the verifier to beat the baseline. We must track degradation via <strong>False Positive Rate (FPR) and MCC</strong> instead.</li>
-            <li><strong>8-bit is Highly Robust:</strong> Across almost all models, 8-bit quantization preserves verification capabilities exceptionally well, showing statistically insignificant reliability loss compared to 16-bit.</li>
-            <li><strong>4-bit Causes Measurable Degradation:</strong> Aggressive 4-bit quantization consistently degrades verifier calibration (FPRs rise, MCCs drop). However, for robust models like Qwen3.5-2B, <strong>it does not universally destroy the capability</strong>, leaving them viable for self-improvement loops.</li>
-            <li><strong>Architecture Matters Most:</strong> Models like Gemma-3 and Llama-3.2 exhibit catastrophic failure (>85% FPR) even at full 16-bit precision, making them fundamentally unsafe for unsupervised self-training regardless of quantization.</li>
+    <section class="content-box">
+        <h2>At a glance</h2>
+        <p class="muted small" id="source-line"></p>
+        <p id="scope-line"></p>
+        <p>The table gives the mean change from the 16-bit run of the same model. A <em>cell</em> is one model with a 16-bit run it can be compared with.</p>
+        <div id="glance"></div>
+    </section>
+
+    <section class="content-box">
+        <h2>Metrics</h2>
+        <p>The verifier is the same model asked, for each of its own sampled solutions, whether the solution is correct. Each judgement is compared with whether the answer really is correct.</p>
+        <div class="grid cols-3">
+            <div class="card">
+                <h3>Safety risk: false positive rate (FPR)</h3>
+                <p><strong>Lower is better.</strong></p>
+                <div class="formula">$\frac{FP}{FP+TN}$</div>
+                <p>How often the verifier approves a flawed trace. A rise as precision drops means the model is becoming falsely confident, which would pollute a self-training set.</p>
+            </div>
+            <div class="card">
+                <h3>Discrimination: MCC</h3>
+                <p><strong>Higher is better.</strong></p>
+                <div class="formula">$\frac{TP\cdot TN-FP\cdot FN}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}$</div>
+                <p>A balanced quality measure that is robust to class imbalance. Zero means the verdicts say nothing about correctness.</p>
+            </div>
+            <div class="card">
+                <h3>Selection utility: guided minus voted</h3>
+                <p><strong>Higher is better, with a caveat.</strong></p>
+                <div class="formula">$Acc_{guided} - Acc_{voted}$</div>
+                <p>Whether voting among approved traces beats plain voting. The baseline moves when the generator is quantized, so a gain can come from a weaker generator rather than a better verifier. Read it together with FPR and MCC.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="content-box">
+        <h2>Results by dataset</h2>
+        <p>Changes are against 16-bit with a 95% paired bootstrap interval over questions. Green or red means the interval excludes zero; for FPR a rise is red, for MCC a fall is red.</p>
+        <div class="chips" id="dataset-chips" role="group" aria-label="Dataset"></div>
+        <div id="dataset-table"></div>
+        <p class="muted small" id="left-out-line"></p>
+    </section>
+
+    <section class="content-box" data-no-toc>
+        <h2>How these numbers are made</h2>
+        <ul>
+            <li>All precisions of a model are scored on the same questions: the first ones, in run order, for which every precision holds all its solutions. Every row therefore has the same number of traces, and a run with too few complete questions is left out.</li>
+            <li>Each trace is relabelled from its stored solution text with the current extractor, and the verdict is parsed again with the shared strict parser.</li>
+            <li>A solution cut off at the token limit is kept. As on the Phase 1 page it counts as wrong and does not vote, so an approval of it is a false positive. Most cut-off solutions are rejected, which lowers the false positive rate where many are cut off: read that rate next to the <em>Cut off</em> column, and compare it within a model, not between models.</li>
+            <li>Traces with no verdict are counted in <em>No verdict</em> and left out of the rates.</li>
+            <li>Cut-off solutions can only be identified while the generator run that produced them still exists. Where it was replaced the column says <em>unknown</em>, the row is scored from the solution text alone, and its precisions are not compared.</li>
+            <li>A verifier that approves almost every trace has an FPR near 100% and an MCC near zero whatever its precision. The notes column marks those rows.</li>
+            <li>This page is regenerated with <code>python scripts/export_web_data.py</code>; nothing here is typed in by hand.</li>
         </ul>
     </section>
-
-    <section class="content-box">
-        <h2>1. Evaluation Methodology & Core Metrics</h2>
-        <p>To accurately assess quantization damage, we track these critical metrics (comparing 8-bit/4-bit against the 16-bit baseline):</p>
-        <div class="grid">
-            <div class="metric-card">
-                <h3>Safety Risk: False Positive Rate (FPR)</h3>
-                <p><strong>Goal: <span class="positive">LOWER is better</span></strong></p>
-                <p><strong>Formula:</strong> $\frac{FP}{FP+TN}$</p>
-                <p>The rate at which the verifier incorrectly approves a flawed trace. A rising FPR as precision drops means the model is becoming falsely confident in incorrect logic—polluting the self-training dataset.</p>
-            </div>
-            <div class="metric-card">
-                <h3>Discrimination: MCC</h3>
-                <p><strong>Goal: <span class="positive">HIGHER is better</span></strong></p>
-                <p><strong>Formula:</strong> $\frac{TP\cdot TN-FP\cdot FN}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}$</p>
-                <p>A balanced metric of verification quality robust to class imbalance. A drop in MCC relative to 16-bit indicates a degradation in the verifier's fundamental classification ability.</p>
-            </div>
-            <div class="metric-card">
-                <h3>Selection Utility: Delta</h3>
-                <p><strong>Goal: <span class="positive">HIGHER is better</span></strong> (but with caveats)</p>
-                <p><strong>Formula:</strong> $Acc_{guided} - Acc_{generator}$</p>
-                <p>Measures overall verifier impact. However, Delta is deceptive for measuring quantization damage because the generator baseline itself shifts during quantization.</p>
-            </div>
-        </div>
-    </section>
-
-    <section class="content-box">
-        <h2>2. Quantization Effect: Change From 16-bit Baseline</h2>
-        <p>This analysis isolates the true cost of compression by subtracting the 16-bit baseline metrics from the 8-bit and 4-bit results. <em>(Negative MCC change and Positive FPR change indicate degradation).</em></p>
-        
-        <div class="data-table-container">
-            <table>
-                <thead><tr><th>Dataset</th><th>Model</th><th>Precision</th><th>Delta Change</th><th>MCC Change</th><th>FPR Change</th><th>Research Interpretation</th></tr></thead>
-                <tbody>
-                    <tr><td>GSM8K</td><td>Qwen3.5-0.8B</td><td>8-bit</td><td class="positive">+1pp</td><td class="positive">+0.024</td><td class="positive">-8.8pp</td><td>Improves on this sample; 8-bit quantization is highly safe.</td></tr>
-                    <tr style="background:#f8fafc;"><td><strong>GSM8K</strong></td><td><strong>Qwen3.5-0.8B</strong></td><td><strong>4-bit</strong></td><td class="positive"><strong>+4pp</strong></td><td class="negative"><strong>-0.066</strong></td><td class="negative"><strong>+12.2pp</strong></td><td><strong>The Delta Illusion:</strong> Delta rises artificially because 4-bit generation collapsed. However, actual verifier safety degrades significantly (FPR rises by 12.2pp, MCC drops).</td></tr>
-                    <tr><td>GSM8K</td><td>Qwen3.5-2B</td><td>8-bit</td><td class="negative">-2pp</td><td class="negative">-0.027</td><td class="negative">+0.1pp</td><td>Statistically insignificant reliability loss; 8-bit holds strong.</td></tr>
-                    <tr><td>GSM8K</td><td>Qwen3.5-2B</td><td>4-bit</td><td class="negative">-2pp</td><td class="negative">-0.074</td><td class="negative">+9.8pp</td><td>Clear degradation in safety (FPR rises ~10pp), but retains a positive base MCC (0.497). Verification is degraded but not destroyed.</td></tr>
-                    <tr><td>GSM8K</td><td>DeepSeek-R1-1.5B</td><td>8-bit</td><td class="negative">-1pp</td><td class="positive">+0.010</td><td class="positive">-1.7pp</td><td>Stable at 8-bit.</td></tr>
-                    <tr><td>GSM8K</td><td>DeepSeek-R1-1.5B</td><td>4-bit</td><td class="negative">-3pp</td><td class="positive">+0.073</td><td class="positive">-8.9pp</td><td>Anomaly: 4-bit compression actually improves class balance (FPR drops), though its base verifier performance is already exceptionally poor (~60% FPR).</td></tr>
-                    <tr><td>GSM8K</td><td>Llama-3.2-3B</td><td>8-bit</td><td class="negative">-3pp</td><td class="negative">-0.010</td><td class="positive">-5.7pp</td><td>Slight improvement in FPR, but base performance is catastrophic.</td></tr>
-                    <tr><td>GSM8K</td><td>Llama-3.2-3B</td><td>4-bit</td><td class="negative">-2pp</td><td class="negative">-0.108</td><td class="negative">+5.5pp</td><td>Severe verifier collapse; MCC drops significantly, FPR crosses 92%.</td></tr>
-                    <tr><td>GSM8K</td><td>Gemma-3-1B</td><td>8-bit</td><td class="negative">-2pp</td><td class="positive">+0.024</td><td class="positive">-4.1pp</td><td>Minor noise shift on fundamentally broken baseline.</td></tr>
-                    <tr><td>GSM8K</td><td>Gemma-3-1B</td><td>4-bit</td><td class="positive">+4pp</td><td class="positive">+0.202</td><td class="negative">+5.9pp</td><td>FPR peaks at 95.4%. Model approves virtually all incorrect traces.</td></tr>
-                    <tr><td>MATH500</td><td>Qwen3.5-0.8B</td><td>8-bit</td><td>0pp</td><td class="positive">+0.011</td><td class="positive">-4.6pp</td><td>Excellent 8-bit retention.</td></tr>
-                    <tr><td>MATH500</td><td>Qwen3.5-0.8B</td><td>4-bit</td><td class="positive">+1pp</td><td class="positive">+0.064</td><td class="positive">-6.3pp</td><td>Highly stable. Verification capabilities successfully survive aggressive 4-bit quantization on this dataset.</td></tr>
-                    <tr><td>MATH500</td><td>DeepSeek-R1-1.5B</td><td>8-bit</td><td class="negative">-5pp</td><td class="negative">-0.008</td><td class="negative">+6.4pp</td><td>Selection becomes noticeably worse, FPR climbs.</td></tr>
-                    <tr><td>MATH500</td><td>DeepSeek-R1-1.5B</td><td>4-bit</td><td class="negative">-2pp</td><td class="positive">+0.015</td><td class="negative">+10.7pp</td><td>Severe 4-bit degradation in safety; FPR jumps +10.7pp.</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <section class="content-box">
-        <h2>3. Complete Base Empirical Results (N=100 per precision)</h2>
-        <div class="data-table-container">
-            <h3>GSM8K Verifier Performance</h3>
-            <table>
-                <thead><tr><th>Model</th><th>Bits</th><th>Gen Maj.</th><th>Guided Maj.</th><th>Delta</th><th>FPR</th><th>MCC</th><th>Bal. Acc.</th></tr></thead>
-                <tbody>
-                    <tr><td>Qwen3.5-0.8B</td><td>16</td><td>60%</td><td>61%</td><td class="positive">+1pp</td><td>31.8%</td><td>0.480</td><td>73.8%</td></tr>
-                    <tr><td>Qwen3.5-0.8B</td><td>8</td><td>66%</td><td>68%</td><td class="positive">+2pp</td><td>23.0%</td><td>0.503</td><td>75.1%</td></tr>
-                    <tr><td>Qwen3.5-0.8B</td><td>4</td><td>56%</td><td>61%</td><td class="positive">+5pp</td><td>44.1%</td><td>0.414</td><td>70.8%</td></tr>
-                    <tr style="background:#f8fafc;"><td><strong>Qwen3.5-2B</strong></td><td><strong>16</strong></td><td><strong>79%</strong></td><td><strong>81%</strong></td><td class="positive"><strong>+2pp</strong></td><td><strong>21.4%</strong></td><td><strong>0.570</strong></td><td><strong>80.2%</strong></td></tr>
-                    <tr style="background:#f8fafc;"><td><strong>Qwen3.5-2B</strong></td><td><strong>8</strong></td><td><strong>80%</strong></td><td><strong>80%</strong></td><td><strong>0pp</strong></td><td><strong>21.5%</strong></td><td><strong>0.543</strong></td><td><strong>78.6%</strong></td></tr>
-                    <tr style="background:#f8fafc;"><td><strong>Qwen3.5-2B</strong></td><td><strong>4</strong></td><td><strong>78%</strong></td><td><strong>78%</strong></td><td><strong>0pp</strong></td><td><strong>31.2%</strong></td><td><strong>0.497</strong></td><td><strong>75.3%</strong></td></tr>
-                    <tr><td>DeepSeek-R1-1.5B</td><td>16</td><td>90%</td><td>91%</td><td class="positive">+1pp</td><td>64.1%</td><td>0.355</td><td>64.4%</td></tr>
-                    <tr><td>DeepSeek-R1-1.5B</td><td>8</td><td>87%</td><td>87%</td><td>0pp</td><td>62.4%</td><td>0.365</td><td>65.0%</td></tr>
-                    <tr><td>DeepSeek-R1-1.5B</td><td>4</td><td>87%</td><td>85%</td><td class="negative">-2pp</td><td>55.2%</td><td>0.428</td><td>68.4%</td></tr>
-                    <tr><td>Gemma-3-1B</td><td>16</td><td>55%</td><td>52%</td><td class="negative">-3pp</td><td>89.5%</td><td>-0.086</td><td>47.1%</td></tr>
-                    <tr><td>Gemma-3-1B</td><td>8</td><td>53%</td><td>48%</td><td class="negative">-5pp</td><td>85.4%</td><td>-0.062</td><td>47.7%</td></tr>
-                    <tr><td>Gemma-3-1B</td><td>4</td><td>37%</td><td>38%</td><td class="positive">+1pp</td><td>95.4%</td><td>0.116</td><td>52.3%</td></tr>
-                    <tr><td>Llama-3.2-3B</td><td>16</td><td>75%</td><td>77%</td><td class="positive">+2pp</td><td>87.0%</td><td>0.223</td><td>55.5%</td></tr>
-                    <tr><td>Llama-3.2-3B</td><td>8</td><td>79%</td><td>78%</td><td class="negative">-1pp</td><td>81.3%</td><td>0.213</td><td>56.7%</td></tr>
-                    <tr><td>Llama-3.2-3B</td><td>4</td><td>77%</td><td>77%</td><td>0pp</td><td>92.5%</td><td>0.115</td><td>52.5%</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="data-table-container">
-            <h3>MATH500 Verifier Performance</h3>
-            <table>
-                <thead><tr><th>Model</th><th>Bits</th><th>Gen Maj.</th><th>Guided Maj.</th><th>Delta</th><th>FPR</th><th>MCC</th><th>Bal. Acc.</th></tr></thead>
-                <tbody>
-                    <tr><td>Qwen3.5-0.8B</td><td>16</td><td>41%</td><td>42%</td><td class="positive">+1pp</td><td>33.0%</td><td>0.483</td><td>76.1%</td></tr>
-                    <tr><td>Qwen3.5-0.8B</td><td>8</td><td>44%</td><td>45%</td><td class="positive">+1pp</td><td>28.4%</td><td>0.494</td><td>76.4%</td></tr>
-                    <tr><td>Qwen3.5-0.8B</td><td>4</td><td>34%</td><td>36%</td><td class="positive">+2pp</td><td>26.7%</td><td>0.547</td><td>81.5%</td></tr>
-                    <tr><td>DeepSeek-R1-1.5B</td><td>16</td><td>51%</td><td>52%</td><td class="positive">+1pp</td><td>43.2%</td><td>0.250</td><td>62.5%</td></tr>
-                    <tr><td>DeepSeek-R1-1.5B</td><td>8</td><td>61%</td><td>57%</td><td class="negative">-4pp</td><td>49.6%</td><td>0.242</td><td>61.8%</td></tr>
-                    <tr><td>DeepSeek-R1-1.5B</td><td>4</td><td>55%</td><td>54%</td><td class="negative">-1pp</td><td>53.9%</td><td>0.265</td><td>62.5%</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <section class="content-box">
-        <h2>4. Next Steps: Proceeding to Experiment B</h2>
-        <p>This phase yields a clear "Outcome 1/3" hybrid based on our project plan: agreement and self-judgment reliability degrade measurably under 4-bit compression (FPR climbs), but they do not hit a floor state in the Qwen family, while 8-bit acts as a highly robust middle-ground.</p>
-        <p>Because the verifier does not catastrophically fail at 4-bit, we have clearance to proceed to <strong>Experiment B</strong>. We will run a complete QLoRA self-improvement loop (Generate &rarr; Verify &rarr; Filter &rarr; Train) using the <strong>Qwen3.5</strong> architecture. By forcing the 4-bit model to train on its own verifier-selected data, we will determine if the 31-44% FPR noise rate is low enough to allow self-improvement, or if that degradation causes compounding training collapse over multiple iterations.</p>
-    </section>
-
 </main>
+
 </body>
 </html>

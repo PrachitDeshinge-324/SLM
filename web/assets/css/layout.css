@@ -1,0 +1,73 @@
+/* Page chrome and structure: header, navigation, containers, grids, pager, footer. */
+.site-header {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: #fff;
+    padding: 2.5rem var(--gutter);
+    text-align: center;
+}
+.site-header h1 { margin: 0 0 0.5rem; font-size: 2.2rem; font-weight: 700; letter-spacing: -0.02em; }
+.site-header p { margin: 0 auto; max-width: 800px; font-size: 1.1rem; opacity: 0.92; }
+
+.site-nav { position: sticky; top: 0; z-index: 100; background: var(--surface); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
+.site-nav ul { list-style: none; margin: 0 auto; padding: 0; max-width: var(--page-width); display: flex; overflow-x: auto; }
+.site-nav li { margin: 0; }
+.site-nav a {
+    display: block;
+    padding: 1rem 0.9rem;
+    color: var(--text-light);
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+    transition: color 0.2s, background 0.2s;
+}
+.site-nav a:hover { color: var(--primary); background: var(--surface-alt); }
+.site-nav a[aria-current="page"] { color: var(--primary); border-bottom-color: var(--primary); }
+
+.container, main, .site-footer { max-width: var(--page-width); margin-left: auto; margin-right: auto; padding-left: var(--gutter); padding-right: var(--gutter); }
+main { margin-top: 2rem; margin-bottom: 2rem; overflow-x: clip; }
+.page-notice { margin-top: 1.5rem; }
+.page-notice .callout { margin: 0; }
+
+.content-box {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    padding: 2.5rem;
+    margin-bottom: 2rem;
+}
+.content-box > :last-child { margin-bottom: 0; }
+
+/* two and three column grids; they stack on narrow screens */
+.grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 1.5rem; }
+.grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid > * { margin-bottom: 0; }
+
+/* "On this page" list that the shell builds from the h2 headings */
+.toc { margin: 0 0 2rem; padding: 1rem 1.25rem; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
+.toc strong { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-light); margin-bottom: 0.4rem; }
+.toc ol { margin: 0; padding: 0; list-style: none; columns: 2; column-gap: 2rem; }
+.toc li { margin-bottom: 0.2rem; break-inside: avoid; }
+
+/* previous / next page links and footer */
+.pager { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 2rem; }
+.pager a { flex: 1 1 0; max-width: 48%; padding: 0.9rem 1.1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); text-decoration: none; color: var(--primary-dark); font-weight: 600; box-shadow: var(--shadow-sm); }
+.pager a:hover { border-color: var(--primary); background: var(--primary-tint); }
+.pager small { display: block; font-weight: 500; color: var(--text-light); }
+.pager .next { margin-left: auto; text-align: right; }
+.site-footer { padding-top: 1rem; padding-bottom: 2.5rem; color: var(--text-light); font-size: 0.85rem; text-align: center; }
+
+/* pages and links that exist only on a developer's machine (see assets/js/site.js) */
+html:not([data-local]) [data-local-only] { display: none !important; }
+
+@media (max-width: 768px) {
+    :root { --gutter: 1rem; }
+    .figure-row { grid-template-columns: minmax(0, 1fr); }
+    .site-header { padding: 1.75rem var(--gutter); }
+    .site-header h1 { font-size: 1.7rem; }
+    .content-box { padding: 1.4rem; }
+    .grid, .grid.cols-3 { grid-template-columns: minmax(0, 1fr); }
+    .toc ol { columns: 1; }
+    .pager { flex-direction: column; }
+    .pager a { max-width: none; }
+}

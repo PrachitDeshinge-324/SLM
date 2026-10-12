@@ -1,0 +1,65 @@
+/* Previous Works page. Buttons, chips, badges, callouts, cards and tables come from components.css;
+   this file only holds what is specific to the paper browser. */
+
+/* controls */
+.pw-controls { display: grid; gap: 0.9rem; }
+.pw-row { display: flex; flex-wrap: wrap; gap: 0.8rem 1.2rem; align-items: flex-end; }
+.pw-more > .pw-row { margin-top: 0.8rem; }
+.field.inline { flex-direction: row; align-items: center; gap: 0.5rem; min-width: 0; }
+.pw-top { position: fixed; right: 1rem; bottom: 1rem; z-index: 50; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); }
+
+/* "where our paper fits" */
+.pw-position tbody th { width: 24%; font-size: 0.95rem; }
+.pw-position td.pw-ours { width: 36%; background: var(--success-tint); }
+.pw-refs { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; vertical-align: middle; }
+.pw-ref { font: inherit; font-size: 0.8rem; font-weight: 600; line-height: 1.5; cursor: pointer; color: var(--primary-dark); background: #fff; border: 1px solid var(--border); border-radius: 9999px; padding: 0.05rem 0.6rem; }
+.pw-ref:hover { background: var(--primary-tint); border-color: var(--primary); }
+
+/* about */
+.pw-legend { list-style: none; padding: 0; display: grid; gap: 0.4rem; }
+
+/* theme sections */
+.pw-theme { margin: 2rem 0 1rem; padding: 1.2rem 1.4rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.pw-theme-head { display: flex; gap: 0.9rem; align-items: flex-start; }
+.pw-theme-head h3 { margin: 0; font-size: 1.35rem; color: var(--primary-dark); }
+.pw-theme-head p { margin: 0.15rem 0 0; }
+.pw-theme-n { flex: none; width: 2.2rem; height: 2.2rem; border-radius: 50%; background: var(--primary); color: #fff; font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; }
+.pw-theme-body { display: grid; grid-template-columns: 3fr 2fr; gap: 1rem; margin-top: 1rem; }
+.pw-theme-body h4 { margin: 0 0 0.35rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-light); }
+.pw-theme-body ul { margin: 0; }
+.pw-theme-body .callout { margin: 0; }
+.pw-theme-body .callout p { margin: 0; }
+
+/* paper cards */
+.pw-card { margin-bottom: 0.9rem; padding: 1.1rem 1.3rem; transition: box-shadow 0.3s; }
+.pw-card.pw-start { border-left: 5px solid var(--success); }
+.pw-card.pw-flash { box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.55); }
+.pw-card h3 { font-size: 1.08rem; line-height: 1.35; }
+.pw-card h3 a { color: inherit; text-decoration: none; }
+.pw-card h3 a:hover { color: var(--primary); text-decoration: underline; }
+.pw-meta { display: flex; flex-wrap: wrap; gap: 0.3rem 0.6rem; align-items: center; margin-bottom: 0.5rem; font-size: 0.88rem; color: var(--text-light); }
+.pw-venue { font-weight: 600; color: var(--text); }
+.pw-take { margin: 0 0 0.45rem; font-size: 1.02rem; font-weight: 600; }
+.pw-use { margin: 0; font-size: 0.93rem; }
+.pw-role { display: inline-block; margin-right: 0.5rem; padding: 0.08rem 0.5rem; border-radius: 4px; background: var(--primary-tint); color: var(--primary-dark); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+.pw-detail { margin-top: 0.7rem; }
+.pw-detail > summary { font-size: 0.9rem; padding: 0.2rem 0; }
+.pw-section { margin-top: 0.9rem; }
+.pw-section h4 { margin: 0 0 0.25rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--purple); }
+.pw-section p, .pw-section ul { margin: 0; }
+.pw-section ul { padding-left: 1.2rem; }
+.pw-detail .callout { margin: 0.9rem 0 0; font-size: 0.88rem; }
+.pw-verify { margin-top: 0.8rem; font-size: 0.82rem; color: var(--text-light); }
+.pw-hl { background: #fefcbf; border-radius: 2px; }
+
+@media (max-width: 768px) {
+    .pw-card, .pw-theme { padding: 1rem; }
+    .pw-theme-body { grid-template-columns: 1fr; }
+
+    /* the position table becomes one block per row */
+    .pw-position thead { display: none; }
+    .pw-position, .pw-position tbody, .pw-position tr, .pw-position th, .pw-position td { display: block; width: auto !important; }
+    .pw-position tr { padding: 0.6rem 0; border-bottom: 2px solid var(--border); }
+    .pw-position th, .pw-position td { border: none; padding: 0.3rem 0.4rem; }
+    .pw-position td::before { content: attr(data-label); display: block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); }
+}

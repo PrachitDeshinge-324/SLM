@@ -17,7 +17,7 @@ Findings, decisions and open questions: [RESEARCH_DOSSIER.md](RESEARCH_DOSSIER.m
 | `tests/` | Unit tests |
 | `data/` | GSM8K and CommonsenseQA files; MATH-500 and SVAMP are downloaded |
 | `results/` | Run files and reports (not in git; synced with Google Drive) |
-| `web/` | Project site |
+| `web/` | Project site (static; the result pages are generated from `results/` by `scripts/export_web_data.py`) |
 | `Docs/` | Original proposal and mentor documents (not in git) |
 | `archive/` | Superseded scripts, documents, notebooks and duplicates (not in git) |
 
@@ -38,6 +38,7 @@ Findings, decisions and open questions: [RESEARCH_DOSSIER.md](RESEARCH_DOSSIER.m
 | `scripts/report_generator_metrics.py` | `results/<dataset>/generator/metrics/`: one CSV per dataset, calibration and accuracy plots |
 | `scripts/report_verifier_metrics.py` | `results/<dataset>/verifier_output/metrics/`: one CSV per model, confusion matrices |
 | `scripts/report_verifier_shared_questions.py` | `results/standardized_verifier_metrics/`: all models on the same 100 questions |
+| `scripts/export_web_data.py` | `web/assets/data/results.js`: every number on the Phase 1 and Phase 2 web pages, re-scored from `results/`. Verifier rows cover a fixed 100 questions and all their traces (truncated ones kept as wrong), so they differ from the two verifier reports |
 
 Reports never trust the metrics stored inside a run file. They re-score every run from its raw outputs with the current code, drop truncated samples, and compare precisions on the questions they share.
 
@@ -54,6 +55,8 @@ Reports never trust the metrics stored inside a run file. They re-score every ru
 | `self_consistency.py` | Majority vote and agreement over the N answers |
 | `verifier.py` | The verifier prompt and the parser for its verdict |
 | `rescoring.py` | Rebuild metrics and labels from stored raw outputs |
+| `verifier_metrics.py` | Verifier metrics (false positive rate, MCC, guided majority) from relabelled traces |
+| `web_export.py` | Everything the web result pages show, with paired intervals against 16-bit |
 | `run_files.py` | Names and locations of run files |
 | `evaluation_stats.py` | AUROC, bootstrap intervals, signal detection, random-effects pooling |
 | `warning_filters.py` | Silence two uninformative library warnings |
@@ -79,6 +82,9 @@ GPU=L4 HF_TOKEN=hf_xxx bash colab/launch_colab_session.sh
 python scripts/report_generator_metrics.py
 python scripts/report_verifier_metrics.py
 python scripts/report_verifier_shared_questions.py
+
+# refresh the numbers on the web pages (after any new or changed run file)
+python scripts/export_web_data.py
 ```
 
 ```bash

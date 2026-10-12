@@ -1,72 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Does Quantization Break Self-Improvement in SLMs?</title>
-    <link rel="stylesheet" href="style.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="assets/css/site.css">
 </head>
 <body>
-    <header>
-        <h1>Agentic AI: Experiment D</h1>
-        <p>A multi-phase investigation into generator scaling, verifier reliability, and quantization effects on Small Language Models.</p>
-    </header>
-
-    <nav>
-        <div class="nav-container">
-            <a href="index.html" class="nav-link active">Home</a>
-            <a href="proposal.html" class="nav-link">Original Proposal</a>
-            <a href="problem_statement.html" class="nav-link">Problem & Datasets</a>
-            <a href="previous_works.html" class="nav-link">Previous Works</a>
-            <a href="generation.html" class="nav-link">Phase 1: Generation</a>
-            <a href="verifier.html" class="nav-link">Phase 2: Verifier</a>
-            <a href="audit.html" class="nav-link">Audit &amp; New Direction</a>
-            <a href="next_steps.html" class="nav-link">Next Steps</a>
-        </div>
-    </nav>
-
-    <div class="container">
-        <div class="content-box">
-            <h2>Welcome to the Project Dashboard</h2>
-            <p>This web interface modularizes our research project into distinct phases. Use the navigation bar above to explore the different stages of the project.</p>
-            
-            <div class="grid" style="margin-top: 2rem;">
-                <div class="card highlight">
-                    <div class="card-header">Original Proposal</div>
-                    <p>The initial scoping document outlining the theoretical basis of combining quantization and self-improvement.</p>
-                    <a href="proposal.html">View Proposal &rarr;</a>
-                </div>
-                
-                <div class="card">
-                    <div class="card-header">Problem Statement & Datasets</div>
-                    <p>Why this research matters and the rationale behind selecting GSM8K over SVAMP.</p>
-                    <a href="problem_statement.html">View Problem &rarr;</a>
-                </div>
-                
-                <div class="card highlight">
-                    <div class="card-header">Previous Works</div>
-                    <p>What is already known about quantization and about self-improvement, where the two meet, and what our paper adds. A one-minute story, a table placing our paper against prior work, and one idea to remember per paper.</p>
-                    <a href="previous_works.html">Browse Previous Works &rarr;</a>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">Phase 1: Generation & Scaling</div>
-                    <p>Analyzing how quantization noise impacts base model generation, diversity, and Pass@k before verification.</p>
-                    <a href="generation.html">View Phase 1 &rarr;</a>
-                </div>
-                
-                <div class="card">
-                    <div class="card-header">Phase 2: Verifier Reliability</div>
-                    <p>The core results of Experiment D: Evaluating if quantized models can act as reliable judges of their own logic.</p>
-                    <a href="verifier.html">View Phase 2 &rarr;</a>
-                </div>
-
-                <div class="card highlight">
-                    <div class="card-header">Audit &amp; New Direction</div>
-                    <p>Bugs found and fixed, what the corrected numbers really show, and the proposed paper contribution.</p>
-                    <a href="audit.html">View Audit &rarr;</a>
-                </div>
-            </div>
-        </div>
-    </div>
+<script src="assets/js/site.js"></script>
+<main>
+    <section class="content-box">
+        <h2>Project dashboard</h2>
+        <p>Small language models are rarely run at full precision: their weights are rounded to 8 or 4 bits to fit on cheap hardware. Self-improvement methods let a model train on answers its own samples agree on. <strong>Experiment D asks whether rounding the weights breaks the agreement signal that self-improvement depends on.</strong></p>
+        <p>The pages run from the question and what is known, to the results, to what comes next. The two results pages are drawn from the run files in <code>results/</code> and regenerated on request, so they never need editing by hand.</p>
+        <div data-page-cards></div>
+    </section>
+</main>
 </body>
 </html>

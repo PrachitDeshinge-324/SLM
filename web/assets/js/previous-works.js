@@ -1,19 +1,14 @@
-/* Previous Works page: a reading guide to the literature behind the project.
-   Data lives in previous_works_data/:
-     pw_guide.js       themes, how our paper sits against prior work, and per-paper take / role / start-here
-     pw_lens.js        per-paper notes on the quantization side and the self-improvement side
-     pw_categories.js  fine-grained research categories (each theme groups one or more)
-     pw_*.js           the paper records */
+/* Previous Works page: renders the reading guide and the paper cards, with search, filters and sorting.
+   Data (window.PW) comes from assets/data/previous-works/:
+     themes.js   themes, categories, roles and the "where our paper fits" table
+     notes.js    per-paper take, role, read-first flag and two-sided notes
+     papers-*.js the paper records */
 (function () {
     'use strict';
 
-    var THEMES = window.PW_THEMES || [];
-    var POSITION = window.PW_POSITION || { add: [], known: [] };
-    var NOTES = window.PW_NOTES || {};
-    var ROLES = window.PW_ROLES || [];
-    var LENS = window.PW_LENS || {};
-    var CATS = window.PW_CATEGORIES || [];
-    var PAPERS = window.PW_PAPERS || [];
+    var PW = window.PW || { papers: [], themes: [], categories: {}, roles: [], position: { add: [], known: [] }, notes: {} };
+    var THEMES = PW.themes, NOTES = PW.notes, ROLES = PW.roles, POSITION = PW.position, CATEGORIES = PW.categories;
+    var PAPERS = PW.papers;
 
     var STATUS = [
         { id: 'published', label: 'Published' },
@@ -31,9 +26,8 @@
         record: 'Bibliographic record only (book, not read here)'
     };
 
-    var themeIndex = {}, catTheme = {}, catTitle = {}, byPaperId = {};
+    var themeIndex = {}, catTheme = {}, byId = {};
     THEMES.forEach(function (t, i) { themeIndex[t.id] = i; t.cats.forEach(function (c) { catTheme[c] = t.id; }); });
-    CATS.forEach(function (c) { catTitle[c.id] = c.title; });
 
     var SORT_DEFAULT = 'theme';
     function freshState() {
@@ -53,16 +47,15 @@
     }
 
     function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-
-    function terms() {
-        return state.q.toLowerCase().split(/\s+/).filter(function (t) { return t.length > 0; });
-    }
+    function terms() { return state.q.toLowerCase().split(/\s+/).filter(Boolean); }
+    function activeSet(obj) { return Object.keys(obj).filter(function (k) { return obj[k]; }); }
+    function shortTitle(p) { return p.short || p.title.split(/[:?]/)[0].trim(); }
 
     function haystack(p) {
         if (p._hay) return p._hay;
         var parts = [p.title, p.authors, p.venue, p.year, p.arxiv || '', p.take, p.role, p.summary, p.relevance, p.lq || '', p.ls || '',
             (p.tags || []).join(' '), (p.method || []).join(' '), (p.results || []).join(' '), (p.limits || []).join(' '), p.note || '',
-            STATUS_LABEL[p.status] || '', catTitle[p.cat] || '', THEMES[themeIndex[p.theme]].title];
+            STATUS_LABEL[p.status] || '', CATEGORIES[p.cat] || '', THEMES[themeIndex[p.theme]].title];
         p._hay = parts.join(' \n ').toLowerCase();
         return p._hay;
     }
@@ -80,11 +73,8 @@
         if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
     }
 
-    function shortTitle(p) { return p.short || p.title.split(/[:?]/)[0].trim(); }
-
     /* ---------- filtering and sorting ---------- */
-    function activeSet(obj) { return Object.keys(obj).filter(function (k) { return obj[k]; }); }
-
+    /* skipTheme leaves the theme filter out so the theme chips can show what choosing each would add */
     function matches(p, skipTheme) {
         var ts = terms();
         if (ts.length) {
@@ -116,8 +106,11 @@
         }
     }
 
-    /* ---------- jump to a paper from the tables above ---------- */
-    function jumpTo(id) {
+    /* ---------- links from the tables above to the cards below ---------- */
+    function showPaper(id) {
+        var p = byId[id];
+        if (!p) return;
+        /* keep the search and filters out of the way so the card is always there */
         state = freshState();
         syncControls();
         render();
@@ -130,50 +123,44 @@
         setTimeout(function () { card.classList.remove('pw-flash'); }, 2200);
     }
 
-    function paperLink(id) {
-        var p = byPaperId[id];
-        var b = el('button', 'pw-ref', p ? shortTitle(p) : id);
-        b.type = 'button';
-        if (p) b.title = p.title + ' (' + p.venue + ')';
-        b.addEventListener('click', function () { jumpTo(id); });
-        return b;
-    }
-
-    function refList(ids) {
+    function paperRefs(ids) {
         var span = el('span', 'pw-refs');
-        ids.forEach(function (id) { span.appendChild(paperLink(id)); });
+        ids.forEach(function (id) {
+            var p = byId[id];
+            var b = el('button', 'pw-ref', p ? shortTitle(p) : id);
+            b.type = 'button';
+            if (p) b.title = p.title + ' (' + p.venue + ')';
+            b.addEventListener('click', function () { showPaper(id); });
+            span.appendChild(b);
+        });
         return span;
     }
 
     /* ---------- "where our paper fits" ---------- */
     function renderPosition() {
-        if (els.posAdd) {
-            POSITION.add.forEach(function (r) {
-                var tr = el('tr');
-                tr.appendChild(el('th', null, r.topic));
-                var prior = el('td');
-                prior.setAttribute('data-label', 'Prior work');
-                prior.appendChild(document.createTextNode(r.prior + ' '));
-                prior.appendChild(refList(r.papers));
-                tr.appendChild(prior);
-                var ours = el('td', 'pw-ours', r.ours);
-                ours.setAttribute('data-label', 'What we add');
-                tr.appendChild(ours);
-                els.posAdd.appendChild(tr);
-            });
-        }
-        if (els.posKnown) {
-            POSITION.known.forEach(function (k) {
-                var li = el('li');
-                li.appendChild(document.createTextNode(k.text + ' '));
-                li.appendChild(refList(k.papers));
-                els.posKnown.appendChild(li);
-            });
-        }
+        POSITION.add.forEach(function (r) {
+            var tr = el('tr');
+            tr.appendChild(el('th', null, r.topic));
+            var prior = el('td');
+            prior.setAttribute('data-label', 'Prior work');
+            prior.appendChild(document.createTextNode(r.prior + ' '));
+            prior.appendChild(paperRefs(r.papers));
+            tr.appendChild(prior);
+            var ours = el('td', 'pw-ours', r.ours);
+            ours.setAttribute('data-label', 'What we add');
+            tr.appendChild(ours);
+            els.posAdd.appendChild(tr);
+        });
+        POSITION.known.forEach(function (k) {
+            var li = el('li');
+            li.appendChild(document.createTextNode(k.text + ' '));
+            li.appendChild(paperRefs(k.papers));
+            els.posKnown.appendChild(li);
+        });
     }
 
-    /* ---------- card ---------- */
-    function badge(cls, text) { return el('span', 'pw-badge ' + cls, text); }
+    /* ---------- cards ---------- */
+    function badge(cls, text) { return el('span', 'badge ' + cls, text); }
 
     function block(title, child) {
         var s = el('div', 'pw-section');
@@ -193,8 +180,8 @@
         return names.length > 1 ? names[0] + ' et al.' : names[0];
     }
 
-    function sideLine(label, text, cls, ts) {
-        var row = el('p', 'pw-side ' + cls);
+    function sideLine(label, text, ts) {
+        var row = el('p');
         row.appendChild(el('strong', null, label + ': '));
         appendHighlighted(row, text, ts);
         return row;
@@ -220,8 +207,8 @@
         meta.appendChild(el('span', null, firstAuthor(p)));
         meta.appendChild(el('span', 'pw-venue', p.venue + ', ' + p.year));
         meta.appendChild(badge(p.status, STATUS_LABEL[p.status]));
-        if (p.start) meta.appendChild(badge('start', 'Read first'));
-        if (p.origin === 'new') meta.appendChild(badge('newfind', 'Not in dossier'));
+        if (p.start) meta.appendChild(badge('solid', 'Read first'));
+        if (p.origin === 'new') meta.appendChild(badge('', 'Not in dossier'));
         c.appendChild(meta);
 
         var take = el('p', 'pw-take');
@@ -244,23 +231,23 @@
         det.appendChild(block('Limitations and open questions', list(p.limits)));
 
         var sides = el('div');
-        if (p.lq) sides.appendChild(sideLine('On quantization', p.lq, 'q', ts));
-        if (p.ls) sides.appendChild(sideLine('On self-improvement', p.ls, 's', ts));
+        if (p.lq) sides.appendChild(sideLine('On quantization', p.lq, ts));
+        if (p.ls) sides.appendChild(sideLine('On self-improvement', p.ls, ts));
         det.appendChild(block('What it covers on each side of our question', sides));
 
         det.appendChild(block('Authors', el('p', null, p.authors)));
 
         if (p.note) {
-            var note = el('div', 'pw-note');
+            var note = el('div', 'callout warning');
             note.appendChild(el('strong', null, 'Verification note: '));
             note.appendChild(document.createTextNode(p.note));
             det.appendChild(note);
         }
-        det.appendChild(el('div', 'pw-verify', 'Read: ' + (READ_LABEL[p.read] || p.read) + (p.arxiv ? ' · arXiv ' + p.arxiv : '')
-            + (p.dossier ? ' · dossier ' + p.dossier : '') + ' · ' + (catTitle[p.cat] || p.cat)));
+        det.appendChild(el('div', 'pw-verify', 'Read: ' + (READ_LABEL[p.read] || p.read) + (p.arxiv ? ' · arXiv ' + p.arxiv : '') +
+            (p.dossier ? ' · dossier ' + p.dossier : '') + ' · ' + (CATEGORIES[p.cat] || p.cat)));
         c.appendChild(det);
 
-        var links = el('ul', 'pw-links');
+        var links = el('ul', 'link-list');
         links.setAttribute('aria-label', 'Links');
         (p.links || []).forEach(function (l) {
             var li = el('li');
@@ -279,17 +266,18 @@
         var head = el('div', 'pw-theme-head');
         head.appendChild(el('span', 'pw-theme-n', String(t.n)));
         var titles = el('div');
-        titles.appendChild(el('h2', null, t.title));
-        titles.appendChild(el('p', 'pw-theme-q', t.question + ' (' + n + (n === 1 ? ' paper)' : ' papers)')));
+        titles.appendChild(el('h3', null, t.title));
+        titles.appendChild(el('p', 'muted', t.question + ' (' + n + (n === 1 ? ' paper)' : ' papers)')));
         head.appendChild(titles);
         box.appendChild(head);
+
         var body = el('div', 'pw-theme-body');
-        var know = el('div', 'pw-know');
+        var know = el('div');
         know.appendChild(el('h4', null, 'What to remember'));
         know.appendChild(list(t.know));
         body.appendChild(know);
         if (t.open) {
-            var open = el('div', 'pw-open');
+            var open = el('div', 'callout warning');
             open.appendChild(el('h4', null, 'What is still open'));
             open.appendChild(el('p', null, t.open));
             body.appendChild(open);
@@ -322,8 +310,7 @@
         els.list.appendChild(frag);
 
         els.empty.hidden = visible.length !== 0;
-        els.count.textContent = visible.length === PAPERS.length
-            ? PAPERS.length + ' papers'
+        els.count.textContent = visible.length === PAPERS.length ? PAPERS.length + ' papers'
             : 'Showing ' + visible.length + ' of ' + PAPERS.length + ' papers';
         renderThemeCounts();
         saveHash();
@@ -332,21 +319,21 @@
     function renderThemeCounts() {
         var counts = {}, total = 0;
         PAPERS.forEach(function (p) { if (matches(p, true)) { counts[p.theme] = (counts[p.theme] || 0) + 1; total++; } });
-        Array.prototype.forEach.call(els.themes.querySelectorAll('.pw-chip'), function (b) {
+        Array.prototype.forEach.call(els.themes.querySelectorAll('.chip'), function (b) {
             var id = b.getAttribute('data-id');
             b.setAttribute('aria-pressed', state.theme === id ? 'true' : 'false');
-            b.querySelector('.pw-count').textContent = String(id ? (counts[id] || 0) : total);
+            b.querySelector('.count').textContent = String(id ? (counts[id] || 0) : total);
         });
     }
 
     /* ---------- controls ---------- */
     function buildControls() {
         [{ id: '', title: 'All' }].concat(THEMES).forEach(function (t) {
-            var b = el('button', 'pw-chip');
+            var b = el('button', 'chip');
             b.type = 'button'; b.setAttribute('data-id', t.id); b.setAttribute('aria-pressed', 'false');
             if (t.question) b.title = t.question;
             b.appendChild(document.createTextNode((t.n ? t.n + '. ' : '') + t.title));
-            b.appendChild(el('span', 'pw-count', '0'));
+            b.appendChild(el('span', 'count', '0'));
             b.addEventListener('click', function () { state.theme = (state.theme === t.id) ? '' : t.id; render(); });
             els.themes.appendChild(b);
         });
@@ -410,7 +397,7 @@
         Array.prototype.forEach.call(els.list.querySelectorAll('details.pw-detail'), function (d) { d.open = open; });
     }
 
-    /* ---------- URL hash persistence ---------- */
+    /* ---------- URL hash: filters (#theme=closest&q=gptq) or a single paper (#paper-maca) ---------- */
     function saveHash() {
         try {
             var parts = [];
@@ -424,6 +411,7 @@
             if (state.yearTo) parts.push('to=' + state.yearTo);
             if (state.sort !== SORT_DEFAULT) parts.push('sort=' + state.sort);
             var h = parts.length ? '#' + parts.join('&') : '';
+            if (/^#paper-/.test(window.location.hash) && !h) return;
             if (h !== window.location.hash) history.replaceState(null, '', window.location.pathname + window.location.search + h);
         } catch (e) { /* hash persistence is optional */ }
     }
@@ -475,18 +463,14 @@
         els.list = $('pw-list'); els.empty = $('pw-empty'); els.count = $('pw-count');
         els.posAdd = $('pw-pos-add'); els.posKnown = $('pw-pos-known');
 
-        /* attach the guide notes to each paper; a paper without notes or a theme is a data error */
+        /* attach notes to each paper; a paper with no notes or no theme is a data error, so it is reported, not hidden */
         PAPERS = PAPERS.filter(function (p) {
-            var note = NOTES[p.id], lens = LENS[p.id] || {};
-            if (!note || !(p.cat in catTheme)) { if (window.console) console.warn('No guide notes or theme for', p.id); return false; }
+            var note = NOTES[p.id];
+            if (!note || !(p.cat in catTheme)) { if (window.console) console.warn('Previous Works: no notes or theme for', p.id); return false; }
             p.theme = catTheme[p.cat];
-            p.take = note.take;
-            p.short = note.short;
-            p.role = note.role;
-            p.start = !!note.start;
-            p.lq = lens.q;
-            p.ls = lens.s;
-            byPaperId[p.id] = p;
+            p.take = note.take; p.role = note.role; p.short = note.short; p.start = !!note.start;
+            p.lq = note.q; p.ls = note.s;
+            byId[p.id] = p;
             return true;
         });
 
@@ -497,6 +481,9 @@
         bind();
         renderCounts();
         render();
+
+        var m = /^#paper-(.+)$/.exec(window.location.hash);
+        if (m) showPaper(m[1]);
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

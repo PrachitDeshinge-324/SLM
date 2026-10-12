@@ -1,0 +1,23 @@
+/* Original Proposal page: the plan rendered as structured prose. */
+.plan-title { font-size: 1.25rem; font-weight: 700; color: var(--text); margin-bottom: 1rem; }
+
+/* paper reference (Title / Venue / Link) */
+.paper-entry { background: var(--surface-alt); border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: var(--radius); padding: 0.9rem 1.1rem; margin: 0 0 1rem; }
+.paper-entry dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 0; }
+.paper-entry dt { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); padding-top: 0.15rem; }
+.paper-entry dd { margin: 0; overflow-wrap: anywhere; }
+.paper-entry > p { margin: 0.7rem 0 0; }
+
+/* lists that keep the author's own markers, such as (a) or 1. */
+ul.marked { list-style: none; padding-left: 0; }
+ul.marked > li { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); }
+ul.marked .marker { font-weight: 700; color: var(--text-light); }
+ul.marked ul { margin-top: 0.5rem; }
+
+/* the five possible outcomes of Experiment D */
+.outcome h4 { margin: 0 0 0.4rem; color: var(--primary-dark); }
+.outcome .action { margin-top: 0.6rem; }
+
+@media (max-width: 560px) {
+    .paper-entry dl { grid-template-columns: 1fr; }
+}

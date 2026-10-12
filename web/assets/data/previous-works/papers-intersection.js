@@ -1,36 +1,6 @@
 /* Quantization meets voting, verification, self-improvement and RL: the closest prior work to Experiment D. */
-(window.PW_PAPERS = window.PW_PAPERS || []).push(
+window.PW.papers.push(
 
-{
-    id: 'not-all-bits', title: 'Not All Bits Are Equal: Scale-Dependent Memory Optimization Strategies for Reasoning Models',
-    year: 2026, posted: '2025-10', authors: 'Junhyuck Kim, Ethan Ewer, Taehong Moon, Jongho Park, Dimitris Papailiopoulos',
-    venue: 'ICLR 2026 (poster)', status: 'published', cat: 'intersection', origin: 'dossier', dossier: '§3.1', alsoSite: true, prio: 1, arxiv: '2510.10964',
-    tags: ['majority voting', 'gptq', 'kv cache', 'budget forcing', 'test-time scaling', 'memory', 'qwen3', 'aime25', 'gpqa'],
-    summary: 'For reasoning models the KV cache can exceed the weights in memory. The paper maps, over 1,700 inference scenarios, how to spend a fixed memory budget across model size, weight precision, generation length and number of parallel votes, and finds the best allocation changes at an effective size of about "8-bit 4B".',
-    method: [
-        'Qwen3 0.6B, 1.7B, 4B, 8B, 14B, 32B; GPTQ at 4 and 8 bits (group size 128, symmetric) against 16-bit; KV eviction with R-KV and StreamingLLM; KV quantization with HQQ at 2, 4, 8 bits.',
-        'Serial scaling by budget forcing (replace the end token with "Wait", budgets 2k to 30k); parallel scaling by majority voting with group sizes up to 16; temperature 0.6; accuracy averaged over 32 generations (8 in the KV section).',
-        'AIME25 and GPQA-Diamond; total memory = weights + KV cache; latency measured with vLLM on one A100 80 GB.'
-    ],
-    results: [
-        'Below an effective 8-bit 4B, spending memory on more weights beats longer generation: a 1.7B 8-bit model at 6k tokens beats a 0.6B 8-bit model at 18k tokens.',
-        'On AIME25, 8-bit is memory-optimal for 0.6B and 1.7B models and an 8B 8-bit model beats a 14B 4-bit one; on GPQA-Diamond 4-bit is broadly memory-optimal.',
-        'Parallel voting is not memory-efficient below the threshold; above it, group sizes 4 to 8 are optimal at 16 to 29 GB and 8 or more above 29 GB.',
-        '4-bit is never on the latency/throughput Pareto frontier; 2-bit KV quantization loses significant accuracy.'
-    ],
-    limits: [
-        'Authors list: majority voting only (no external verifiers), no comparison of other PTQ or eviction algorithms, no quantization-aware training, one model family and two benchmarks.',
-        'The threshold is stated inconsistently in the text ("8-bit 4B" and "8-bit 8B"); one GPU setup.'
-    ],
-    relevance: 'The closest published work to our framing: quantization crossed with sample-and-vote at inference. It only asks whether voting pays for its memory, never whether agreement still tracks correctness, and it is inference-only. Its finding that 8-bit is optimal for 0.6B and 1.7B matches our Qwen-0.8B result.',
-    links: [
-        { l: 'ICLR 2026 poster page', u: 'https://iclr.cc/virtual/2026/poster/10008643', o: true },
-        { l: 'OpenReview PDF (camera-ready)', u: 'https://openreview.net/pdf/e4c6cd05fb9c7ca57c8fd4185c4974ae299fafb4.pdf' },
-        { l: 'arXiv', u: 'https://arxiv.org/abs/2510.10964' },
-        { l: 'PDF (v1)', u: 'https://arxiv.org/pdf/2510.10964' }
-    ],
-    read: 'full', note: 'The method and numbers above are from arXiv v1, which the dossier read. The ICLR camera-ready describes mathematical, code-generation and knowledge-intensive reasoning tasks, so the final experimental scope differs from v1.'
-},
 {
     id: 'maca', title: 'Self-Improvement of Language Models by Post-Training on Multi-Agent Debate',
     year: 2026, posted: '2025-09', authors: 'Ankur Samanta, Akshayaa Magesh, Runzhe Wu, Ayush Jain, Youliang Yu, Daniel Jiang, Boris Vidolov, Paul Sajda, Yonathan Efroni, Kaveh Hassani',
@@ -169,31 +139,5 @@
         { l: 'PDF', u: 'https://arxiv.org/pdf/2601.00282' }
     ],
     read: 'main', note: 'arXiv comments: "EMNLP 2026 Findings; camera-ready version". The proceedings page was not available to check, so status is Accepted. The retrieved text was cut in the references and later appendices.'
-},
-{
-    id: 'multipass-verification', title: 'Improving Quantized Model Performance in Qualitative Analysis with Multi-Pass Prompt Verification',
-    year: 2026, posted: '2026-04', authors: 'Aisvarya Adeseye, Jouni Isoaho, Adeyemi Adeseye',
-    venue: '12th Intelligent Systems Conference 2026 (Amsterdam)', status: 'accepted', cat: 'intersection', origin: 'dossier', dossier: '§4.4', prio: 3, arxiv: '2605.20193',
-    tags: ['multi-pass verification', 'quantized llama', 'qualitative coding', 'hallucination', 'semantic drift', 'gguf', 'smoothquant', 'hqq'],
-    summary: 'Quantized LLaMA-3.1 8B models hallucinate and drift when coding interview transcripts. A quantization-aware multi-pass prompt workflow that extracts, verifies and re-counts themes stabilizes low-bit models.',
-    method: [
-        'LLaMA-3.1 8B in BF16, 8-bit (SmoothQuant, INT8, GGUF Q8_0), 4-bit (Q4_K_M, NF4, GPTQ), 3-bit (HQQ, AWQ) and 2-bit (SPQR, Q2_K); llama.cpp on an RTX 4090, temperature 0.2, five runs per configuration.',
-        'Passes: analysis prompt (themes, sub-themes, quotes as JSON), verification prompt removing unsupported items, then frequency counting and verification; at most three passes, 93% converge within two.',
-        '82 semi-structured interviews (33 experts, 49 non-experts); eight metrics including F1, semantic drift, hallucination rate; gold standard from human NVivo coding.'
-    ],
-    results: [
-        'Non-expert F1 before and after verification: BF16 0.65 to 0.82; Q4_K_M 0.58 to 0.77; GPTQ-4bit 0.55 to 0.74; HQQ (3-bit) 0.37 to 0.58; Q2_K 0.22 to 0.40; human reference 0.80 (Table 1).',
-        'HQQ hallucination rate (non-expert) falls from 0.40 to 0.22; runtime increases 34.7%.'
-    ],
-    limits: [
-        'Only LLaMA-3.1 8B and one qualitative domain; statistical tests are described but no p-values or effect sizes appear.',
-        'Conflicting statements about whether corrected BF16 outputs entered the gold standard; some listed methods are not native llama.cpp formats; claimed 40 to 80% gains exceed Table 1 (19 to 33% F1).'
-    ],
-    relevance: 'The dossier cites it (abstract only) as an adjacent verification-under-quantization study. It verifies extracted themes, not reasoning correctness, and measures accuracy rather than verifier bias, so it does not address our verifier-criterion question.',
-    links: [
-        { l: 'arXiv', u: 'https://arxiv.org/abs/2605.20193' },
-        { l: 'PDF', u: 'https://arxiv.org/pdf/2605.20193' }
-    ],
-    read: 'main', note: 'arXiv comments: "Accepted to publish in 12th Intelligent Systems Conference 2026; 3-4 September 2026 in Amsterdam". The conference proceedings page was not checked.'
 }
 );

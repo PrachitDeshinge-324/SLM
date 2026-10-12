@@ -95,7 +95,7 @@ We cannot yet say *how much* damage to expect for a new model: it ranged from 1 
 
 **If it holds**, a second phase runs one real self-training round at 16-bit and 4-bit to test the prediction in A.5. **Possible venues**: a workshop paper first, then a fuller journal-style version (Part B, section 9).
 
-**Decisions that are yours** (Part B, section 10): your compute and time budget, the target venue, whether the mentor's PDFs in `Docs/` add constraints (they are image-only and could not be read), and whether the project web pages should be updated to the corrected numbers.
+**Decisions that are yours** (Part B, section 10): your compute and time budget, the target venue, whether the mentor's PDFs in `Docs/` add constraints (they are image-only and could not be read), (the web pages now follow `results/` automatically; see section 10).
 
 ## A.8 Glossary
 
@@ -217,7 +217,8 @@ All numbers: current extractor and matcher (with `sympy`); truncated samples nev
 - The dilution changes a conclusion. On MATH-500 the `shared100` CSV shows Qwen-0.8B's false-positive rate *falling* with quantization (0.330 / 0.284 / 0.267). On complete traces it is 0.63 / 0.63 / 0.70. [Data]
 - `results/rescored/*.csv` (3 Oct) predates the current files and should be regenerated or deleted.
 - In the regenerated verifier CSV for Qwen-0.8B MATH-500, the 16-bit and 4-bit rows show `Truncation_Unknown = 800`: their traces cannot be matched to a generator file, so truncated traces could not be removed and those two rows are not comparable with the 8-bit row.
-- Still stale: `web/generation.html`, `web/verifier.html` and `web/audit.html` quote the old numbers. The audit document itself is archived.
+- Resolved on 12 Oct: `web/generation.html` and `web/verifier.html` now draw every number from `results/` (`scripts/export_web_data.py`, same re-scoring as the reports), so they no longer quote the 4 Oct numbers. `web/audit.html` is a local-only snapshot, kept out of git.
+- Changed on 12 Oct, at Prachit's request: the Phase 2 web page scores every row on the same 100 questions of its model and on all 800 of their traces (N = 8), so truncated traces are kept as wrong traces instead of dropped, and runs with fewer than 100 complete questions (Qwen-0.8B GSM8K `n16`) are left out. Voting is unchanged (truncated traces never vote). The page's false-positive rates therefore carry the dilution described in the table above and are lower than the report CSVs wherever truncation is high (Qwen-2B GSM8K 16-bit: 0.20 on the page, 0.40 on complete traces). The 4-bit rise survives on GSM8K (Qwen-0.8B +14.5 points [+7.4, +20.8]; Qwen-2B +10.7 [+3.9, +18.4]). The report scripts still drop truncated traces. To switch the page back, pass `keep_truncated=False` in `web_export.collect_verifier_runs`.
 
 ### 2.2 Validity problems found in the stored runs
 
@@ -334,7 +335,7 @@ The verifier emits one greedy line (median 26 characters), so it is a one-token 
 
 - "Repetition penalty 1.1 on math" affects `run_pipeline.sh` (then `fullrun.sh`) for future runs; no stored run records it.
 - `rescore_paired.py` (now archived) does not pick up `_backup` files (its filename pattern excludes them).
-- "Nobody measures sampled self-consistency on reasoning under quantization" was too strong: 2510.10964 votes over up to 16 samples at GPTQ 4/8-bit (accuracy only), and MACA Table 16 reports agreement at 4-bit.
+- "Nobody measures sampled self-consistency on reasoning under quantization" was too strong: MACA Table 16 reports agreement at 4-bit.
 - "Nobody varies precision in a label-free self-training loop" must become "nobody *trains* at two precisions and compares"; MACA evaluates a 4-bit-trained adapter at both precisions.
 
 ### 2.10 Generality: which findings hold beyond the cell they were found in
@@ -430,7 +431,7 @@ It reviews 34 arXiv papers and two textbooks. The main ones get their design, fi
 
 ### 4.1 What is established and therefore not ours to claim
 
-1. 4-bit weight quantization costs small reasoning models little on GSM8K and more on harder tasks; 3-bit is risky; small models lose more. [2504.04823, 2510.10964]
+1. 4-bit weight quantization costs small reasoning models little on GSM8K and more on harder tasks; 3-bit is risky; small models lose more. [2504.04823]
 2. A 4-bit base model can self-improve from majority-vote signals. [2509.15172]
 3. Majority-vote self-training can collapse; gains are largely sharpening; sub-2B verifiers are near chance. [2505.21444, 2606.01075]
 4. Agreement is roughly calibrated on arithmetic word problems and poorly on hard multiple choice. [2210.11610, 2608.11403, 2607.08065]
@@ -448,7 +449,6 @@ It reviews 34 arXiv papers and two textbooks. The main ones get their design, fi
 |---|---|---|---|
 | Flips | Counted without a sampling floor | 8-bit flips = floor; 4-bit excess one-directional | New control; one model so far |
 | Damage location | Low-confidence items move most (2405.00632) | Absolute loss sits in mid/high-confidence questions | Partial disagreement; different task type |
-| Voting under quantization | Accuracy at fixed group size (2510.10964) | Voting absorbs mild damage, not severe | New observation |
 | Pseudo-label quality by precision | Never varied | Precision flat, yield and coverage down | New; needs train split |
 | Verifier under quantization | Precision treated as infrastructure (2605.02915) | Criterion shift without sensitivity loss in one cell | Suggestive; confounded |
 | Style shift | Instruction following degrades (2409.11055) | Decomposed: most of Gemma's loss is style | New; one model |
@@ -461,7 +461,7 @@ It reviews 34 arXiv papers and two textbooks. The main ones get their design, fi
 | G1. No paper analyses self-consistency *as a signal* (calibration, AUROC, pseudo-label precision and yield, coverage) across bit-widths | High | Full texts of 22 papers retrieved (relevant sections of 13 read directly, 9 through summaries), 9 targeted searches |
 | G2. No flip study on sampled generation subtracts a replicate floor | High | Both flip papers evaluate deterministically |
 | G3. No self-training study trains at two precisions and compares | Medium | MACA comes close; a 2026 paper could exist that my searches missed |
-| G4. No study separates verifier sensitivity from bias across precisions | Medium–high | One adjacent paper on multi-pass verification (2605.20193, abstract only) measures accuracy, not bias |
+| G4. No study separates verifier sensitivity from bias across precisions | High | Existing self-verification studies treat precision as infrastructure rather than a variable |
 | G5. No decomposition of quantization loss into style shift and within-style loss | Medium | Searched once; adjacent instruction-following reports exist |
 
 ### 4.5 What the data mean for the project
@@ -534,7 +534,7 @@ Ranks 1–3 are one coherent story and need only inference. Rank 4 is the highes
 
 | Objection | Current exposure | Answer to build |
 |---|---|---|
-| "Accuracy under quantization is known" | High | Cite 2504.04823 and 2510.10964 up front; position accuracy as replication, signal analysis as the contribution |
+| "Accuracy under quantization is known" | High | Cite 2504.04823 up front; position accuracy as replication, signal analysis as the contribution |
 | "Self-improvement in the title, no training" | High | Title and claims about pseudo-labels and agreement; phase 2 optional |
 | "Only bitsandbytes, nothing below 4-bit" | High | AWQ/GPTQ 4-bit and GPTQ 3-bit |
 | "Truncation and token caps drive the results" | High | Pilot-set cap; outcome classes; results with and without truncated questions |
@@ -595,7 +595,7 @@ $PY 11_outliers.py                             # 2.11
 **Decisions needed from you**
 1. Compute and time budget, and target venue. This decides whether phase 2 is in scope.
 2. Whether the Docs PDFs contain constraints from your mentor (model list, datasets, deadline).
-3. Whether to update the web pages, which still quote the 4 Oct numbers (the audit document is archived).
+3. ~~Whether to update the web pages~~ Done on 12 Oct: the Phase 1 and Phase 2 pages are generated from `results/`; run `python scripts/export_web_data.py` after any new or changed run file.
 
 **Decision log**
 | Date | Decision | Reason |

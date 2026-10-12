@@ -68,7 +68,10 @@ results/*.jpg
 !.nojekyll
 !index.html
 !web/
-!web/** 
+!web/**
+web/**/.DS_Store
+# Local-only page: a dated snapshot of the early-October audit, not published
+web/audit.html
 
 # Exclude specific directories
 notebooks/
@@ -82,3 +85,4 @@ results/
 
 # Regenerable analysis cache
 analysis/**/cache.pkl
+LLM_Course_Project_Paper_Template/*

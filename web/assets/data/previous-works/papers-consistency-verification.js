@@ -1,5 +1,5 @@
 /* Self-consistency and confidence; self-correction and self-verification; verifiers and test-time compute. All at full precision unless noted. */
-(window.PW_PAPERS = window.PW_PAPERS || []).push(
+window.PW.papers.push(
 
 /* ================= SELF-CONSISTENCY, CONFIDENCE, AGREEMENT ================= */
 {
@@ -106,7 +106,7 @@
         'Factual-recall QA only, short-form; reasoning-heavy settings untested; verbalized methods are prompt-sensitive; claude-1 is deprecated.',
         'Correctness depends on LLM-based equivalence judgments.'
     ],
-    relevance: 'Gives the verbalized-confidence alternative to our one-token verifier verdict. Its models are large API models; in the vision-language study Bigger or Cheaper?, 4-bit also lowered the verbalized-confidence parse rate from 0.99 to 0.64, one reason to prefer logit margins for a quantized verifier.',
+    relevance: 'Gives the verbalized-confidence alternative to our one-token verifier verdict. Its models are large API models; verbalized methods are prompt-sensitive, one reason to prefer logit margins for a quantized verifier.',
     links: [
         { l: 'ACL Anthology (EMNLP 2023)', u: 'https://aclanthology.org/2023.emnlp-main.330/', o: true },
         { l: 'arXiv', u: 'https://arxiv.org/abs/2305.14975' },
@@ -541,7 +541,7 @@
         'Difficulty estimation costs 2,048 samples and is not counted; one base model and one benchmark; revision and verification needed capability-specific fine-tuning.',
         'The abstract claims over 4x efficiency while the Discussion says 2 to 4x; search over-optimizes the PRM on easy problems.'
     ],
-    relevance: 'The framework behind the dossier\'s "voting is a way to spend compute" reading. Under quantization the compute budget buys different things (smaller weights, longer traces), which is the trade-off Not All Bits Are Equal begins to map.',
+    relevance: 'The framework behind the dossier\'s "voting is a way to spend compute" reading. Frames sampling, voting and verification as ways to spend test-time compute, with the best strategy depending on difficulty.',
     links: [
         { l: 'ICLR 2025 proceedings', u: 'https://proceedings.iclr.cc/paper_files/paper/2025/hash/1b623663fd9b874366f3ce019fdfdd44-Abstract-Conference.html', o: true },
         { l: 'arXiv', u: 'https://arxiv.org/abs/2408.03314' },

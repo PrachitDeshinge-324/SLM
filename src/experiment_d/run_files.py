@@ -7,6 +7,7 @@ Where run files live and how they are named.
 
 <model> and <dataset> are the HuggingFace ids with '/' replaced by '_'.
 """
+import json
 import re
 from pathlib import Path
 
@@ -66,3 +67,29 @@ def parse_run_name(file_name: str):
 def is_legacy_file(path) -> bool:
     """Backup copies of superseded runs are never analysed."""
     return "_backup" in Path(path).name
+
+
+def read_run_config(path) -> dict:
+    """The header of a generator run file ({} when the file or its header is missing)."""
+    path = Path(path)
+    if not path.exists():
+        return {}
+    with path.open() as handle:
+        for line in handle:
+            if '"run_config"' not in line:
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if obj.get("type") == "run_config":
+                return obj
+    return {}
+
+
+def token_limit(run_config: dict, dataset: str):
+    """Token limit of a generator run: one key in newer headers, one per dataset in older ones, absent in the oldest."""
+    for key in ("max_new_tokens", f"max_new_tokens_{dataset}", f"max_new_tokens_{dataset.lower()}"):
+        if run_config.get(key) is not None:
+            return int(run_config[key])
+    return None

@@ -1,0 +1,36 @@
+/* Design tokens: every colour, size and radius used elsewhere comes from here. */
+:root {
+    --bg: #f4f7f6;
+    --surface: #ffffff;
+    --surface-alt: #f7fafc;
+    --text: #2d3748;
+    --text-light: #718096;
+    --border: #e2e8f0;
+
+    --primary: #3182ce;
+    --primary-dark: #2b6cb0;
+    --primary-tint: #ebf8ff;
+    --success: #38a169;
+    --success-dark: #276749;
+    --success-tint: #f0fff4;
+    --warning: #d69e2e;
+    --warning-dark: #975a16;
+    --warning-tint: #fffaf0;
+    --danger: #e53e3e;
+    --purple: #805ad5;
+    --purple-dark: #553c9a;
+    --purple-tint: #faf5ff;
+
+    --font: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+    --radius-sm: 6px;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+
+    --page-width: 1200px;
+    --gutter: 2rem;
+    --nav-height: 3.4rem;
+}

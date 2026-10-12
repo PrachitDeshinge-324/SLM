@@ -14,19 +14,13 @@
 - *Weak points:* pass@1 only; no voting, confidence, verification or training; three seeds but no paired test.
 - *For us:* settles the accuracy question. Gives a reference number, public quantized checkpoints for our anchor model, and a warning that our 512–2048-token caps are far too small for reasoning models.
 
-**Not All Bits Are Equal** ([2510.10964](https://arxiv.org/abs/2510.10964)) — F
-- *Design:* Qwen3 0.6–32B, GPTQ 4/8-bit, AIME25 and GPQA-Diamond, temperature 0.6, majority voting with 1–16 samples, memory as the budget.
-- *Finds:* for mathematical reasoning 4-bit is memory-inefficient and 8-bit is optimal for 0.6B and 1.7B models; parallel voting is memory-inefficient below an "8-bit 4B" effective size.
-- *Weak points:* point estimates without intervals; accuracy only; verifiers excluded by design.
-- *For us:* agrees with our Qwen-0.8B result. Leaves open everything about agreement as a *signal*.
-
 **Quantization Meets Reasoning** ([2501.03035](https://arxiv.org/abs/2501.03035); follow-up [2505.11574](https://arxiv.org/abs/2505.11574) A) — S
 - *Finds:* Llama-3.2-1B/3B and 3.1-8B lose 5–32% on MATH under AWQ/GPTQ 4-bit; repair with DPO + QLoRA on 545 *labelled* failures.
 - *Weak points:* error labels come from five judge models; recovery needs ground truth.
 - *For us:* shows fine-tuning a quantized model on curated data works. Our question is whether *self-generated* labels suffice.
 
-**Dettmers & Zettlemoyer** ([2212.09720](https://arxiv.org/abs/2212.09720)) A; **Lee et al.** ([2409.11055](https://arxiv.org/abs/2409.11055)) A; **Decoding Compressed Trust** ([2403.15447](https://arxiv.org/abs/2403.15447)) A
-- 4-bit is near-optimal for zero-shot accuracy per bit; quantized models struggle with instruction following; 4-bit preserves trust dimensions, 3-bit does not. Background only.
+**Dettmers & Zettlemoyer** ([2212.09720](https://arxiv.org/abs/2212.09720)) A; **Lee et al.** ([2409.11055](https://arxiv.org/abs/2409.11055)) A
+- 4-bit is near-optimal for zero-shot accuracy per bit; quantized models struggle with instruction following. Background only.
 
 ### 3.2 Quantization and reliability
 
@@ -52,8 +46,8 @@
 - *Weak points:* deterministic evaluation, so no sampling floor; calls predicting degradation "a challenging and open problem".
 - *For us:* our replicate floor is the missing control for sampled generation.
 
-**Illusion of Equivalency** ([2607.08734](https://arxiv.org/abs/2607.08734)) S; **Self-explanations** ([2601.00282](https://arxiv.org/abs/2601.00282)) S; **Quantization Undoes Alignment** ([2605.15208](https://arxiv.org/abs/2605.15208)) S; **BitCal-TTS** ([2605.05561](https://arxiv.org/abs/2605.05561)) A
-- GGUF correctness agreement without a noise floor; greedy self-explanations on 7–72B models; 3-bit lowers abstention in bias probes; 4-bit miscalibrates early-halting confidence (54 and 35 GSM8K questions). Adjacent; none studies agreement or verification.
+**Illusion of Equivalency** ([2607.08734](https://arxiv.org/abs/2607.08734)) S; **Self-explanations** ([2601.00282](https://arxiv.org/abs/2601.00282)) S; **BitCal-TTS** ([2605.05561](https://arxiv.org/abs/2605.05561)) A
+- GGUF correctness agreement without a noise floor; greedy self-explanations on 7–72B models; 4-bit miscalibrates early-halting confidence (54 and 35 GSM8K questions). Adjacent; none studies agreement or verification.
 
 ### 3.3 Self-consistency and self-verification (full precision)
 
@@ -105,5 +99,4 @@
 
 - Difference of Confidences ([2107.03315](https://arxiv.org/abs/2107.03315)) F (definition); Agreement-on-the-Line ([2206.13089](https://arxiv.org/abs/2206.13089)) A — label-free accuracy estimation.
 - xFinder ([2405.11874](https://arxiv.org/abs/2405.11874)) A — regex answer extraction reached 74% accuracy in the best framework they tested.
-- Adding Error Bars to Evals ([2411.00640](https://arxiv.org/abs/2411.00640)) A — formulas for comparing two models and planning sample size. My recollection that it recommends paired, question-clustered analysis is from memory, not from this session's reading.
-- Signal detection theory (Green & Swets 1966; Macmillan & Creelman, *Detection Theory*) — textbook, cited from memory.
+- Adding Error Bars to Evals ([2411.00640](https://arxiv.org/abs/2411.00640)) A — formulas for comparing two models and planning sample size.

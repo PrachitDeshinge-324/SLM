@@ -1,68 +1,54 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Next Steps - Agentic AI</title>
-    <link rel="stylesheet" href="style.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="assets/css/site.css">
 </head>
 <body>
-    <header>
-        <h1>What's Next?</h1>
-        <p>Planning the next phases of our research based on the findings from Experiment D.</p>
-    </header>
-
-    <nav>
-        <div class="nav-container">
-            <a href="index.html" class="nav-link">Home</a>
-            <a href="proposal.html" class="nav-link">Original Proposal</a>
-            <a href="problem_statement.html" class="nav-link">Problem & Datasets</a>
-            <a href="previous_works.html" class="nav-link">Previous Works</a>
-            <a href="generation.html" class="nav-link">Phase 1: Generation</a>
-            <a href="verifier.html" class="nav-link">Phase 2: Verifier</a>
-            <a href="audit.html" class="nav-link">Audit &amp; New Direction</a>
-            <a href="next_steps.html" class="nav-link active">Next Steps</a>
+<script src="assets/js/site.js"></script>
+<main>
+    <section class="content-box">
+        <h2>Where the project goes from here</h2>
+        <div class="callout success">
+            <h3>Summary (after the scoring fixes)</h3>
+            <p>The earlier plan (a self-improvement loop on Qwen 0.8B, or a harder dataset for DeepSeek) is superseded. After fixing the scoring, 8-bit is safe, 4-bit costs accuracy mainly in weak models, and the model-as-judge is weak everywhere. The promising result is that <strong>the drop in self-agreement tracks the drop in accuracy</strong> (r = 0.93 over 20 runs). Next: confirm it with a second quantizer, a 3-bit point and three seeds.<span data-local-only> See the local <a href="audit.html">Audit &amp; New Direction</a> page.</span></p>
         </div>
-    </nav>
 
-    <div class="container">
-        <div class="content-box">
-            <h2>Future Research Pathways</h2>
-
-            <div class="alert" style="background-color: #f0fdf4; border-left-color: var(--success);">
-                <h3 style="margin-top:0; color: #166534;">Executive Summary (updated after the audit)</h3>
-                <p style="margin-bottom:0;">The earlier plan (self-improvement loop on Qwen 0.8B, or a harder dataset for DeepSeek) is superseded. After fixing the scoring, 8-bit is safe, 4-bit costs accuracy mainly in weak models, and the model-as-judge is weak everywhere. The promising result is that <strong>the drop in self-agreement tracks the drop in accuracy</strong> (r = 0.93 over 20 runs). Next: confirm it with a second quantizer, a 3-bit point and three seeds. See <a href="audit.html">Audit &amp; New Direction</a>.</p>
+        <div class="grid">
+            <div class="card highlight">
+                <h3>Step 1: Clean rerun</h3>
+                <ul>
+                    <li>Use the fixed prompts (no double start token, pinned Llama date, DeepSeek instructions in the user turn, shared SVAMP prompt).</li>
+                    <li>Raise the token limit until truncation is below 5%.</li>
+                    <li>Run all precisions of a model together; three seeds; 100&ndash;200 questions.</li>
+                </ul>
             </div>
-
-            <div class="grid" style="margin-top: 2rem;">
-                <div class="card highlight">
-                    <div class="card-header">Step 1: Clean rerun</div>
-                    <ul>
-                        <li>Use the fixed prompts (no double start token, pinned Llama date, DeepSeek instructions in the user turn, shared SVAMP prompt).</li>
-                        <li>Raise the token limit until truncation is below 5%.</li>
-                        <li>Run all precisions of a model together; three seeds; 100&ndash;200 questions.</li>
-                    </ul>
-                </div>
-                <div class="card">
-                    <div class="card-header">Step 2: More damage to measure</div>
-                    <ul>
-                        <li>Add GPTQ or GGUF Q4 and a 3-bit point.</li>
-                        <li>Keep the models where 4-bit actually hurts (Qwen-0.8B, Gemma-1B) and add one more weak family.</li>
-                    </ul>
-                </div>
-                <div class="card">
-                    <div class="card-header">Step 3: Test the estimator</div>
-                    <ul>
-                        <li>Predict each quantized model's accuracy change from its agreement change, on held-out models.</li>
-                        <li>Beat two label-free baselines: flip rate against 16-bit, and cross-model disagreement.</li>
-                        <li>Falsified if the held-out error is no better than "assume no change".</li>
-                    </ul>
-                </div>
-                <div class="card">
-                    <div class="card-header">Later: Experiment B</div>
-                    <p>The self-improvement training loop is still unrun. Only start it if the estimator holds up, and track vote accuracy against sample accuracy each round to catch collapse early.</p>
-                </div>
+            <div class="card">
+                <h3>Step 2: More damage to measure</h3>
+                <ul>
+                    <li>Add GPTQ or GGUF Q4 and a 3-bit point.</li>
+                    <li>Keep the models where 4-bit actually hurts (Qwen-0.8B, Gemma-1B) and add one more weak family.</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>Step 3: Test the estimator</h3>
+                <ul>
+                    <li>Predict each quantized model's accuracy change from its agreement change, on held-out models.</li>
+                    <li>Beat two label-free baselines: flip rate against 16-bit, and cross-model disagreement.</li>
+                    <li>Falsified if the held-out error is no better than "assume no change".</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>Optional: settle the verifier question</h3>
+                <p>Freeze the 16-bit traces and let every precision judge the same set. A short negative result that removes the trace-pool confound from the verifier comparison.</p>
+            </div>
+            <div class="card">
+                <h3>Later: Experiment B</h3>
+                <p>The self-improvement training loop is still unrun. Only start it if the estimator holds up, and track vote accuracy against sample accuracy each round to catch collapse early.</p>
             </div>
         </div>
-    </div>
+    </section>
+</main>
 </body>
 </html>

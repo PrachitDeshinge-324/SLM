@@ -1,5 +1,5 @@
 /* Self-improvement and self-training: methods, theory, and failure modes. */
-(window.PW_PAPERS = window.PW_PAPERS || []).push(
+window.PW.papers.push(
 
 {
     id: 'star', title: 'STaR: Bootstrapping Reasoning With Reasoning',
@@ -193,32 +193,6 @@
     links: [
         { l: 'arXiv', u: 'https://arxiv.org/abs/2606.21090' },
         { l: 'PDF', u: 'https://arxiv.org/pdf/2606.21090' }
-    ],
-    read: 'main'
-},
-{
-    id: 'self-evolving-forget', title: 'Do Self-Evolving Agents Forget? Capability Degradation and Preservation in Lifelong LLM Agent Adaptation',
-    year: 2026, posted: '2026-05', authors: 'Ye Yu, Xiaopeng Yuan, Haibo Jin, Heming Liu, Yaoning Yu, Haohan Wang',
-    venue: 'arXiv preprint', status: 'preprint', cat: 'selftrain', origin: 'site', prio: 3, arxiv: '2605.09315',
-    tags: ['capability erosion', 'forgetting', 'self-evolving agents', 'ewc', 'star-style', 'lora', 'medmcqa'],
-    summary: 'Self-evolving agents (workflow, skill, model and memory evolution) can lose previously mastered capabilities while adapting to new tasks. The paper proposes Capability-Preserving Evolution, a retention regularizer added to the self-evolution objective.',
-    method: [
-        'Workflow evolution with EvoAgentX on tau^2-Bench (GPT-5.1 and GPT-5 nano); skill evolution on MATH subjects with GPT-4o mini and GPT-5 nano; model evolution by STaR-style LoRA self-training on MedMCQA with Qwen3-0.6B and Llama3.2-3B; memory evolution with a Dynamic-Cheatsheet-style store.',
-        'CPE minimizes current-task loss plus lambda times a retention penalty (Eq. 5), implemented as a Fisher-weighted EWC-style penalty for the model dimension (Eq. 7); baselines are unconstrained self-evolution in each dimension.'
-    ],
-    results: [
-        'Workflow: GPT-5.1 simple-task average 41.8% (vanilla) to 52.8% (CPE), complex 23.9% to 33.4% (Table 1).',
-        'Model evolution: Qwen3-0.6B Anatomy 29.4 to 30.5, Biochemistry 37.2 to 38.4, Dental 32.2 to 33.0; Llama3.2-3B gains are 0.1 to 1.4 points (Table 3).',
-        'Memory: old-domain accuracy falls from 83.9% to 81.6% (vanilla) and recovers to 83.3% with CPE.'
-    ],
-    limits: [
-        'The local analysis relies on a quadratic surrogate assumption not verified empirically; several cells are ties or +0.1; one evaluation round per setting and no variance.',
-        'Regularizers differ by dimension, there is no unified implementation, and some splits are small (Airline has 14 simple tasks). The authors\' own limitations appendix was not visible.'
-    ],
-    relevance: 'Documents that a STaR-style loop on a 0.6B to 3B model can erase earlier skills, so a phase-2 round must measure retention of other capabilities. It does not test quantization.',
-    links: [
-        { l: 'arXiv', u: 'https://arxiv.org/abs/2605.09315' },
-        { l: 'PDF', u: 'https://arxiv.org/pdf/2605.09315' }
     ],
     read: 'main'
 },

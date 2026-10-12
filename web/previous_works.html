@@ -1,162 +1,133 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Previous Works - Agentic AI</title>
-    <link rel="stylesheet" href="style.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="assets/css/site.css">
+    <link rel="stylesheet" href="assets/css/previous-works.css">
 </head>
-<body class="pw-page">
-    <header>
-        <h1>Previous Works</h1>
-        <p>What is already known about quantization and about self-improvement, where the two meet, and what our paper adds.</p>
-    </header>
-
-    <nav>
-        <div class="nav-container">
-            <a href="index.html" class="nav-link">Home</a>
-            <a href="proposal.html" class="nav-link">Original Proposal</a>
-            <a href="problem_statement.html" class="nav-link">Problem & Datasets</a>
-            <a href="previous_works.html" class="nav-link active">Previous Works</a>
-            <a href="generation.html" class="nav-link">Phase 1: Generation</a>
-            <a href="verifier.html" class="nav-link">Phase 2: Verifier</a>
-            <a href="audit.html" class="nav-link">Audit &amp; New Direction</a>
-            <a href="next_steps.html" class="nav-link">Next Steps</a>
-        </div>
-    </nav>
-
-    <div class="container">
-        <div class="content-box pw-intro">
-            <h2>The story in one minute</h2>
-            <div class="pw-trio">
-                <div class="pw-box q">
-                    <h3>Quantization</h3>
-                    <p>Rounding a model's weights to 8 or 4 bits makes it cheap to run. It costs some accuracy: almost nothing at 8-bit, a few points at 4-bit, and more for small models.</p>
-                </div>
-                <div class="pw-box s">
-                    <h3>Self-improvement</h3>
-                    <p>A model answers each question several times, trusts the answer most attempts agree on, and trains on it. No human labels. It only works if agreement is a reliable sign of being right.</p>
-                </div>
-                <div class="pw-box gap">
-                    <h3>The gap</h3>
-                    <p>Quantization papers score one answer at a time. Self-improvement papers run at full precision. Almost nobody checks whether rounding damages the agreement signal itself.</p>
-                </div>
+<body>
+<script src="assets/js/site.js"></script>
+<main>
+    <section class="content-box">
+        <h2>The story in one minute</h2>
+        <div class="grid cols-3">
+            <div class="card">
+                <h3>Quantization</h3>
+                <p>Rounding a model's weights to 8 or 4 bits makes it cheap to run. It costs some accuracy: almost nothing at 8-bit, a few points at 4-bit, and more for small models.</p>
             </div>
-            <p class="pw-answer"><strong>Our answer so far:</strong> at 4-bit a small model is right less often and sure less often, but when it is sure it is just as trustworthy. We therefore expect a compressed model to improve itself more slowly, not to be misled by bad labels. This is provisional: one quantizer, some small question sets, and no training loop yet.</p>
-        </div>
-
-        <div class="content-box">
-            <h2>Where our paper fits</h2>
-            <p>Each row is a question our paper asks, what earlier work did, and what our data show so far. Click a paper name to jump to its card.</p>
-            <div class="pw-table-wrap">
-                <table class="pw-table">
-                    <thead><tr><th>Question</th><th>Prior work</th><th>What we add (provisional)</th></tr></thead>
-                    <tbody id="pw-pos-add"></tbody>
-                </table>
+            <div class="card">
+                <h3>Self-improvement</h3>
+                <p>A model answers each question several times, trusts the answer most attempts agree on, and trains on it. No human labels. It only works if agreement is a reliable sign of being right.</p>
             </div>
-            <h3 class="pw-h3">Already known, so we cite it and do not claim it</h3>
-            <ul class="pw-known" id="pw-pos-known"></ul>
+            <div class="card highlight">
+                <h3>The gap</h3>
+                <p>Quantization papers score one answer at a time. Self-improvement papers run at full precision. Almost nobody checks whether rounding damages the agreement signal itself.</p>
+            </div>
         </div>
+        <div class="callout success">
+            <p><strong>Our answer so far:</strong> at 4-bit a small model is right less often and sure less often, but when it is sure it is just as trustworthy. We therefore expect a compressed model to improve itself more slowly, not to be misled by bad labels. This is provisional: one quantizer, some small question sets, and no training loop yet.</p>
+        </div>
+    </section>
 
-        <div class="content-box">
-            <h2>Browse the papers</h2>
-            <noscript><p class="alert">This page needs JavaScript for search, filters and the paper cards.</p></noscript>
-            <p><span data-pw-count="all"></span> papers in six themes. Each card gives the one idea to remember and how we use the paper; open a card for method, results and limitations. Start with the <span data-pw-count="start"></span> marked <span class="pw-badge start">Read first</span>.</p>
-            <div class="pw-controls">
-                <input id="pw-q" class="pw-search" type="search" placeholder="Search titles, authors, ideas, methods, results" autocomplete="off" aria-label="Search papers">
-                <div class="pw-chips" id="pw-themes" role="group" aria-label="Theme"></div>
+    <section class="content-box">
+        <h2>Where our paper fits</h2>
+        <p>Each row is a question our paper asks, what earlier work did, and what our data show so far. Click a paper name to jump to its card.</p>
+        <table class="pw-position">
+            <thead><tr><th>Question</th><th>Prior work</th><th>What we add (provisional)</th></tr></thead>
+            <tbody id="pw-pos-add"></tbody>
+        </table>
+        <h3>Already known, so we cite it and do not claim it</h3>
+        <ul id="pw-pos-known"></ul>
+    </section>
+
+    <section class="content-box" id="browse">
+        <h2>Browse the papers</h2>
+        <noscript><div class="callout warning">This page needs JavaScript for search, filters and the paper cards.</div></noscript>
+        <p><span data-pw-count="all"></span> papers in six themes. Each card gives the one idea to remember and how we use the paper; open a card for method, results and limitations. Start with the <span data-pw-count="start"></span> marked <span class="badge solid">Read first</span>.</p>
+        <div class="pw-controls">
+            <input id="pw-q" class="input" type="search" placeholder="Search titles, authors, ideas, methods, results" autocomplete="off" aria-label="Search papers">
+            <div class="chips" id="pw-themes" role="group" aria-label="Theme"></div>
+            <div class="pw-row">
+                <div class="checks"><label><input type="checkbox" id="pw-start"> Read first only</label></div>
+                <div class="field inline">
+                    <label for="pw-sort">Sort</label>
+                    <select id="pw-sort" class="select">
+                        <option value="theme">By theme</option>
+                        <option value="year-desc">Newest first</option>
+                        <option value="year-asc">Oldest first</option>
+                        <option value="title">Title, A to Z</option>
+                    </select>
+                </div>
+                <button type="button" class="btn" id="pw-expand">Open all</button>
+                <button type="button" class="btn" id="pw-collapse">Close all</button>
+                <button type="button" class="btn" id="pw-reset">Reset</button>
+            </div>
+            <details class="pw-more">
+                <summary>More filters</summary>
                 <div class="pw-row">
-                    <div class="pw-checks"><label><input type="checkbox" id="pw-start"> Read first only</label></div>
-                    <div class="pw-field pw-inline">
-                        <label for="pw-sort">Sort</label>
-                        <select id="pw-sort" class="pw-select">
-                            <option value="theme">By theme</option>
-                            <option value="year-desc">Newest first</option>
-                            <option value="year-asc">Oldest first</option>
-                            <option value="title">Title, A to Z</option>
+                    <div class="field">
+                        <label for="pw-role">How we use it</label>
+                        <select id="pw-role" class="select"><option value="">Any</option></select>
+                    </div>
+                    <div class="field">
+                        <span class="field-label" id="pw-status-label">Publication status</span>
+                        <div class="checks" id="pw-status" role="group" aria-labelledby="pw-status-label"></div>
+                    </div>
+                    <div class="field">
+                        <label for="pw-origin">Source</label>
+                        <select id="pw-origin" class="select">
+                            <option value="">Any</option>
+                            <option value="dossier">In the dossier</option>
+                            <option value="site">Cited on the site</option>
+                            <option value="new">Not in dossier (new)</option>
                         </select>
                     </div>
-                    <button type="button" class="pw-btn" id="pw-expand">Open all</button>
-                    <button type="button" class="pw-btn" id="pw-collapse">Close all</button>
-                    <button type="button" class="pw-btn" id="pw-reset">Reset</button>
-                </div>
-                <details class="pw-more">
-                    <summary>More filters</summary>
-                    <div class="pw-row">
-                        <div class="pw-field">
-                            <label for="pw-role">How we use it</label>
-                            <select id="pw-role" class="pw-select"><option value="">Any</option></select>
-                        </div>
-                        <div class="pw-field">
-                            <span class="pw-label" id="pw-status-label">Publication status</span>
-                            <div class="pw-checks" id="pw-status" role="group" aria-labelledby="pw-status-label"></div>
-                        </div>
-                        <div class="pw-field">
-                            <label for="pw-origin">Source</label>
-                            <select id="pw-origin" class="pw-select">
-                                <option value="">Any</option>
-                                <option value="dossier">In the dossier</option>
-                                <option value="site">Cited on the site</option>
-                                <option value="new">Not in dossier (new)</option>
-                            </select>
-                        </div>
-                        <div class="pw-field">
-                            <label for="pw-year-from">Year from</label>
-                            <select id="pw-year-from" class="pw-select"></select>
-                        </div>
-                        <div class="pw-field">
-                            <label for="pw-year-to">Year to</label>
-                            <select id="pw-year-to" class="pw-select"></select>
-                        </div>
+                    <div class="field">
+                        <label for="pw-year-from">Year from</label>
+                        <select id="pw-year-from" class="select"></select>
                     </div>
-                </details>
-            </div>
+                    <div class="field">
+                        <label for="pw-year-to">Year to</label>
+                        <select id="pw-year-to" class="select"></select>
+                    </div>
+                </div>
+            </details>
         </div>
+    </section>
 
-        <div class="pw-resultbar" role="status" aria-live="polite"><span id="pw-count"></span></div>
+    <p class="muted" id="pw-count" role="status" aria-live="polite"></p>
+    <div id="pw-list"></div>
+    <p class="center muted" id="pw-empty" hidden>No paper matches these filters. Try fewer filters or a shorter search.</p>
 
-        <div id="pw-list"></div>
-        <p class="pw-empty" id="pw-empty" hidden>No paper matches these filters. Try fewer filters or a shorter search.</p>
-
-        <div class="content-box pw-about">
-            <h2>About this page</h2>
-            <p><span data-pw-count="all"></span> entries: <span data-pw-count="dossier"></span> from <code>RESEARCH_DOSSIER.md</code>, <span data-pw-count="site"></span> cited only on the <a href="proposal.html">Original Proposal</a> page, and <span data-pw-count="new"></span> found while checking them. No paper from either source was dropped.</p>
-            <ul class="pw-legend">
-                <li><span class="pw-badge published">Published</span> <span data-pw-count="published"></span> peer-reviewed conference or journal papers; the venue was checked on a proceedings or venue page.</li>
-                <li><span class="pw-badge accepted">Accepted</span> <span class="pw-badge workshop">Workshop</span> <span data-pw-count="accepted"></span> where the authors state acceptance but proceedings were not found, or workshop papers.</li>
-                <li><span class="pw-badge preprint">Preprint</span> <span data-pw-count="preprint"></span> on arXiv only; not peer reviewed as far as could be found.</li>
-            </ul>
-            <details class="pw-detail">
-                <summary>How the cards were made, and what was corrected</summary>
-                <p>Each paper was looked up on arXiv (title, authors, versions, comments field) and its venue was checked on a proceedings or venue page where one exists. The full text was retrieved from arXiv HTML, ar5iv or the ACL Anthology and the method and numbers were taken from it. Each card says how much was read. Numbers are copied from the papers' own tables and text; where a paper contradicts itself the card says so.</p>
-                <p>The one-line idea, the "how we use it" label and the notes on each side of our question are this project's reading of the papers, not claims by their authors. The "what we add" column comes from the stored runs described in the dossier and is provisional.</p>
-                <p>Checking turned up corrections to what the project had recorded:</p>
-                <ul class="pw-corrections">
+    <section class="content-box" id="about" data-no-toc>
+        <h2>About this page</h2>
+        <p><span data-pw-count="all"></span> entries: <span data-pw-count="dossier"></span> from <code>RESEARCH_DOSSIER.md</code>, <span data-pw-count="site"></span> cited only on the <a href="proposal.html">Original Proposal</a> page, and <span data-pw-count="new"></span> found while checking them. No paper from either source was dropped.</p>
+        <ul class="pw-legend">
+            <li><span class="badge published">Published</span> <span data-pw-count="published"></span> peer-reviewed conference or journal papers; the venue was checked on a proceedings or venue page.</li>
+            <li><span class="badge accepted">Accepted</span> <span class="badge workshop">Workshop</span> <span data-pw-count="accepted"></span> where the authors state acceptance but proceedings were not found, or workshop papers.</li>
+            <li><span class="badge preprint">Preprint</span> <span data-pw-count="preprint"></span> on arXiv only; not peer reviewed as far as could be found.</li>
+        </ul>
+        <details>
+            <summary>How the cards were made, and what was corrected</summary>
+            <p>Each paper was looked up on arXiv (title, authors, versions, comments field) and its venue was checked on a proceedings or venue page where one exists. The full text was retrieved from arXiv HTML, ar5iv or the ACL Anthology and the method and numbers were taken from it. Each card says how much was read. Numbers are copied from the papers' own tables and text; where a paper contradicts itself the card says so.</p>
+            <p>The one-line idea, the "how we use it" label and the notes on each side of our question are this project's reading of the papers, not claims by their authors. The "what we add" column comes from the stored runs described in the dossier and is provisional.</p>
+            <p>Checking turned up corrections to what the project had recorded:</p>
+            <ul>
                     <li><strong>MACA</strong> (Self-Improvement of LMs by Post-Training on Multi-Agent Debate) is an <em>ICLR 2026 workshop poster</em> (Multi-Agent Learning workshop), not a main-conference paper. arXiv shows no venue.</li>
                     <li><strong>Reliability Scaling Laws for Quantized LLMs</strong>: arXiv's comments field says "TMLR 2026"; the ICML 2026 site lists it as a <em>workshop poster</em> (SCALE). A TMLR acceptance page could not be opened, so it is shown as Workshop.</li>
                     <li><strong>Quantization Meets Reasoning</strong> is <em>two separate arXiv entries</em> with different author lists: 2501.03035 (Jan 2025, Llama-3) and 2505.11574 (May 2025, Qwen2.5 and Llama-3, with a restoration pipeline). The second shows an ICLR 2026 header that says "Published" in v3 and "Under review" in v4, so it is kept as a preprint.</li>
                     <li><strong>Lee et al.</strong> (2409.11055) was published at <em>IJCAI 2025</em> and its first arXiv version had a different title ("A Comprehensive Evaluation of Quantized Instruction-Tuned LLMs: An Experimental Analysis up to 405B").</li>
-                    <li><strong>QuRL</strong> carries a different title at ICLR 2026 ("Low-Precision Reinforcement Learning for Efficient Reasoning") than on arXiv ("Efficient Reinforcement Learning with Quantized Rollout"). <strong>AWQ</strong>'s MLSys title says "On-Device LLM Compression" where arXiv says "LLM Compression".</li>
+                    <li><strong>QuRL</strong> carries a different title at ICLR 2026 ("Low-Precision Reinforcement Learning for Efficient Reasoning") than on arXiv ("Efficient Reinforcement Learning with Quantized Rollout").</li>
                     <li><strong>When Self-Consistency Backfires</strong>: only v1 was accepted (COLM 2026 Workshop on Efficient Reasoning); the v2 additions are not peer reviewed.</li>
                     <li><strong>Can LLMs Still Explain Themselves?</strong> is accepted to <em>EMNLP 2026 Findings</em> (camera-ready, proceedings not yet checked), not just an arXiv preprint.</li>
-                    <li><strong>Not All Bits Are Equal</strong> is <em>ICLR 2026</em>. Its ICLR version describes math, code and knowledge tasks; the arXiv v1 the dossier read describes AIME25 and GPQA-Diamond only.</li>
                     <li><strong>Adding Error Bars to Evals</strong>: the dossier recalled from memory that it recommends paired, question-clustered analysis. Reading it confirms it: paired differences (Eq. 7) and clustered standard errors (Eqs. 4, 8).</li>
                 </ul>
-            </details>
-        </div>
-    </div>
+        </details>
+    </section>
+</main>
 
-    <button type="button" class="pw-btn pw-top" id="pw-top" hidden aria-label="Back to top">&uarr; Top</button>
+<button type="button" class="btn pw-top" id="pw-top" hidden aria-label="Back to top">&uarr; Top</button>
 
-    <script src="previous_works_data/pw_categories.js"></script>
-    <script src="previous_works_data/pw_guide.js"></script>
-    <script src="previous_works_data/pw_lens.js"></script>
-    <script src="previous_works_data/pw_quantization.js"></script>
-    <script src="previous_works_data/pw_reasoning_reliability.js"></script>
-    <script src="previous_works_data/pw_intersection.js"></script>
-    <script src="previous_works_data/pw_consistency_verification.js"></script>
-    <script src="previous_works_data/pw_selftraining.js"></script>
-    <script src="previous_works_data/pw_methods.js"></script>
-    <script src="previous_works.js"></script>
 </body>
 </html>
