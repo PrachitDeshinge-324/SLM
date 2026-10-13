@@ -8,6 +8,10 @@
 #   bash run_pipeline.sh --model Qwen/Qwen3.5-0.8B --precision 4bit --dataset gsm8k \
 #        [--n_samples 8] [--batch_size 64] [--limit 100] [--results_dir DIR]
 #
+# With --extend_to TOKENS stage 1 does not generate: it raises the token limit of the existing
+# run by continuing only its truncated samples (scripts/extend_truncated.py), and stage 3 then
+# re-judges only the traces that changed.
+#
 # Make script stop on first error
 set -e
 
@@ -18,9 +22,10 @@ DATASET="math500"
 N_SAMPLES=8
 BATCH_SIZE=64
 LIMIT=100
+EXTEND_TO=""
 
 # Root directory of the run files (Colab-mounted Drive by default)
-RESULTS_DIR="/content/drive/MyDrive/Experiment_D_Results"
+RESULTS_DIR="/content/drive/MyDrive/results"
 
 # Parse arguments
 while [[ "$#" -gt 0 ]]; do
@@ -31,6 +36,7 @@ while [[ "$#" -gt 0 ]]; do
         --n_samples) N_SAMPLES="$2"; shift ;;
         --batch_size) BATCH_SIZE="$2"; shift ;;
         --limit) LIMIT="$2"; shift ;;
+        --extend_to) EXTEND_TO="$2"; shift ;;
         --results_dir|--output_dir) RESULTS_DIR="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -55,16 +61,34 @@ else
   echo "Detected short-answer dataset: setting MAX_NEW_TOKENS=512 and REP_PENALTY=1.1."
 fi
 
-PYTHONPATH=. python scripts/generate_answers.py \
-  --model "${MODEL}" \
-  --precision "${PRECISION}" \
-  --dataset "${DATASET}" \
-  --n_samples "${N_SAMPLES}" \
-  --batch_size "${BATCH_SIZE}" \
-  --results_dir "${RESULTS_DIR}" \
-  --limit "${LIMIT}" \
-  --max_new_tokens "${MAX_NEW_TOKENS}" \
-  --repetition_penalty "${REP_PENALTY}"
+if [[ -n "${EXTEND_TO}" ]]; then
+  echo "Extending the existing run to ${EXTEND_TO} tokens (truncated samples only)."
+  PYTHONPATH=. python scripts/extend_truncated.py \
+    --model "${MODEL}" \
+    --precision "${PRECISION}" \
+    --dataset "${DATASET}" \
+    --n_samples "${N_SAMPLES}" \
+    --batch_size "${BATCH_SIZE}" \
+    --results_dir "${RESULTS_DIR}" \
+    --max_new_tokens "${EXTEND_TO}"
+  # Judge the changed traces with the penalty the run itself was made with (none in older runs).
+  REP_PENALTY=$(PYTHONPATH=. python -c "
+import sys
+from src.experiment_d.run_files import generator_run_path, read_run_config
+print(read_run_config(generator_run_path(*sys.argv[1:])).get('repetition_penalty', 1.0))
+" "${RESULTS_DIR}" "${MODEL}" "${PRECISION}" "${DATASET}" "${N_SAMPLES}")
+else
+  PYTHONPATH=. python scripts/generate_answers.py \
+    --model "${MODEL}" \
+    --precision "${PRECISION}" \
+    --dataset "${DATASET}" \
+    --n_samples "${N_SAMPLES}" \
+    --batch_size "${BATCH_SIZE}" \
+    --results_dir "${RESULTS_DIR}" \
+    --limit "${LIMIT}" \
+    --max_new_tokens "${MAX_NEW_TOKENS}" \
+    --repetition_penalty "${REP_PENALTY}"
+fi
 
 echo "======================================================"
 echo " Stage 2 of 3: Build verifier dataset"

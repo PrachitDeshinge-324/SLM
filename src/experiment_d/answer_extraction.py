@@ -132,7 +132,7 @@ def extract_math500_answer(text: str) -> str:
 
 def get_extractor(dataset_name: str):
     name = dataset_name.lower()
-    if name == "gsm8k":
+    if name.startswith("gsm8k"):
         return extract_gsm8k_answer
     elif name == "cqa":
         return extract_cqa_answer

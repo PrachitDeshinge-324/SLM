@@ -4,6 +4,21 @@ from typing import List, Optional, Dict, Any
 from src.experiment_d.answer_matching import answers_match, normalize_answer
 
 
+def majority_vote(extracted_answers: List[str]):
+    """
+    The vote itself, with no reference answer. None never votes; ties go to the answer seen first.
+
+    Returns (majority_answer, majority_key, majority_count, keys): `keys` holds each sample's
+    normalized answer ('18' == '18.00'), None where the sample has no answer.
+    """
+    keys = [None if ans is None else normalize_answer(ans) for ans in extracted_answers]
+    counts = Counter(key for key in keys if key is not None)
+    if not counts:
+        return None, None, 0, keys
+    majority_key, majority_count = counts.most_common(1)[0]
+    return extracted_answers[keys.index(majority_key)], majority_key, majority_count, keys
+
+
 def summarize_votes(
     extracted_answers: List[str],
     ground_truth: str,
@@ -49,10 +64,8 @@ def summarize_votes(
         }
 
     # Majority vote over normalized keys, keeping one representative raw string per key
-    keys = [normalize_answer(ans) for ans in valid_answers]
+    majority_answer, _, majority_count, keys = majority_vote(valid_answers)
     counts = Counter(keys)
-    majority_key, majority_count = counts.most_common(1)[0]
-    majority_answer = valid_answers[keys.index(majority_key)]
 
     # Confidence is the fraction of *valid* samples that agree with the majority
     confidence = majority_count / valid_count

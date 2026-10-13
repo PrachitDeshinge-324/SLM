@@ -10,6 +10,20 @@ import re
 
 import pandas as pd
 
+from src.experiment_d.prompts import GSM8K_1SHOT_USER
+
+GSM8K_TRAIN_PARQUET = "data/gsm8k/main/train-00000-of-00001.parquet"
+
+
+def question_key(text: str) -> str:
+    """Question text with case and spacing ignored, for telling whether two questions are the same."""
+    return " ".join(text.lower().split())
+
+
+def _gsm8k_reference(answer_str: str) -> str:
+    truth_num = answer_str.split("####")[-1].strip() if "####" in answer_str else answer_str.strip()
+    return truth_num.replace(',', '')
+
 
 def load_gsm8k(parquet_path: str = "data/gsm8k/main/test-00000-of-00001.parquet"):
     if not os.path.exists(parquet_path):
@@ -18,17 +32,50 @@ def load_gsm8k(parquet_path: str = "data/gsm8k/main/test-00000-of-00001.parquet"
     questions = []
     for idx, row in df.iterrows():
         answer_str = row['answer']
-        truth_num = answer_str.split("####")[-1].strip() if "####" in answer_str else answer_str.strip()
-        truth_num = truth_num.replace(',', '')
         questions.append({
             "qid": f"gsm8k_{idx}",
             "dataset": "gsm8k",
             "question": row['question'],
-            "ground_truth": truth_num,
+            "ground_truth": _gsm8k_reference(answer_str),
             "choices": None,
             "raw_answer_str": answer_str
         })
     return questions
+
+
+def load_gsm8k_train_pool(parquet_path: str = GSM8K_TRAIN_PARQUET):
+    """
+    Unlabelled GSM8K train questions, the pool a model self-trains on.
+
+    Only the question column is read, so no reference answer can reach the caller. The question the
+    prompt shows as its worked example is left out: its answer is in every prompt.
+    """
+    if not os.path.exists(parquet_path):
+        raise FileNotFoundError(f"Could not find {parquet_path}. Please ensure it is present.")
+    df = pd.read_parquet(parquet_path, columns=["question"])
+    prompt_example = question_key(GSM8K_1SHOT_USER)
+    return [
+        {
+            "qid": f"gsm8k_train_{idx}",
+            "dataset": "gsm8k_train",
+            "question": row['question'],
+            "ground_truth": None,
+            "choices": None,
+            "raw_answer_str": None,
+        }
+        for idx, row in df.iterrows()
+        if question_key(row['question']) != prompt_example
+    ]
+
+
+def load_gsm8k_train_answers(parquet_path: str = GSM8K_TRAIN_PARQUET) -> dict:
+    """
+    qid -> reference answer of the GSM8K train questions.
+
+    For reports written after a run only. Nothing that selects labels or trains may call this.
+    """
+    df = pd.read_parquet(parquet_path, columns=["answer"])
+    return {f"gsm8k_train_{idx}": _gsm8k_reference(row['answer']) for idx, row in df.iterrows()}
 
 
 def load_svamp(path_or_name: str = "ChilleD/SVAMP"):
@@ -144,10 +191,15 @@ def load_from_huggingface(dataset_name: str):
 
 
 def load_benchmark(dataset_name: str):
-    """Questions of the named benchmark: gsm8k, cqa, math500, any *svamp* id, or a HuggingFace dataset id."""
+    """
+    Questions of the named benchmark: gsm8k, gsm8k_train (unlabelled train questions), cqa, math500,
+    any *svamp* id, or a HuggingFace dataset id.
+    """
     name = dataset_name.lower()
     if name == "gsm8k":
         return load_gsm8k()
+    elif name == "gsm8k_train":
+        return load_gsm8k_train_pool()
     elif name == "cqa":
         return load_commonsenseqa()
     elif name == "math500":

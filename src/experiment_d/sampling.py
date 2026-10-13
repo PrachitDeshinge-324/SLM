@@ -8,7 +8,11 @@ from src.experiment_d.model_loading import model_device
 
 
 class StopAfterBoxedAnswer(StoppingCriteria):
-    """Stops a sequence once its last \\boxed{...} is closed (used for MATH-500)."""
+    """
+    Stops a sequence once its last \\boxed{...} is closed (used for MATH-500).
+
+    prompt_length: where the answer starts in each row, one int for the whole batch or one per row.
+    """
 
     def __init__(self, tokenizer, prompt_length):
         self.tokenizer = tokenizer
@@ -16,8 +20,9 @@ class StopAfterBoxedAnswer(StoppingCriteria):
 
     def __call__(self, input_ids, scores, **kwargs):
         should_stop = []
-        for sequence in input_ids:
-            generated = sequence[self.prompt_length:][-256:]
+        for row, sequence in enumerate(input_ids):
+            start = self.prompt_length if isinstance(self.prompt_length, int) else self.prompt_length[row]
+            generated = sequence[start:][-256:]
             text = self.tokenizer.decode(generated, skip_special_tokens=True)
             start = text.rfind("\\boxed{")
             if start < 0:

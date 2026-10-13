@@ -147,7 +147,7 @@ def get_generic_messages(question: str, choices: list = None) -> list[dict]:
 
 def get_messages(dataset_name: str, question: str, choices: list = None):
     name = dataset_name.lower()
-    if name == "gsm8k" or "svamp" in name:
+    if name.startswith("gsm8k") or "svamp" in name:
         return get_gsm8k_messages(question)
     elif name == "cqa":
         return get_cqa_messages(question, choices)

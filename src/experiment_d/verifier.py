@@ -51,3 +51,19 @@ def parse_verdict(response):
         if found:
             return found[-1].lower() == "correct"
     return None
+
+
+def split_stale_verdicts(judged: list, traces: list) -> tuple:
+    """
+    (reusable, stale) verifier output records, given the traces now in the verifier dataset.
+
+    A verdict is stale when the solution it judged is no longer the one stored for its
+    (question, trace_index), e.g. after a truncated sample was continued to a higher token limit.
+    """
+    current = {(trace.get("question"), trace.get("trace_index")): trace.get("student_solution") for trace in traces}
+    reusable, stale = [], []
+    for record in judged:
+        key = (record.get("question"), record.get("trace_index"))
+        is_stale = key in current and record.get("student_solution") != current[key]
+        (stale if is_stale else reusable).append(record)
+    return reusable, stale

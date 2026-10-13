@@ -6,6 +6,9 @@ accelerate>=1.0.0
 # Quantization (CUDA only)
 bitsandbytes>=0.45.0
 
+# LoRA adapters (self-training)
+peft>=0.13.0
+
 # Data
 pandas>=2.0.0
 pyarrow>=14.0.0

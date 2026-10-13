@@ -36,17 +36,20 @@ colab drivemount -s "${SESSION}"
 # NotebookAccessError immediately. Push HF_TOKEN as a plain env var instead --
 # built locally and piped in so it's never echoed to the terminal or logs.
 echo "Setting experiment args and HF token on the session..."
-python3 - "$EXPERIMENT_ARGS" "$HF_TOKEN" <<'PYEOF' | colab exec -s "${SESSION}"
+python3 - "$EXPERIMENT_ARGS" "$HF_TOKEN" "${DRIVE_DIR:-}" <<'PYEOF' | colab exec -s "${SESSION}"
 import sys
-exp_args, hf_token = sys.argv[1], sys.argv[2]
+exp_args, hf_token, drive_dir = sys.argv[1], sys.argv[2], sys.argv[3]
 print(f'import os; os.environ["EXPERIMENT_ARGS"] = {exp_args!r}')
 if hf_token:
     print(f'os.environ["HF_TOKEN"] = {hf_token!r}')
+# Optional: write to another Drive folder (e.g. a clean rerun that must not resume old files).
+if drive_dir:
+    print(f'os.environ["DRIVE_DIR"] = {drive_dir!r}')
 PYEOF
 
 echo "Running colab_entrypoint.py (clones the repo, logs + results go to Drive)..."
 colab exec -s "${SESSION}" -f "$(dirname "$0")/colab_entrypoint.py"
 
 echo "Experiment finished."
-echo "  Logs and results are on Drive under Experiment_D_Results/"
+echo "  Logs and results are on Drive under ${DRIVE_DIR:-results}/"
 echo "  You can check them from any device via Google Drive."

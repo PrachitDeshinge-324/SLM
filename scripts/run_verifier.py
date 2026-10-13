@@ -28,7 +28,7 @@ from src.experiment_d.model_loading import PRECISIONS, load_model_and_tokenizer
 from src.experiment_d.prompts import build_prompt
 from src.experiment_d.run_files import verifier_dataset_path, verifier_output_path
 from src.experiment_d.sampling import count_generated_tokens
-from src.experiment_d.verifier import get_verifier_messages, parse_verdict
+from src.experiment_d.verifier import get_verifier_messages, parse_verdict, split_stale_verdicts
 
 
 def parse_args():
@@ -45,9 +45,9 @@ def parse_args():
     return parser.parse_args()
 
 
-def already_judged(output_file) -> set:
-    """(question, trace_index) keys present in a possibly partial output file."""
-    keys = set()
+def read_judged(output_file) -> list:
+    """Records of a possibly partial output file (unreadable lines are skipped)."""
+    records = []
     if os.path.exists(output_file):
         print(f"Found existing output file: {output_file}. Scanning for already evaluated traces...")
         try:
@@ -57,16 +57,33 @@ def already_judged(output_file) -> set:
                     if not line_str:
                         continue
                     try:
-                        rec = json.loads(line_str)
-                        q = rec.get("question")
-                        t_idx = rec.get("trace_index")
-                        if q is not None and t_idx is not None:
-                            keys.add((q, t_idx))
+                        records.append(json.loads(line_str))
                     except Exception:
                         pass
         except Exception as e:
             print(f"Warning reading output file: {e}")
-    return keys
+    return records
+
+
+def set_aside_stale_verdicts(output_file, judged: list, traces: list) -> list:
+    """
+    Removes verdicts on solutions that have since changed from the output file, so those traces are
+    judged again. They are appended to <output name>_backup_stale.jsonl. Returns the records kept.
+    """
+    reusable, stale = split_stale_verdicts(judged, traces)
+    if not stale:
+        return judged
+    stale_file = output_file.with_name(f"{output_file.stem}_backup_stale.jsonl")
+    with open(stale_file, 'a') as f:
+        for record in stale:
+            f.write(json.dumps(record) + '\n')
+    temp_file = output_file.with_name(output_file.name + ".tmp")
+    with open(temp_file, 'w') as f:
+        for record in reusable:
+            f.write(json.dumps(record) + '\n')
+    os.replace(temp_file, output_file)
+    print(f"{len(stale)} traces changed since they were judged; old verdicts moved to {stale_file.name}.")
+    return reusable
 
 
 def judge_batch(model, tokenizer, traces: list, max_new_tokens: int, repetition_penalty: float):
@@ -167,11 +184,15 @@ def main():
     print(f"Loading input file: {input_file}")
     with open(input_file, 'r') as f:
         traces = [json.loads(line) for line in f]
-    if args.limit is not None:
-        traces = traces[:args.limit]
 
     # --- Robust Key-Based Resume Functionality ---
-    judged = already_judged(output_file)
+    judged_records = set_aside_stale_verdicts(output_file, read_judged(output_file), traces)
+    judged = {
+        (record.get("question"), record.get("trace_index")) for record in judged_records
+        if record.get("question") is not None and record.get("trace_index") is not None
+    }
+    if args.limit is not None:
+        traces = traces[:args.limit]
     if judged:
         initial_count = len(traces)
         traces = [trace for trace in traces if (trace.get("question"), trace.get("trace_index")) not in judged]

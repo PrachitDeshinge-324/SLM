@@ -6,10 +6,18 @@ Where run files live and how they are named.
     results/<dataset>/verifier_output/<model>/verifier_output_<same name>
 
 <model> and <dataset> are the HuggingFace ids with '/' replaced by '_'.
+
+Self-training keeps one such tree per round, plus that round's adapter:
+
+    results/self_training/<experiment>/round<k>/<the layout above>
+    results/self_training/<experiment>/round<k>/adapters/<model>_<precision>/
 """
+import hashlib
 import json
 import re
 from pathlib import Path
+
+SELF_TRAINING_DIR = "self_training"
 
 RUN_NAME_PATTERN = re.compile(
     r"^(?:verifier_output_|verifier_)?(?P<model>.+)_(?P<precision>16bit|8bit|4bit)_(?P<dataset>.+)_n(?P<n_samples>\d+)\.jsonl$"
@@ -67,6 +75,47 @@ def parse_run_name(file_name: str):
 def is_legacy_file(path) -> bool:
     """Backup copies of superseded runs are never analysed."""
     return "_backup" in Path(path).name
+
+
+def self_training_round_dir(results_dir, experiment: str, round_index) -> Path:
+    """Results root of one self-training round (round 0 is the untrained model)."""
+    return Path(results_dir) / SELF_TRAINING_DIR / experiment / f"round{int(round_index)}"
+
+
+def adapter_dir(results_dir, experiment: str, round_index, model: str, precision: str) -> Path:
+    """Where the adapter trained in a round is saved, next to that round's run files."""
+    return self_training_round_dir(results_dir, experiment, round_index) / "adapters" / f"{safe_name(model)}_{precision}"
+
+
+def is_self_training_file(path) -> bool:
+    """Self-training rounds reuse the run names of the main runs, so the main reports leave them out."""
+    return SELF_TRAINING_DIR in Path(path).parts
+
+
+def adapter_fingerprint(path) -> str:
+    """Hash of an adapter's weights, so a run file records exactly which adapter produced it."""
+    weights = [file for file in sorted(Path(path).glob("adapter_model.*")) if file.is_file()]
+    if not weights:
+        raise FileNotFoundError(f"No adapter weights found in {path}.")
+    digest = hashlib.sha256()
+    for file in weights:
+        with file.open("rb") as handle:
+            for block in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(block)
+    return digest.hexdigest()
+
+
+def read_question_records(path) -> list:
+    """The per-question records of a generator run file, in file order (the header is skipped)."""
+    records = []
+    with Path(path).open() as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if "raw_samples" in record:
+                records.append(record)
+    return records
 
 
 def read_run_config(path) -> dict:

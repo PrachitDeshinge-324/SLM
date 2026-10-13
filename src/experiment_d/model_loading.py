@@ -34,10 +34,13 @@ def select_device(model_id: str = ""):
     return "cpu"
 
 
-def load_model_and_tokenizer(model_id: str, precision: str = "16bit"):
+def load_model_and_tokenizer(model_id: str, precision: str = "16bit", adapter_path=None):
     """
     Loads a model and tokenizer based on the requested precision.
     precision can be '16bit', '8bit', or '4bit'.
+
+    adapter_path: optional folder of a LoRA adapter trained on this model. It is applied on top of
+    the base weights and not merged into them, so a quantized base stays quantized.
 
     Note: 8-bit and 4-bit require bitsandbytes and typically a CUDA backend.
     """
@@ -101,6 +104,10 @@ def load_model_and_tokenizer(model_id: str, precision: str = "16bit"):
         print(f"SDPA is unavailable for {model_id}; retrying with the model default attention: {error}")
         model_kwargs.pop("attn_implementation")
         model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
+    if adapter_path:
+        from peft import PeftModel
+        model = PeftModel.from_pretrained(model, str(adapter_path))
+        print(f"Applied LoRA adapter from {adapter_path} (not merged into the {precision} base).")
     model.eval()
     device_map = getattr(model, "hf_device_map", None)
     if device_map and any(str(mapped_device) in {"cpu", "disk"} for mapped_device in device_map.values()):

@@ -9,10 +9,12 @@ Findings, decisions and open questions: [RESEARCH_DOSSIER.md](RESEARCH_DOSSIER.m
 | Path | What it holds |
 |---|---|
 | `run_pipeline.sh` | Runs the three pipeline stages for one model, one precision, one dataset |
+| `run_self_training.sh` | Label-free self-training rounds for one model at one precision (section below) |
 | `scripts/` | One file per pipeline stage and per report (table below) |
 | `src/experiment_d/` | The library the scripts are built from (table below) |
 | `colab/` | Launching a run on Google Colab from your own machine |
 | `notebooks/run_pipeline_on_colab.ipynb` | The same pipeline, cell by cell, for a manual Colab session |
+| `notebooks/self_training_4bit_pilot.ipynb` | The self-training pilot for a manual Colab session |
 | `analysis/` | Dated analyses behind the dossier, with their saved outputs |
 | `tests/` | Unit tests |
 | `data/` | GSM8K and CommonsenseQA files; MATH-500 and SVAMP are downloaded |
@@ -42,6 +44,19 @@ Findings, decisions and open questions: [RESEARCH_DOSSIER.md](RESEARCH_DOSSIER.m
 
 Reports never trust the metrics stored inside a run file. They re-score every run from its raw outputs with the current code, drop truncated samples, and compare precisions on the questions they share.
 
+### Self-training
+
+`run_self_training.sh` asks whether a model can improve from its own answers, with no labels:
+
+| Round | What happens | Written under `results/self_training/<experiment>/round<k>/` |
+|---|---|---|
+| 0 | The untrained model answers the test questions and an unlabelled pool of train questions | `gsm8k/generator/...`, `gsm8k_train/generator/...` |
+| k ≥ 1 | `scripts/train_self_labels.py` labels the round k−1 pool answers by majority vote, keeps questions with agreement ≥ 0.75 and trains a fresh LoRA adapter on those solutions; the model with that adapter answers the test questions and the pool again | `adapters/<model>_<precision>/`, then the same two run files |
+
+`scripts/report_self_training.py` compares every round with round 0 on the same test questions and writes `report_<model>_<precision>.txt` next to the rounds.
+
+The pool (`gsm8k_train`) is loaded without its answers and without the question the prompt uses as its worked example, and training refuses to start if a pool question is also a test question. The test questions are only ever evaluated. The report's label-accuracy column is the one place the train answers are read, after the run.
+
 ### Library modules (`src/experiment_d/`)
 
 | Module | Responsibility |
@@ -53,6 +68,8 @@ Reports never trust the metrics stored inside a run file. They re-score every ru
 | `answer_extraction.py` | Pull the final answer out of a generated solution |
 | `answer_matching.py` | Decide whether two answers are equal (numbers, fractions, LaTeX, symbolic) |
 | `self_consistency.py` | Majority vote and agreement over the N answers |
+| `self_training.py` | Pick a model's own vote-filtered solutions as training text; check the pool shares no question with the test set |
+| `lora_training.py` | Train a LoRA adapter on a frozen base at any precision |
 | `verifier.py` | The verifier prompt and the parser for its verdict |
 | `rescoring.py` | Rebuild metrics and labels from stored raw outputs |
 | `verifier_metrics.py` | Verifier metrics (false positive rate, MCC, guided majority) from relabelled traces |
@@ -75,6 +92,13 @@ bash run_pipeline.sh --model Qwen/Qwen3.5-0.8B --precision 4bit --dataset gsm8k 
 # the same on Google Colab, launched from your machine
 EXPERIMENT_ARGS="--model Qwen/Qwen3.5-0.8B --precision 4bit --dataset gsm8k --n_samples 8 --limit 0" \
 GPU=L4 HF_TOKEN=hf_xxx bash colab/launch_colab_session.sh
+```
+
+```bash
+# self-training: 3 rounds at 4-bit on 200 train questions, tested on 100 test questions
+bash run_self_training.sh --model Qwen/Qwen3.5-0.8B --precision 4bit --experiment qwen08_4bit_pilot \
+     --rounds 3 --pool_limit 200 --eval_limit 100 --results_dir results
+python scripts/report_self_training.py --model Qwen/Qwen3.5-0.8B --precision 4bit --experiment qwen08_4bit_pilot
 ```
 
 ```bash

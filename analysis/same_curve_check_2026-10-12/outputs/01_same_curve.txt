@@ -1,0 +1,227 @@
+=== (a) Cell level, GSM8K 8-sample runs. Do quantized cells sit on the curve traced by the 16-bit models?
+    x = per-sample accuracy. For each metric a line is fitted through the 16-bit points of the OTHER five models;
+    along-curve = slope * change in x; off-curve = actual change - along-curve (0 = the model moved along the curve).
+    Intervals resample the model's own questions and hold the slope fixed, so they are too narrow where the change in x is large (Gemma at 4-bit).
+
+16-bit reference points: model | nQ | per-sample accuracy | mean agreement | yield at agreement>=0.75 | majority accuracy | label precision at >=0.75
+  Qwen3.5-0.8B  | 1319 | 0.488 | 0.563 | 0.383 | 0.666 | 0.968
+  Qwen3.5-2B    |  100 | 0.685 | 0.730 | 0.680 | 0.780 | 0.941
+  DS-R1-1.5B    |  200 | 0.716 | 0.743 | 0.690 | 0.890 | 0.986
+  gemma-3-1b-it |  200 | 0.474 | 0.576 | 0.445 | 0.600 | 0.899
+  Llama-1B      | 1000 | 0.377 | 0.515 | 0.288 | 0.480 | 0.868
+  Llama-3B      | 1319 | 0.718 | 0.783 | 0.679 | 0.807 | 0.948
+
+--- mean agreement: line through the six 16-bit points: slope 0.76, intercept +0.217; between-model scatter (RMS distance of a held-out 16-bit model from the others' line) 2.5 pts
+    model | prec | change in x | actual change | along-curve | off-curve [95% CI] | held-out 16-bit model's own distance from the line
+    Qwen3.5-0.8B  | 8bit |  -1.5 |  -1.3 |  -1.1 |  -0.2 [ -0.8, +0.4]  |  -2.9
+    Qwen3.5-0.8B  | 4bit |  -8.4 |  -7.2 |  -6.2 |  -1.1 [ -1.8, -0.4]* |  -2.9
+    Qwen3.5-2B    | 8bit |  -1.9 |  -0.9 |  -1.4 |  +0.6 [ -1.3, +2.6]  |  -0.6
+    Qwen3.5-2B    | 4bit |  -3.3 |  -0.6 |  -2.5 |  +1.8 [ -0.1, +4.1]  |  -0.6
+    DS-R1-1.5B    | 8bit |  +0.1 |  -0.1 |  +0.0 |  -0.1 [ -1.1, +0.9]  |  -2.1
+    DS-R1-1.5B    | 4bit |  -0.9 |  -0.6 |  -0.7 |  +0.1 [ -1.1, +1.4]  |  -2.1
+    gemma-3-1b-it | 8bit |  -3.4 |  -3.9 |  -2.6 |  -1.3 [ -3.4, +0.9]  |  +0.2
+    gemma-3-1b-it | 4bit | -19.5 | -14.2 | -14.8 |  +0.6 [ -2.3, +3.4]  |  +0.2
+    Llama-1B      | 8bit |  -1.6 |  -0.9 |  -1.3 |  +0.5 [ -0.3, +1.3]  |  +3.0
+    Llama-1B      | 4bit |  -2.7 |  -3.3 |  -2.2 |  -1.1 [ -2.1, -0.1]* |  +3.0
+    Llama-3B      | 8bit |  +0.0 |  -0.2 |  +0.0 |  -0.3 [ -0.8, +0.3]  |  +3.7
+    Llama-3B      | 4bit |  -1.1 |  -1.1 |  -0.8 |  -0.3 [ -0.9, +0.3]  |  +3.7
+
+--- yield at agreement>=0.75: line through the six 16-bit points: slope 1.18, intercept -0.155; between-model scatter (RMS distance of a held-out 16-bit model from the others' line) 3.5 pts
+    model | prec | change in x | actual change | along-curve | off-curve [95% CI] | held-out 16-bit model's own distance from the line
+    Qwen3.5-0.8B  | 8bit |  -1.5 |  -2.7 |  -1.8 |  -0.9 [ -2.7, +0.9]  |  -5.3
+    Qwen3.5-0.8B  | 4bit |  -8.4 | -10.4 |  -9.6 |  -0.8 [ -2.7, +1.1]  |  -5.3
+    Qwen3.5-2B    | 8bit |  -1.9 |  -2.0 |  -2.2 |  +0.2 [ -5.8, +6.0]  |  +3.2
+    Qwen3.5-2B    | 4bit |  -3.3 |  -5.0 |  -3.7 |  -1.3 [ -7.7, +5.1]  |  +3.2
+    DS-R1-1.5B    | 8bit |  +0.1 |  -2.0 |  +0.1 |  -2.1 [ -6.7, +2.8]  |  -0.4
+    DS-R1-1.5B    | 4bit |  -0.9 |  -3.5 |  -1.0 |  -2.5 [ -7.3, +2.4]  |  -0.4
+    gemma-3-1b-it | 8bit |  -3.4 |  -6.0 |  -4.2 |  -1.8 [ -6.4, +2.7]  |  +5.3
+    gemma-3-1b-it | 4bit | -19.5 | -19.0 | -24.1 |  +5.1 [ -0.7,+10.7]  |  +5.3
+    Llama-1B      | 8bit |  -1.6 |  -1.9 |  -1.9 |  +0.0 [ -1.9, +1.9]  |  -0.7
+    Llama-1B      | 4bit |  -2.7 |  -4.8 |  -3.1 |  -1.7 [ -3.9, +0.5]  |  -0.7
+    Llama-3B      | 8bit |  +0.0 |  -0.5 |  +0.0 |  -0.5 [ -2.1, +1.1]  |  -2.5
+    Llama-3B      | 4bit |  -1.1 |  -1.4 |  -1.4 |  -0.1 [ -1.9, +1.7]  |  -2.5
+
+--- majority accuracy: line through the six 16-bit points: slope 0.98, intercept +0.138; between-model scatter (RMS distance of a held-out 16-bit model from the others' line) 5.5 pts
+    model | prec | change in x | actual change | along-curve | off-curve [95% CI] | held-out 16-bit model's own distance from the line
+    Qwen3.5-0.8B  | 8bit |  -1.5 |  -1.7 |  -1.6 |  -0.1 [ -2.0, +1.8]  |  +6.4
+    Qwen3.5-0.8B  | 4bit |  -8.4 |  -7.2 |  -8.7 |  +1.5 [ -0.5, +3.4]  |  +6.4
+    Qwen3.5-2B    | 8bit |  -1.9 |  +1.0 |  -1.9 |  +2.9 [ -0.8, +6.8]  |  -4.3
+    Qwen3.5-2B    | 4bit |  -3.3 |  +0.0 |  -3.3 |  +3.3 [ -2.1, +9.0]  |  -4.3
+    DS-R1-1.5B    | 8bit |  +0.1 |  +0.0 |  +0.1 |  -0.1 [ -3.0, +3.0]  |  +7.5
+    DS-R1-1.5B    | 4bit |  -0.9 |  -2.5 |  -0.8 |  -1.7 [ -5.5, +2.3]  |  +7.5
+    gemma-3-1b-it | 8bit |  -3.4 |  -2.0 |  -3.4 |  +1.4 [ -2.8, +5.6]  |  -0.5
+    gemma-3-1b-it | 4bit | -19.5 | -23.0 | -19.1 |  -3.9 [ -9.1, +0.7]  |  -0.5
+    Llama-1B      | 8bit |  -1.6 |  -0.7 |  -1.4 |  +0.7 [ -1.1, +2.8]  |  -6.0
+    Llama-1B      | 4bit |  -2.7 |  -0.8 |  -2.3 |  +1.5 [ -0.5, +3.7]  |  -6.0
+    Llama-3B      | 8bit |  +0.0 |  +0.4 |  +0.0 |  +0.3 [ -1.1, +1.8]  |  -5.5
+    Llama-3B      | 4bit |  -1.1 |  -0.1 |  -1.2 |  +1.1 [ -0.2, +2.6]  |  -5.5
+
+--- label precision at >=0.75: line through the six 16-bit points: slope 0.22, intercept +0.811; between-model scatter (RMS distance of a held-out 16-bit model from the others' line) 4.1 pts
+    model | prec | change in x | actual change | along-curve | off-curve [95% CI] | held-out 16-bit model's own distance from the line
+    Qwen3.5-0.8B  | 8bit |  -1.5 |  -0.2 |  -0.4 |  +0.2 [ -1.6, +1.9]  |  +6.9
+    Qwen3.5-0.8B  | 4bit |  -8.4 |  -1.7 |  -2.3 |  +0.6 [ -1.7, +2.8]  |  +6.9
+    Qwen3.5-2B    | 8bit |  -1.9 |  +1.3 |  -0.4 |  +1.8 [ -2.6, +6.9]  |  -2.4
+    Qwen3.5-2B    | 4bit |  -3.3 |  -2.1 |  -0.8 |  -1.3 [ -6.5, +3.5]  |  -2.4
+    DS-R1-1.5B    | 8bit |  +0.1 |  +0.7 |  +0.0 |  +0.7 [ -0.3, +2.3]  |  +3.1
+    DS-R1-1.5B    | 4bit |  -0.9 |  +0.7 |  -0.2 |  +0.8 [ -0.2, +2.5]  |  +3.1
+    gemma-3-1b-it | 8bit |  -3.4 |  +1.0 |  -0.7 |  +1.7 [ -3.9, +8.1]  |  -1.9
+    gemma-3-1b-it | 4bit | -19.5 |  -9.5 |  -3.9 |  -5.6 [-16.3, +4.2]  |  -1.9
+    Llama-1B      | 8bit |  -1.6 |  +1.3 |  -0.2 |  +1.5 [ -1.7, +4.9]  |  -5.1
+    Llama-1B      | 4bit |  -2.7 |  +3.2 |  -0.3 |  +3.5 [ -0.5, +7.7]  |  -5.1
+    Llama-3B      | 8bit |  +0.0 |  +0.6 |  +0.0 |  +0.6 [ -0.5, +1.7]  |  -2.8
+    Llama-3B      | 4bit |  -1.1 |  +0.0 |  -0.3 |  +0.3 [ -1.2, +1.6]  |  -2.8
+
+
+=== (b) Question level. At the same agreement, is the voted answer right as often as at 16-bit?
+    change in majority accuracy  = distribution part (the model lands on lower agreement levels) + curve part (same agreement, different accuracy)
+    change in label precision at agreement>=0.75 splits the same way. Curve part = 0 means the model moved along its own 16-bit calibration curve.
+    Last column: share of the run's questions in an agreement bin that is empty in the reference run (nearest bin used).
+
+--- 4bit against 16-bit
+cell | nQ | d majority = distribution + curve part [95% CI] | d label precision = mix + curve part [95% CI] | empty-bin share
+ChilleD Qwen3.5-0.8B  n8  |  100 |  -5.0 =  -2.6 +  -2.4 [-10.4, +6.7]  |  +5.7 =  -1.9 +  +7.6 [ +0.0,+17.8]  | 0.00
+cqa     Qwen3.5-0.8B  n8  | 1221 |  -2.1 =  -5.9 +  +3.8 [ +1.3, +6.3]* |  +0.5 =  -3.2 +  +3.8 [ +0.4, +7.0]* | 0.00
+cqa     Llama-1B      n16 | 1221 |  +0.2 =  -1.3 +  +1.5 [ -0.7, +3.9]  |  +0.4 =  -1.4 +  +1.7 [ -1.1, +4.7]  | 0.00
+gsm8k   Qwen3.5-0.8B  n8  | 1319 |  -7.2 =  -7.4 +  +0.2 [ -2.4, +2.7]  |  -1.7 =  -0.3 +  -1.4 [ -3.9, +0.9]  | 0.00
+gsm8k   Qwen3.5-2B    n8  |  112 |  +0.9 =  -0.3 +  +1.2 [ -6.4,+10.1]  |  -1.8 =  +1.4 +  -3.2 [ -8.0, +1.5]  | 0.00
+gsm8k   DS-R1-1.5B    n8  |  200 |  -2.5 =  -0.7 +  -1.8 [ -6.6, +3.1]  |  +0.7 =  +0.1 +  +0.6 [ -0.1, +2.0]  | 0.00
+gsm8k   gemma-3-1b-it n8  |  200 | -23.0 = -11.3 + -11.7 [-20.6, -3.0]* |  -9.5 =  -4.4 +  -5.1 [-19.0, +9.4]  | 0.00
+gsm8k   Llama-1B      n8  | 1000 |  -0.8 =  -3.5 +  +2.7 [ -0.1, +5.6]  |  +3.2 =  -2.1 +  +5.3 [ +0.8,+10.4]* | 0.00
+gsm8k   Llama-3B      n8  | 1319 |  -0.1 =  -0.8 +  +0.7 [ -1.0, +2.6]  |  +0.0 =  -0.2 +  +0.2 [ -1.3, +1.7]  | 0.00
+math500 DS-R1-1.5B    n8  |  100 |  +0.0 =  +1.5 +  -1.5 [ -9.4, +6.3]  |  +1.7 =  -0.0 +  +1.7 [ -1.7, +7.0]  | 0.00
+  pooled curve part of majority accuracy  (all cells, 10 cells): +0.82 [-0.74,+2.38]  tau 1.56
+  pooled curve part of label precision    (all cells, 10 cells): +0.87 [-0.41,+2.16]  tau 1.23
+  pooled curve part of majority accuracy  (without Gemma, 9 cells): +1.32 [+0.28,+2.36]  tau 0.35
+  pooled curve part of label precision    (without Gemma, 9 cells): +0.93 [-0.38,+2.24]  tau 1.26
+  pooled curve part of majority accuracy  (full test sets only, 5 cells): +1.63 [+0.41,+2.85]  tau 0.69
+  pooled curve part of label precision    (full test sets only, 5 cells): +1.33 [-0.63,+3.30]  tau 1.71
+
+--- 8bit against 16-bit
+cell | nQ | d majority = distribution + curve part [95% CI] | d label precision = mix + curve part [95% CI] | empty-bin share
+ChilleD Qwen3.5-0.8B  n8  |  100 |  -2.0 =  -0.5 +  -1.5 [ -8.5, +6.4]  |  -2.0 =  -1.2 +  -0.9 [ -7.6, +6.9]  | 0.00
+cqa     Qwen3.5-0.8B  n8  | 1221 |  -1.0 =  -2.9 +  +1.9 [ -0.6, +4.4]  |  -0.5 =  -1.7 +  +1.3 [ -1.8, +4.2]  | 0.00
+gsm8k   Qwen3.5-0.8B  n8  | 1319 |  -1.7 =  -1.7 +  +0.0 [ -2.3, +2.4]  |  -0.2 =  +0.1 +  -0.3 [ -2.0, +1.5]  | 0.00
+gsm8k   Qwen3.5-2B    n8  |  100 |  +1.0 =  -0.9 +  +1.9 [ -3.3, +8.4]  |  +1.3 =  -1.1 +  +2.4 [ -3.1, +8.8]  | 0.00
+gsm8k   DS-R1-1.5B    n8  |  200 |  +0.0 =  -0.2 +  +0.2 [ -3.2, +4.5]  |  +0.7 =  +0.0 +  +0.7 [ -0.2, +2.2]  | 0.00
+gsm8k   gemma-3-1b-it n8  |  200 |  -2.0 =  -4.2 +  +2.2 [ -3.9, +8.2]  |  +1.0 =  -2.1 +  +3.1 [ -3.3,+10.3]  | 0.00
+gsm8k   Llama-1B      n8  | 1000 |  -0.7 =  -0.9 +  +0.2 [ -2.3, +2.6]  |  +1.3 =  -1.0 +  +2.3 [ -1.5, +6.1]  | 0.00
+gsm8k   Llama-3B      n8  | 1319 |  +0.4 =  -0.2 +  +0.6 [ -1.1, +2.1]  |  +0.6 =  -0.0 +  +0.7 [ -0.4, +1.9]  | 0.00
+math500 DS-R1-1.5B    n8  |  100 |  +5.0 =  +4.7 +  +0.3 [ -6.4, +6.8]  |  +0.4 =  +1.3 +  -1.0 [ -7.0, +4.3]  | 0.00
+  pooled curve part of majority accuracy  (all cells, 9 cells): +0.63 [-0.34,+1.60]  tau 0.00
+  pooled curve part of label precision    (all cells, 9 cells): +0.61 [-0.11,+1.33]  tau 0.00
+  pooled curve part of majority accuracy  (without Gemma, 8 cells): +0.59 [-0.39,+1.57]  tau 0.00
+  pooled curve part of label precision    (without Gemma, 8 cells): +0.58 [-0.14,+1.30]  tau 0.00
+  pooled curve part of majority accuracy  (full test sets only, 4 cells): +0.62 [-0.44,+1.68]  tau 0.00
+  pooled curve part of label precision    (full test sets only, 4 cells): +0.57 [-0.31,+1.45]  tau 0.00
+
+--- the same contrasts in the 16-sample runs (a second pair of runs for cells that already appear above)
+cell | prec | nQ | d majority = distribution + curve part [95% CI] | d label precision = mix + curve part [95% CI] | empty-bin share
+cqa     Qwen3.5-0.8B  n16 | 4bit | 1221 |  -2.5 =  -4.7 +  +2.2 [ -0.5, +4.9]  |  -1.8 =  -3.1 +  +1.3 [ -2.4, +4.9]  | 0.00
+cqa     Qwen3.5-0.8B  n16 | 8bit | 1221 |  +0.2 =  -2.6 +  +2.8 [ +0.9, +4.6]* |  +1.4 =  -1.6 +  +3.1 [ +0.7, +5.4]* | 0.00
+gsm8k   Qwen3.5-0.8B  n16 | 4bit | 1319 |  -7.4 =  -6.6 +  -0.7 [ -3.3, +1.6]  |  -0.2 =  -0.3 +  +0.2 [ -2.0, +2.6]  | 0.00
+gsm8k   Qwen3.5-0.8B  n16 | 8bit | 1319 |  +0.5 =  -0.8 +  +1.3 [ -0.6, +3.2]  |  -0.9 =  -0.2 +  -0.7 [ -2.4, +0.9]  | 0.00
+
+--- yardstick 1: two independent runs of the SAME model at the SAME precision (first 8 samples of the n16 run against the n8 run)
+cell | prec | nQ | d majority = distribution + curve part [95% CI] | d label precision = mix + curve part [95% CI] | empty-bin share
+cqa     Qwen3.5-0.8B  | 16bit | 1221 |  -0.2 =  -0.8 +  +0.5 [ -1.5, +2.5]  |  +0.1 =  -0.1 +  +0.2 [ -2.1, +2.4]  | 0.00
+cqa     Qwen3.5-0.8B  | 8bit  | 1221 |  +1.4 =  -0.6 +  +1.9 [ -0.6, +4.6]  |  +3.7 =  +0.1 +  +3.7 [ +0.7, +6.6]* | 0.00
+cqa     Qwen3.5-0.8B  | 4bit  | 1221 |  -2.1 =  +0.2 +  -2.3 [ -4.7, +0.2]  |  -1.3 =  -0.0 +  -1.2 [ -4.2, +1.9]  | 0.00
+cqa     Llama-1B      | 4bit  | 1221 |  +0.1 =  -0.2 +  +0.2 [ -1.9, +2.2]  |  -0.7 =  -0.1 +  -0.6 [ -3.0, +1.7]  | 0.00
+gsm8k   Qwen3.5-0.8B  | 16bit | 1319 |  -1.7 =  -0.8 +  -0.8 [ -3.0, +1.2]  |  +0.1 =  +0.0 +  +0.0 [ -1.8, +1.8]  | 0.00
+gsm8k   Qwen3.5-0.8B  | 8bit  | 1319 |  +0.2 =  +0.1 +  +0.1 [ -2.0, +2.2]  |  -1.2 =  -0.2 +  -1.0 [ -3.2, +1.0]  | 0.00
+gsm8k   Qwen3.5-0.8B  | 4bit  | 1319 |  -0.5 =  +0.9 +  -1.4 [ -3.8, +1.0]  |  +0.2 =  +0.2 +  -0.0 [ -2.3, +2.2]  | 0.00
+gsm8k   Llama-1B      | 16bit | 1000 |  +0.7 =  +1.0 +  -0.3 [ -2.8, +2.2]  |  +0.3 =  -0.7 +  +1.0 [ -2.8, +5.0]  | 0.00
+
+--- yardstick 2: two DIFFERENT models at 16-bit on GSM8K (the less accurate model against the more accurate one, shared questions)
+weaker model vs stronger model | nQ | d majority = distribution + curve part [95% CI] | d label precision = mix + curve part [95% CI] | empty-bin share
+Qwen3.5-0.8B  vs Qwen3.5-2B    |  200 | -13.5 = -12.1 +  -1.4 [ -8.6, +5.5]  |  +0.5 =  -2.4 +  +2.9 [ -3.7, +9.6]  | 0.00
+Qwen3.5-0.8B  vs DS-R1-1.5B    |  200 | -20.5 = -14.7 +  -5.8 [-14.4, +3.3]  |  -1.2 =  -0.0 +  -1.2 [ -5.0, +2.1]  | 0.00
+gemma-3-1b-it vs Qwen3.5-0.8B  |  200 |  -8.5 =  -0.4 +  -8.1 [-14.2, -1.7]* |  -7.4 =  +1.3 +  -8.8 [-14.6, -3.5]* | 0.00
+Llama-1B      vs Qwen3.5-0.8B  | 1000 | -19.1 =  -5.8 + -13.3 [-16.6, -9.9]* |  -9.8 =  +0.2 + -10.0 [-14.1, -6.1]* | 0.00
+Qwen3.5-0.8B  vs Llama-3B      | 1319 | -14.1 = -20.0 +  +5.9 [ +2.5, +9.2]* |  +2.1 =  -2.8 +  +4.9 [ +2.2, +7.6]* | 0.01
+Qwen3.5-2B    vs DS-R1-1.5B    |  200 |  -7.0 =  -4.4 +  -2.6 [ -8.4, +2.7]  |  -1.7 =  -0.1 +  -1.6 [ -5.5, +2.2]  | 0.00
+gemma-3-1b-it vs Qwen3.5-2B    |  200 | -22.0 = -12.5 +  -9.5 [-16.6, -2.0]* |  -7.0 =  +0.3 +  -7.3 [-14.3, -1.1]* | 0.00
+Llama-1B      vs Qwen3.5-2B    |  200 | -35.5 = -15.0 + -20.5 [-30.5, -9.9]* | -14.0 =  -1.3 + -12.8 [-23.0, -3.0]* | 0.00
+Qwen3.5-2B    vs Llama-3B      |  200 |  +0.0 =  -4.1 +  +4.1 [ -3.1,+11.4]  |  -0.9 =  -0.7 +  -0.2 [ -4.7, +4.5]  | 0.02
+gemma-3-1b-it vs DS-R1-1.5B    |  200 | -29.0 = -16.9 + -12.1 [-21.4, -3.4]* |  -8.7 =  -0.1 +  -8.5 [-14.9, -2.7]* | 0.00
+Llama-1B      vs DS-R1-1.5B    |  200 | -42.5 = -18.9 + -23.6 [-35.6,-12.4]* | -15.7 =  +0.1 + -15.8 [-26.1, -7.2]* | 0.00
+DS-R1-1.5B    vs Llama-3B      |  200 |  +7.0 =  -1.0 +  +8.0 [ +2.3,+14.1]* |  +0.8 =  -1.6 +  +2.4 [ -2.2, +9.0]  | 0.01
+Llama-1B      vs gemma-3-1b-it |  200 | -13.5 =  -5.3 +  -8.2 [-17.1, +0.9]  |  -7.1 =  -4.5 +  -2.6 [-14.1,+10.2]  | 0.00
+gemma-3-1b-it vs Llama-3B      |  200 | -22.0 = -15.5 +  -6.5 [-16.3, +3.3]  |  -7.9 =  -0.5 +  -7.4 [-14.7, -0.8]* | 0.09
+Llama-1B      vs Llama-3B      | 1000 | -32.8 = -26.3 +  -6.5 [-11.0, -2.0]* |  -7.8 =  -2.2 +  -5.6 [-10.1, -1.2]* | 0.00
+  curve part of majority accuracy  over 15 model pairs: median absolute 8.0 pts, range -23.6..+8.0, tau 8.26
+  curve part of label precision    over 15 model pairs: median absolute 5.6 pts, range -15.8..+4.9, tau 5.30
+
+
+=== (c) Sample level. Do wrong samples agree with each other more under quantization, and are they the same wrong answers?
+    within = P(two wrong samples of one question give the same answer), averaged over questions with >=2 wrong samples in both runs.
+    across = P(a wrong sample from one run and a wrong sample from the other give the same answer), sample pairs with the same index left out.
+    If quantization only makes the model wrong more often, within is unchanged and across equals within.
+    Last column: the left-out same-index pairs. A share far above 'across' means the two runs followed the same random numbers.
+
+--- 4bit (run) against 16-bit (reference)
+cell | questions | within (reference) | within (run) | difference [95% CI] | across | across - mean within [95% CI] | same-index pairs equal
+ChilleD Qwen3.5-0.8B  n8  |   41 | 0.305 | 0.325 |  +2.0 [-11.7,+14.7]  | 0.275 |  -3.9 [ -8.4, -0.0]* | 0.286 (n=105)
+cqa     Qwen3.5-0.8B  n8  |  764 | 0.557 | 0.491 |  -6.6 [ -8.9, -4.3]* | 0.492 |  -3.2 [ -4.0, -2.4]* | 0.774 (n=3779)
+cqa     Llama-1B      n16 |  814 | 0.636 | 0.625 |  -1.1 [ -3.3, +1.0]  | 0.594 |  -3.7 [ -4.7, -2.8]* | 0.622 (n=5852)
+gsm8k   Qwen3.5-0.8B  n8  |  716 | 0.202 | 0.164 |  -3.9 [ -6.2, -1.6]* | 0.168 |  -1.5 [ -2.5, -0.5]* | 0.166 (n=2216)
+gsm8k   Qwen3.5-2B    n8  |   27 | 0.495 | 0.489 |  -0.6 [-15.0,+13.9]  | 0.469 |  -2.4 [ -8.3, +2.5]  | 0.533 (n=75)
+gsm8k   DS-R1-1.5B    n8  |   32 | 0.391 | 0.283 | -10.7 [-26.1, +5.1]  | 0.342 |  +0.5 [ -5.3, +5.9]  | 0.438 (n=80)
+gsm8k   gemma-3-1b-it n8  |   69 | 0.421 | 0.265 | -15.6 [-26.0, -4.0]* | 0.130 | -21.3 [-28.2,-14.8]* | 0.121 (n=272)
+gsm8k   Llama-1B      n8  |  775 | 0.185 | 0.165 |  -2.0 [ -3.8, -0.2]* | 0.153 |  -2.2 [ -3.0, -1.5]* | 0.168 (n=4094)
+gsm8k   Llama-3B      n8  |  492 | 0.307 | 0.289 |  -1.8 [ -4.6, +1.1]  | 0.298 |  -0.1 [ -1.2, +1.0]  | 0.302 (n=1883)
+math500 DS-R1-1.5B    n8  |    6 | 0.367 | 0.508 | +14.1 [-21.0,+54.6]  | 0.338 |  -9.9 [-26.4, +0.2]  | 0.652 (n=23)
+
+--- 8bit (run) against 16-bit (reference)
+cell | questions | within (reference) | within (run) | difference [95% CI] | across | across - mean within [95% CI] | same-index pairs equal
+ChilleD Qwen3.5-0.8B  n8  |   44 | 0.311 | 0.329 |  +1.8 [ -6.7,+11.4]  | 0.326 |  +0.6 [ -1.9, +3.3]  | 0.476 (n=126)
+cqa     Qwen3.5-0.8B  n8  |  740 | 0.560 | 0.534 |  -2.6 [ -5.1, -0.2]* | 0.543 |  -0.4 [ -1.3, +0.5]  | 0.585 (n=3283)
+gsm8k   Qwen3.5-0.8B  n8  |  696 | 0.202 | 0.201 |  -0.1 [ -2.2, +2.2]  | 0.207 |  +0.5 [ -0.5, +1.4]  | 0.227 (n=2149)
+gsm8k   Qwen3.5-2B    n8  |   21 | 0.490 | 0.438 |  -5.2 [-19.8, +8.5]  | 0.527 |  +6.3 [ +2.7,+10.5]* | 0.490 (n=49)
+gsm8k   DS-R1-1.5B    n8  |   33 | 0.369 | 0.391 |  +2.2 [ -7.4,+12.2]  | 0.419 |  +3.9 [ +0.1, +7.4]* | 0.430 (n=79)
+gsm8k   gemma-3-1b-it n8  |   64 | 0.397 | 0.349 |  -4.8 [-14.4, +4.9]  | 0.337 |  -3.6 [ -7.2, -0.0]* | 0.360 (n=239)
+gsm8k   Llama-1B      n8  |  782 | 0.185 | 0.170 |  -1.5 [ -2.9, +0.0]  | 0.176 |  -0.2 [ -0.8, +0.3]  | 0.342 (n=4400)
+gsm8k   Llama-3B      n8  |  496 | 0.311 | 0.313 |  +0.2 [ -2.5, +3.0]  | 0.315 |  +0.3 [ -0.7, +1.3]  | 0.425 (n=2030)
+math500 DS-R1-1.5B    n8  |    8 | 0.400 | 0.323 |  -7.7 [-28.1,+13.8]  | 0.373 |  +1.2 [ -2.1, +6.7]  | 0.593 (n=27)
+
+--- yardstick 1: two independent runs of the SAME model at the SAME precision (n16 run, first 8 samples = run; n8 run = reference)
+cell | prec | questions | within (reference) | within (run) | difference [95% CI] | across | across - mean within [95% CI] | same-index pairs equal
+cqa     Qwen3.5-0.8B  | 16bit |  746 | 0.564 | 0.563 |  -0.1 [ -2.2, +2.0]  | 0.561 |  -0.3 [ -1.3, +0.7]  | 0.644 (n=3449)
+cqa     Qwen3.5-0.8B  | 8bit  |  773 | 0.537 | 0.536 |  -0.0 [ -2.5, +2.6]  | 0.519 |  -1.8 [ -2.9, -0.7]* | 0.550 (n=3273)
+cqa     Qwen3.5-0.8B  | 4bit  |  847 | 0.485 | 0.507 |  +2.2 [ -0.1, +4.4]  | 0.493 |  -0.3 [ -1.3, +0.7]  | 0.520 (n=3560)
+cqa     Llama-1B      | 4bit  |  697 | 0.621 | 0.631 |  +1.0 [ -1.8, +3.6]  | 0.616 |  -1.0 [ -2.2, +0.1]  | 0.652 (n=3078)
+gsm8k   Qwen3.5-0.8B  | 16bit |  687 | 0.202 | 0.210 |  +0.8 [ -1.6, +3.2]  | 0.209 |  +0.3 [ -0.8, +1.4]  | 0.227 (n=2081)
+gsm8k   Qwen3.5-0.8B  | 8bit  |  711 | 0.199 | 0.205 |  +0.6 [ -1.6, +2.9]  | 0.202 |  +0.1 [ -1.0, +1.1]  | 0.224 (n=2209)
+gsm8k   Qwen3.5-0.8B  | 4bit  |  838 | 0.165 | 0.163 |  -0.3 [ -2.2, +1.6]  | 0.174 |  +1.0 [ +0.2, +1.9]* | 0.183 (n=2571)
+gsm8k   Llama-1B      | 16bit |  762 | 0.187 | 0.185 |  -0.2 [ -2.0, +1.7]  | 0.178 |  -0.8 [ -1.5, -0.0]* | 0.171 (n=3984)
+
+--- yardstick 2: two DIFFERENT models at 16-bit on GSM8K
+run vs reference | questions | within (reference) | within (run) | difference [95% CI] | across | across - mean within [95% CI] | same-index pairs equal
+Qwen3.5-0.8B  vs Qwen3.5-2B    |   48 | 0.457 | 0.174 | -28.3 [-41.6,-16.3]* | 0.172 | -14.4 [-21.8, -8.0]* | 0.178 (n=129)
+Qwen3.5-0.8B  vs DS-R1-1.5B    |   43 | 0.358 | 0.177 | -18.2 [-30.1, -5.6]* | 0.153 | -11.5 [-17.4, -5.8]* | 0.192 (n=104)
+Qwen3.5-0.8B  vs gemma-3-1b-it |   61 | 0.398 | 0.208 | -19.0 [-29.2,-10.1]* | 0.129 | -17.4 [-23.4,-12.1]* | 0.187 (n=198)
+Qwen3.5-0.8B  vs Llama-1B      |  552 | 0.177 | 0.201 |  +2.4 [ -0.5, +5.1]  | 0.110 |  -8.0 [ -9.3, -6.6]* | 0.115 (n=2166)
+Qwen3.5-0.8B  vs Llama-3B      |  459 | 0.337 | 0.201 | -13.6 [-17.4,-10.0]* | 0.160 | -10.9 [-12.8, -9.1]* | 0.172 (n=1546)
+Qwen3.5-2B    vs DS-R1-1.5B    |   31 | 0.220 | 0.417 | +19.7 [ +4.7,+35.0]* | 0.179 | -13.9 [-23.1, -5.7]* | 0.274 (n=62)
+Qwen3.5-2B    vs gemma-3-1b-it |   34 | 0.341 | 0.441 | +10.1 [ -7.7,+27.7]  | 0.199 | -19.2 [-28.0,-11.4]* | 0.238 (n=101)
+Qwen3.5-2B    vs Llama-1B      |   57 | 0.135 | 0.435 | +30.0 [+19.6,+40.8]* | 0.114 | -17.0 [-22.8,-11.5]* | 0.144 (n=195)
+Qwen3.5-2B    vs Llama-3B      |   42 | 0.271 | 0.373 | +10.2 [ +0.8,+20.1]* | 0.209 | -11.3 [-18.4, -5.0]* | 0.220 (n=127)
+DS-R1-1.5B    vs gemma-3-1b-it |   30 | 0.340 | 0.326 |  -1.4 [-17.8,+14.5]  | 0.136 | -19.7 [-31.1,-10.5]* | 0.210 (n=81)
+DS-R1-1.5B    vs Llama-1B      |   50 | 0.148 | 0.337 | +18.9 [ +8.2,+29.9]* | 0.096 | -14.6 [-20.9, -8.9]* | 0.097 (n=175)
+DS-R1-1.5B    vs Llama-3B      |   37 | 0.325 | 0.321 |  -0.5 [-14.5,+13.7]  | 0.187 | -13.6 [-22.7, -5.8]* | 0.144 (n=111)
+gemma-3-1b-it vs Llama-1B      |   71 | 0.188 | 0.401 | +21.4 [+12.5,+30.8]* | 0.132 | -16.2 [-21.0,-12.1]* | 0.138 (n=312)
+gemma-3-1b-it vs Llama-3B      |   42 | 0.266 | 0.289 |  +2.4 [ -8.3,+14.1]  | 0.159 | -11.9 [-17.1, -7.3]* | 0.156 (n=154)
+Llama-1B      vs Llama-3B      |  415 | 0.320 | 0.154 | -16.7 [-20.0,-13.4]* | 0.141 |  -9.6 [-11.2, -7.9]* | 0.132 (n=1949)
+
+
+=== (d) Does the smaller model of a family lose more at 4-bit? GSM8K, questions that all four runs share.
+    Only two families have two sizes, so this is two comparisons, not a trend.
+family: small vs large | nQ | metric | 4-bit change, small | 4-bit change, large | small minus large [95% CI]
+Qwen3.5-0.8B  vs Qwen3.5-2B  |  112 | per-sample accuracy        |  -9.6 |  -2.5 |  -7.1 [-12.3, -2.2]*
+Qwen3.5-0.8B  vs Qwen3.5-2B  |  112 | yield at agreement>=0.75   | -10.7 |  -4.5 |  -6.3 [-17.0, +4.5] 
+Qwen3.5-0.8B  vs Qwen3.5-2B  |  112 | majority accuracy          | -15.2 |  +0.9 | -16.1 [-24.1, -8.9]*
+Qwen3.5-0.8B  vs Qwen3.5-2B  |  112 | label precision at >=0.75  |  -8.2 |  -1.8 |  -6.4 [-18.7, +3.1] 
+Llama-1B      vs Llama-3B    | 1000 | per-sample accuracy        |  -2.7 |  -1.1 |  -1.5 [ -3.1, +0.1] 
+Llama-1B      vs Llama-3B    | 1000 | yield at agreement>=0.75   |  -4.8 |  -2.0 |  -2.8 [ -6.1, +0.6] 
+Llama-1B      vs Llama-3B    | 1000 | majority accuracy          |  -0.8 |  +0.2 |  -1.0 [ -4.3, +2.3] 
+Llama-1B      vs Llama-3B    | 1000 | label precision at >=0.75  |  +3.2 |  +0.3 |  +2.9 [ -1.5, +7.8] 

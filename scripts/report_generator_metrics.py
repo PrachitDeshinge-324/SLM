@@ -19,7 +19,7 @@ import seaborn as sns
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.experiment_d.rescoring import rescore_record
-from src.experiment_d.run_files import is_legacy_file
+from src.experiment_d.run_files import is_legacy_file, is_self_training_file
 
 
 def analyze_file(filepath: str):
@@ -402,8 +402,10 @@ def main():
     args = parser.parse_args()
 
     all_files = glob.glob(os.path.join(args.results_dir, "**", "*.jsonl"), recursive=True)
-    # Exclude verifier files which are processed separately, and backup copies of superseded runs
-    files = [f for f in all_files if not os.path.basename(f).startswith("verifier") and not is_legacy_file(f)]
+    # Exclude verifier files which are processed separately, backup copies of superseded runs, and
+    # self-training rounds (they reuse the run names of the main runs; see report_self_training.py)
+    files = [f for f in all_files if not os.path.basename(f).startswith("verifier") and not is_legacy_file(f)
+             and not is_self_training_file(f)]
     
     if not files:
         print(f"No jsonl files found in {args.results_dir}")
