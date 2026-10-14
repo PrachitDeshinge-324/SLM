@@ -372,10 +372,7 @@ def compute_quantization_deltas(df: pd.DataFrame, runs: dict) -> pd.DataFrame:
         common = None
         if run is not None and base is not None:
             limits = {run["max_new_tokens"], base["max_new_tokens"]} - {None}
-            if run.get("engine", "hf") != base.get("engine", "hf"):
-                print(f"  Note: no delta for {row['model']} {row['precision']} on {row['dataset']} "
-                      f"(n={row['n_samples']}): sampling engines differ ({run.get('engine', 'hf')} vs {base.get('engine', 'hf')})")
-            elif len(limits) > 1:
+            if len(limits) > 1:
                 print(f"  Note: no delta for {row['model']} {row['precision']} on {row['dataset']} "
                       f"(n={row['n_samples']}): token limits differ {sorted(limits)}")
             else:
@@ -459,8 +456,6 @@ def main():
             paired_runs[(dataset, model, n_samples, precision)] = {
                 "per_question": per_question[list(DELTA_METRICS.values())].astype(float),
                 "max_new_tokens": (res['run_config'] or {}).get("max_new_tokens"),
-                # Headers written before engines existed are Hugging Face runs.
-                "engine": (res['run_config'] or {}).get("engine", "hf"),
             }
 
         short_model = model.split("/")[-1] if "/" in model else model

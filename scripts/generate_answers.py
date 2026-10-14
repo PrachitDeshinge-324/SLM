@@ -33,7 +33,6 @@ from src.experiment_d.model_loading import PRECISIONS, load_model_and_tokenizer,
 from src.experiment_d.prompts import build_prompt, get_messages
 from src.experiment_d.run_files import adapter_fingerprint, generator_run_path
 from src.experiment_d.sampling import sample_responses
-from src.experiment_d.vllm_sampling import VLLM_PRECISIONS
 from src.experiment_d.self_consistency import summarize_votes
 
 # Settings that MUST match for a resumed run to be valid. Operational settings like batch_size
@@ -42,13 +41,11 @@ SCIENTIFIC_SETTINGS = [
     "model", "precision", "dataset", "n_samples",
     "temperature", "top_k", "top_p", "seed",
     "repetition_penalty", "dataset_fingerprint", "max_new_tokens", "prompt_sha256",
-    "adapter_sha256", "engine",
+    "adapter_sha256",
 ]
 # Absent from headers written before the setting existed, where the absence has a known meaning
-# (no adapter = the untrained model; every earlier run used Hugging Face generate). These are
-# compared even when the old header lacks them, against this default.
-SETTINGS_ABSENT_DEFAULTS = {"adapter_sha256": None, "engine": "hf"}
-ENGINES = ("hf", "vllm")
+# (no adapter = the untrained model). These are compared even when the old header lacks them.
+SETTINGS_ABSENT_MEANS_NONE = {"adapter_sha256"}
 
 
 def parse_args():
@@ -67,22 +64,12 @@ def parse_args():
     parser.add_argument("--results_dir", "--output_dir", dest="results_dir", type=str, default="results", help="Root directory of the run files")
     parser.add_argument("--max_new_tokens", type=int, default=2048, help="Max new tokens (default 2048, adjust if needed)")
     parser.add_argument("--adapter", type=str, default=None, help="Folder of a LoRA adapter to apply on top of the model (self-training rounds)")
-    parser.add_argument("--engine", type=str, choices=ENGINES, default="hf",
-                        help="hf: Hugging Face generate (all earlier runs). vllm: much faster, CUDA only, 16/4-bit; its samples are not "
-                             "bit-identical to hf, so never mix engines within one comparison")
-    parser.add_argument("--vllm_chunk_questions", type=int, default=64, help="vllm: questions per call (and per flush to disk); batch_size is ignored")
-    parser.add_argument("--vllm_gpu_memory_utilization", type=float, default=0.85, help="vllm: share of GPU memory the engine may take")
-    parser.add_argument("--vllm_max_model_len", type=int, default=0, help="vllm: longest prompt + answer in tokens (0 = max_new_tokens + 2048)")
 
     args = parser.parse_args()
     if args.n_samples < 1 or args.batch_size < 1:
         parser.error("--n_samples and --batch_size must both be positive")
     if args.temperature <= 0 or not 0 < args.top_p <= 1 or args.top_k < 0:
         parser.error("--temperature must be positive, --top_p in (0, 1], and --top_k non-negative")
-    if args.engine == "vllm" and args.precision not in VLLM_PRECISIONS:
-        parser.error(f"--engine vllm supports precisions {VLLM_PRECISIONS}; use --engine hf for {args.precision}")
-    if args.vllm_chunk_questions < 1:
-        parser.error("--vllm_chunk_questions must be positive")
     return args
 
 
@@ -128,17 +115,7 @@ def read_existing_run(output_file):
     return existing_config, processed_ids
 
 
-def hf_model_info(model) -> dict:
-    """The model facts a run header records, read from a loaded Hugging Face model."""
-    return {
-        "model_revision": getattr(model.config, "_commit_hash", None),
-        "model_dtype": str(getattr(model, "dtype", None)),
-        "device": str(model_device(model)),
-        "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
-    }
-
-
-def build_run_config(args, dataset_name: str, questions: list, model_info: dict, tokenizer) -> dict:
+def build_run_config(args, dataset_name: str, questions: list, model, tokenizer) -> dict:
     """The header line of a run file: everything needed to audit that two runs are comparable."""
     probe_choices = [{"label": "A", "text": "x"}] if dataset_name.lower() == "cqa" else None
     return {
@@ -148,7 +125,6 @@ def build_run_config(args, dataset_name: str, questions: list, model_info: dict,
         "top_k": args.top_k, "top_p": args.top_p, "seed": args.seed,
         "max_new_tokens": args.max_new_tokens,
         "repetition_penalty": args.repetition_penalty,
-        "engine": args.engine,
         "adapter": args.adapter,
         "adapter_sha256": adapter_fingerprint(args.adapter) if args.adapter else None,
         # True for an unlabelled pool: the run file then holds no reference answers.
@@ -156,16 +132,15 @@ def build_run_config(args, dataset_name: str, questions: list, model_info: dict,
 
         "total_questions": len(questions),
         "dataset_fingerprint": dataset_fingerprint(questions),
-        "model_revision": model_info["model_revision"],
+        "model_revision": getattr(model.config, "_commit_hash", None),
         "prompt_sha256": hashlib.sha256(build_prompt(
             tokenizer, get_messages(dataset_name, "PROBE QUESTION", probe_choices)
         ).encode("utf-8")).hexdigest(),
-        "model_dtype": model_info["model_dtype"],
-        "device": model_info["device"],
-        "gpu": model_info["gpu"],
+        "model_dtype": str(getattr(model, "dtype", None)),
+        "device": str(model_device(model)),
+        "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
         "torch_version": torch.__version__,
         "transformers_version": __import__("transformers").__version__,
-        "vllm_version": model_info.get("vllm_version"),
     }
 
 
@@ -175,8 +150,8 @@ def check_resume_is_valid(output_file, existing_config, processed_ids, run_confi
         raise RuntimeError(f"Cannot safely resume {output_file}: existing records have no run_config header. Move the file or start a fresh output directory.")
     if existing_config is not None:
         mismatches = [key for key in SCIENTIFIC_SETTINGS
-                      if key in run_config and (key in existing_config or key in SETTINGS_ABSENT_DEFAULTS)
-                      and existing_config.get(key, SETTINGS_ABSENT_DEFAULTS.get(key)) != run_config.get(key)]
+                      if key in run_config and (key in existing_config or key in SETTINGS_ABSENT_MEANS_NONE)
+                      and existing_config.get(key) != run_config.get(key)]
         if mismatches:
             raise RuntimeError(f"Cannot resume {output_file}: run settings differ for {', '.join(mismatches)}. Use a fresh output directory.")
         if existing_config.get("batch_size") != batch_size:
@@ -245,47 +220,7 @@ def build_question_record(item, dataset_name, responses, gen_lengths, extractor,
     }
 
 
-class HFSampler:
-    """Hugging Face generate: chunks of batch_size // n_samples questions, seeded once per chunk."""
-
-    def __init__(self, args, model, tokenizer):
-        self.args, self.model, self.tokenizer = args, model, tokenizer
-        self.info = hf_model_info(model)
-        self.questions_per_chunk = max(1, args.batch_size // args.n_samples)
-
-    def sample(self, prompts, chunk, dataset_name):
-        # Per-chunk seed for reproducibility across resumes.
-        seed_everything(question_seed(self.args.seed, chunk[0]['qid']))
-        return sample_with_oom_backoff(self.model, self.tokenizer, prompts, self.args, dataset_name, chunk[0]['qid'])
-
-
-class VLLMSampler:
-    """vLLM: continuous batching over a whole chunk, one seed per question."""
-
-    def __init__(self, args, tokenizer):
-        from src.experiment_d.vllm_sampling import load_vllm_engine, stop_token_ids
-
-        self.args, self.tokenizer = args, tokenizer
-        max_model_len = args.vllm_max_model_len or args.max_new_tokens + 2048
-        self.llm, self.lora_request, self.info = load_vllm_engine(
-            args.model, args.precision, args.adapter, max_model_len=max_model_len,
-            gpu_memory_utilization=args.vllm_gpu_memory_utilization, seed=args.seed)
-        self.stop_ids = stop_token_ids(args.model, tokenizer)
-        self.questions_per_chunk = args.vllm_chunk_questions
-
-    def sample(self, prompts, chunk, dataset_name):
-        from src.experiment_d.vllm_sampling import sample_responses_vllm
-
-        args = self.args
-        responses, tps, latency, lengths = sample_responses_vllm(
-            self.llm, self.tokenizer, prompts, [question_seed(args.seed, item['qid']) for item in chunk],
-            n_samples=args.n_samples, temperature=args.temperature, top_k=args.top_k, top_p=args.top_p,
-            max_new_tokens=args.max_new_tokens, repetition_penalty=args.repetition_penalty,
-            stop_ids=self.stop_ids, lora_request=self.lora_request, stop_on_boxed=dataset_name.lower() == "math500")
-        return responses, tps, latency, lengths, len(prompts) * args.n_samples
-
-
-def run_dataset(args, dataset_name: str, questions: list, sampler, tokenizer):
+def run_dataset(args, dataset_name: str, questions: list, model, tokenizer):
     if args.limit > 0:
         questions = questions[:args.limit]
 
@@ -293,7 +228,7 @@ def run_dataset(args, dataset_name: str, questions: list, sampler, tokenizer):
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
     existing_config, processed_ids = read_existing_run(output_file)
-    run_config = build_run_config(args, dataset_name, questions, sampler.info, tokenizer)
+    run_config = build_run_config(args, dataset_name, questions, model, tokenizer)
     check_resume_is_valid(output_file, existing_config, processed_ids, run_config, args.batch_size)
 
     print(f"Starting {dataset_name}. Found {len(processed_ids)} already processed items.")
@@ -308,18 +243,23 @@ def run_dataset(args, dataset_name: str, questions: list, sampler, tokenizer):
         # Preserve fixed chunk boundaries across resumes while filling the
         # requested sequence batch. Partially completed chunks are regenerated
         # with the same seed; only missing question records are appended.
-        questions_per_chunk = sampler.questions_per_chunk
+        questions_per_chunk = max(1, args.batch_size // args.n_samples)
 
         for i in tqdm(range(0, len(questions), questions_per_chunk), desc=f"Processing {dataset_name}"):
             chunk = questions[i:i + questions_per_chunk]
             if all(item['qid'] in processed_ids for item in chunk):
                 continue
 
+            # Set per-chunk seed for reproducibility across resumes
+            seed_everything(question_seed(args.seed, chunk[0]['qid']))
+
             prompts = [
                 build_prompt(tokenizer, get_messages(dataset_name, item['question'], item.get('choices')))
                 for item in chunk
             ]
-            grouped_responses, tps, latency, grouped_lengths, used_batch_size = sampler.sample(prompts, chunk, dataset_name)
+            grouped_responses, tps, latency, grouped_lengths, used_batch_size = sample_with_oom_backoff(
+                model, tokenizer, prompts, args, dataset_name, chunk[0]['qid']
+            )
 
             for q_idx, item in enumerate(chunk):
                 if item['qid'] in processed_ids:
@@ -346,20 +286,10 @@ def main():
     dataset_names = ["gsm8k", "cqa"] if args.dataset == "both" else [name.strip() for name in args.dataset.split(",")]
     datasets_to_run = [(name, load_benchmark(name)) for name in dataset_names]
 
-    if args.engine == "vllm":
-        from transformers import AutoTokenizer
-
-        # The prompts are rendered and tokenized here, exactly as the Hugging Face path does.
-        tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-        sampler = VLLMSampler(args, tokenizer)
-    else:
-        model, tokenizer = load_model_and_tokenizer(args.model, args.precision, adapter_path=args.adapter)
-        sampler = HFSampler(args, model, tokenizer)
+    model, tokenizer = load_model_and_tokenizer(args.model, args.precision, adapter_path=args.adapter)
 
     for dataset_name, questions in datasets_to_run:
-        run_dataset(args, dataset_name, questions, sampler, tokenizer)
+        run_dataset(args, dataset_name, questions, model, tokenizer)
 
 
 if __name__ == "__main__":
