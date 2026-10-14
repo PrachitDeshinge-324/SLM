@@ -18,7 +18,11 @@
 #   bash run_self_training.sh --model Qwen/Qwen3.5-0.8B --precision 4bit --experiment qwen08_4bit_pilot \
 #        [--rounds 3] [--pool_limit 200] [--eval_limit 100] [--batch_size 64] [--results_dir DIR]
 #        [--objective sft|dpo] [--pairing similar_length|longest_shortest] [--pair_threshold 0.625]
-#        [--beta 2.0] [--epochs 2]
+#        [--beta 2.0] [--epochs 2] [--engine hf|vllm]
+#
+# --engine vllm samples with vLLM (CUDA only, 16/4-bit; much faster). Its samples are not
+# bit-identical to Hugging Face generate, so use one engine for every round of an experiment AND
+# for the untrained control it is compared with. Training always runs on Hugging Face.
 #
 # Make script stop on first error
 set -e
@@ -37,6 +41,7 @@ THRESHOLD=0.75
 OBJECTIVE="sft"
 PAIRING="similar_length"
 PAIR_THRESHOLD=0.625
+ENGINE="hf"
 BETA=2.0
 EPOCHS=2
 # Generation settings of the stored GSM8K runs these rounds are compared with.
@@ -65,6 +70,7 @@ while [[ "$#" -gt 0 ]]; do
         --pairing) PAIRING="$2"; shift ;;
         --pair_threshold) PAIR_THRESHOLD="$2"; shift ;;
         --beta) BETA="$2"; shift ;;
+        --engine) ENGINE="$2"; shift ;;
         --epochs) EPOCHS="$2"; shift ;;
         --max_new_tokens) MAX_NEW_TOKENS="$2"; shift ;;
         --repetition_penalty) REP_PENALTY="$2"; shift ;;
@@ -107,6 +113,7 @@ generate() {
     --limit "$3" \
     --max_new_tokens "${MAX_NEW_TOKENS}" \
     --repetition_penalty "${REP_PENALTY}" \
+    --engine "${ENGINE}" \
     "${adapter_args[@]}"
 }
 

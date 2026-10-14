@@ -66,7 +66,8 @@ The pool (`gsm8k_train`) is loaded without its answers and without the question 
 | `benchmarks.py` | Load GSM8K, MATH-500, SVAMP, CommonsenseQA into one question format |
 | `prompts.py` | Build the chat prompt for each benchmark |
 | `model_loading.py` | Load a model at 16-bit, 8-bit or 4-bit |
-| `sampling.py` | Sample N answers per prompt |
+| `sampling.py` | Sample N answers per prompt (Hugging Face `generate`) |
+| `vllm_sampling.py` | The same with vLLM (`--engine vllm`): CUDA only, 16/4-bit, much faster; same record format |
 | `answer_extraction.py` | Pull the final answer out of a generated solution |
 | `answer_matching.py` | Decide whether two answers are equal (numbers, fractions, LaTeX, symbolic) |
 | `self_consistency.py` | Majority vote and agreement over the N answers |
@@ -101,6 +102,11 @@ GPU=L4 HF_TOKEN=hf_xxx bash colab/launch_colab_session.sh
 bash run_self_training.sh --model Qwen/Qwen3.5-0.8B --precision 4bit --experiment qwen08_4bit_pilot \
      --rounds 3 --pool_limit 200 --eval_limit 100 --results_dir results
 python scripts/report_self_training.py --model Qwen/Qwen3.5-0.8B --precision 4bit --experiment qwen08_4bit_pilot
+
+# vLLM sampling (CUDA; install vllm first, e.g. EXTRA_PIP_PACKAGES="flash-linear-attention vllm" on Colab).
+# Check once per model/precision/adapter that vLLM computes the same model, then add --engine vllm:
+python scripts/check_vllm_parity.py --model Qwen/Qwen3.5-0.8B --precision 4bit --adapter <round k adapter dir>
+bash run_self_training.sh ... --engine vllm   # every round AND the untrained control must use the same engine
 
 # the same with length-normalised DPO on the model's own (majority, minority) pairs
 bash run_self_training.sh --model Qwen/Qwen3.5-0.8B --precision 4bit --experiment qwen08_4bit_dpo_similar \

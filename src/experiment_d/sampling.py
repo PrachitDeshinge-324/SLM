@@ -7,6 +7,40 @@ from transformers import StoppingCriteria, StoppingCriteriaList
 from src.experiment_d.model_loading import model_device
 
 
+BOXED_OPEN = "\\boxed{"
+
+
+def closed_boxed_end(text: str, start: int = None):
+    """
+    Index just past the brace that closes the \\boxed{...} opening at `start`, or None while it is
+    still open. `start` defaults to the last \\boxed{ in the text (None when there is none).
+    """
+    if start is None:
+        start = text.rfind(BOXED_OPEN)
+    if start < 0:
+        return None
+    depth = 0
+    for offset, character in enumerate(text[start + len(BOXED_OPEN) - 1:]):
+        if character == "{":
+            depth += 1
+        elif character == "}" and depth > 0:
+            depth -= 1
+            if depth == 0:
+                return start + len(BOXED_OPEN) + offset
+    return None
+
+
+def truncate_after_first_boxed(text: str):
+    """The text up to and including its first closed \\boxed{...}, or None when none is closed."""
+    start = text.find(BOXED_OPEN)
+    while start >= 0:
+        end = closed_boxed_end(text, start)
+        if end is not None:
+            return text[:end]
+        start = text.find(BOXED_OPEN, start + 1)
+    return None
+
+
 class StopAfterBoxedAnswer(StoppingCriteria):
     """
     Stops a sequence once its last \\boxed{...} is closed (used for MATH-500).
@@ -24,20 +58,7 @@ class StopAfterBoxedAnswer(StoppingCriteria):
             start = self.prompt_length if isinstance(self.prompt_length, int) else self.prompt_length[row]
             generated = sequence[start:][-256:]
             text = self.tokenizer.decode(generated, skip_special_tokens=True)
-            start = text.rfind("\\boxed{")
-            if start < 0:
-                should_stop.append(False)
-                continue
-
-            depth = 0
-            for character in text[start + len("\\boxed{") - 1:]:
-                if character == "{" and (depth == 0 or character != "\\"):
-                    depth += 1
-                elif character == "}" and depth > 0:
-                    depth -= 1
-                    if depth == 0:
-                        break
-            should_stop.append(depth == 0)
+            should_stop.append(closed_boxed_end(text) is not None)
         return torch.tensor(should_stop, dtype=torch.bool, device=input_ids.device)
 
 
