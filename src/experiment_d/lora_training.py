@@ -134,3 +134,131 @@ def train_lora(model, tokenizer, examples: list, steps: int, batch_size: int = 8
     finally:
         model.eval()
     return losses
+
+
+# ─── Preference training (length-normalised DPO) ─────────────────────────────
+
+def build_preference_example(tokenizer, dataset_name: str, question: str, chosen: str, rejected: str,
+                             end_token: int, max_length: int):
+    """{chosen, rejected} training examples for one pair, or None when either does not fit in max_length."""
+    examples = {side: build_training_example(tokenizer, dataset_name, question, trace, end_token, max_length)
+                for side, trace in (("chosen", chosen), ("rejected", rejected))}
+    return None if None in examples.values() else examples
+
+
+def mean_token_logps(model, input_ids, attention_mask, labels, compute_dtype=None):
+    """
+    Per-row mean log-probability of the scored tokens (labels != IGNORE_INDEX), in float32.
+
+    The mean over a solution's tokens, not their sum, is the length-normalised score: a long and a
+    short solution are compared per token. Only the scored positions go through the softmax, since
+    the vocabulary is large.
+    """
+    device = input_ids.device
+    use_autocast = device.type == "cuda" and compute_dtype in (torch.float16, torch.bfloat16)
+    with torch.autocast(device_type=device.type, dtype=compute_dtype, enabled=use_autocast):
+        logits = model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False).logits
+    targets = labels[:, 1:]
+    scored = targets != IGNORE_INDEX
+    token_logps = -F.cross_entropy(logits[:, :-1][scored].float(), targets[scored], reduction="none")
+    rows = scored.nonzero()[:, 0]
+    sums = torch.zeros(len(labels), device=device, dtype=torch.float32).index_add(0, rows, token_logps)
+    return sums / scored.sum(dim=1).clamp(min=1)
+
+
+def _pair_logps(model, tokenizer, pairs: list, compute_dtype):
+    """(chosen, rejected) mean log-probs of a few pairs, in one forward pass."""
+    examples = [pair["chosen"] for pair in pairs] + [pair["rejected"] for pair in pairs]
+    input_ids, attention_mask, labels = _collate(examples, tokenizer.pad_token_id, model_device(model))
+    logps = mean_token_logps(model, input_ids, attention_mask, labels, compute_dtype)
+    return logps[:len(pairs)], logps[len(pairs):]
+
+
+@torch.no_grad()
+def reference_logps(model, tokenizer, pairs: list, micro_batch_size: int = 1, compute_dtype=None) -> list:
+    """
+    [(chosen, rejected)] mean log-probs under the model as it is now. Run it on the frozen base
+    before the adapter is attached: the reference never changes, so it is scored once.
+    """
+    was_training = model.training
+    model.eval()
+    scores = []
+    try:
+        for start in range(0, len(pairs), micro_batch_size):
+            chosen, rejected = _pair_logps(model, tokenizer, pairs[start:start + micro_batch_size], compute_dtype)
+            scores += list(zip(chosen.tolist(), rejected.tolist()))
+    finally:
+        model.train(was_training)
+    return scores
+
+
+def dpo_loss(policy_chosen, policy_rejected, ref_chosen, ref_rejected, beta: float):
+    """
+    Length-normalised DPO: -log sigmoid(beta * margin), margin = the chosen solution's per-token
+    log-ratio to the reference minus the rejected one's. Returns (loss per pair, margin per pair).
+    """
+    margin = (policy_chosen - ref_chosen) - (policy_rejected - ref_rejected)
+    return -F.logsigmoid(beta * margin), margin
+
+
+def train_lora_dpo(model, tokenizer, pairs: list, steps: int, batch_size: int = 16, micro_batch_size: int = 1,
+                   learning_rate: float = 5e-5, beta: float = 2.0, seed: int = 0, compute_dtype=None,
+                   log_every: int = 10, max_grad_norm: float = 1.0) -> dict:
+    """
+    Run `steps` AdamW updates of the adapter on preference pairs and return
+    {losses, margins, preferred}: per step, the mean loss, the mean margin and the share of pairs
+    whose margin is positive.
+
+    pairs: [{chosen, rejected, ref_chosen, ref_rejected}], the first two from build_preference_example,
+    the last two from reference_logps. Batches are drawn as in train_lora; each micro-batch scores
+    micro_batch_size pairs (both solutions) at once and the gradients are summed.
+    """
+    parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
+    optimizer = torch.optim.AdamW(parameters, lr=learning_rate, weight_decay=0.0)
+    device = model_device(model)
+    use_autocast = device.type == "cuda" and compute_dtype in (torch.float16, torch.bfloat16)
+    scaler = torch.amp.GradScaler(device.type, enabled=use_autocast and compute_dtype == torch.float16)
+
+    shuffler = random.Random(seed)
+    torch.manual_seed(seed)  # dropout
+    queue, history = [], {"losses": [], "margins": [], "preferred": []}
+    model.train()
+    try:
+        for step in range(steps):
+            if len(queue) < batch_size:
+                order = list(range(len(pairs)))
+                shuffler.shuffle(order)
+                queue.extend(order)
+            batch, queue = queue[:batch_size], queue[batch_size:]
+
+            optimizer.zero_grad(set_to_none=True)
+            step_loss, margins = 0.0, []
+            for start in range(0, len(batch), micro_batch_size):
+                chunk = [pairs[i] for i in batch[start:start + micro_batch_size]]
+                policy_chosen, policy_rejected = _pair_logps(model, tokenizer, chunk, compute_dtype)
+                ref_chosen = torch.tensor([pair["ref_chosen"] for pair in chunk], device=device)
+                ref_rejected = torch.tensor([pair["ref_rejected"] for pair in chunk], device=device)
+                losses, margin = dpo_loss(policy_chosen, policy_rejected, ref_chosen, ref_rejected, beta)
+                loss = losses.sum() / len(batch)
+                if not torch.isfinite(loss):
+                    raise FloatingPointError(f"DPO loss is {loss.item()} at step {step + 1}; stopping without saving an adapter.")
+                scaler.scale(loss).backward()
+                step_loss += loss.item()
+                margins += margin.detach().tolist()
+
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(parameters, max_grad_norm)
+            scaler.step(optimizer)
+            scaler.update()
+
+            history["losses"].append(step_loss)
+            history["margins"].append(sum(margins) / len(margins))
+            history["preferred"].append(sum(m > 0 for m in margins) / len(margins))
+            if (step + 1) % log_every == 0 or step + 1 == steps:
+                recent = slice(-log_every, None)
+                mean = lambda values: sum(values[recent]) / len(values[recent])
+                print(f"step {step + 1}/{steps}  loss {mean(history['losses']):.4f}  margin {mean(history['margins']):+.4f}  "
+                      f"chosen preferred {mean(history['preferred']):.2f}", flush=True)
+    finally:
+        model.eval()
+    return history

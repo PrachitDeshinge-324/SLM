@@ -53,6 +53,8 @@ Reports never trust the metrics stored inside a run file. They re-score every ru
 | 0 | The untrained model answers the test questions and an unlabelled pool of train questions | `gsm8k/generator/...`, `gsm8k_train/generator/...` |
 | k ≥ 1 | `scripts/train_self_labels.py` labels the round k−1 pool answers by majority vote, keeps questions with agreement ≥ 0.75 and trains a fresh LoRA adapter on those solutions; the model with that adapter answers the test questions and the pool again | `adapters/<model>_<precision>/`, then the same two run files |
 
+With `--objective dpo` round k instead runs `scripts/train_preference_pairs.py`: for each pool question with agreement ≥ 5/8 it pairs a complete majority solution (chosen) with a complete minority one (rejected), scores both once with the frozen base as the reference, and trains the adapter with length-normalised DPO (per-token mean log-ratio, β = 2). `--pairing similar_length` (default) takes the pair closest in length so length does not separate chosen from rejected; `--pairing longest_shortest` is the length-confounded ablation. The pairs and their reference scores are saved next to the adapter. `scripts/check_dpo_overfit.py` overfits one pair on the real model as an end-to-end check of the loss.
+
 `scripts/report_self_training.py` compares every round with round 0 on the same test questions and writes `report_<model>_<precision>.txt` next to the rounds.
 
 The pool (`gsm8k_train`) is loaded without its answers and without the question the prompt uses as its worked example, and training refuses to start if a pool question is also a test question. The test questions are only ever evaluated. The report's label-accuracy column is the one place the train answers are read, after the run.
@@ -68,8 +70,8 @@ The pool (`gsm8k_train`) is loaded without its answers and without the question 
 | `answer_extraction.py` | Pull the final answer out of a generated solution |
 | `answer_matching.py` | Decide whether two answers are equal (numbers, fractions, LaTeX, symbolic) |
 | `self_consistency.py` | Majority vote and agreement over the N answers |
-| `self_training.py` | Pick a model's own vote-filtered solutions as training text; check the pool shares no question with the test set |
-| `lora_training.py` | Train a LoRA adapter on a frozen base at any precision |
+| `self_training.py` | Pick a model's own vote-filtered solutions as training text, or (majority, minority) preference pairs; check the pool shares no question with the test set |
+| `lora_training.py` | Train a LoRA adapter on a frozen base at any precision, by fine-tuning or length-normalised DPO |
 | `verifier.py` | The verifier prompt and the parser for its verdict |
 | `rescoring.py` | Rebuild metrics and labels from stored raw outputs |
 | `verifier_metrics.py` | Verifier metrics (false positive rate, MCC, guided majority) from relabelled traces |
@@ -99,6 +101,10 @@ GPU=L4 HF_TOKEN=hf_xxx bash colab/launch_colab_session.sh
 bash run_self_training.sh --model Qwen/Qwen3.5-0.8B --precision 4bit --experiment qwen08_4bit_pilot \
      --rounds 3 --pool_limit 200 --eval_limit 100 --results_dir results
 python scripts/report_self_training.py --model Qwen/Qwen3.5-0.8B --precision 4bit --experiment qwen08_4bit_pilot
+
+# the same with length-normalised DPO on the model's own (majority, minority) pairs
+bash run_self_training.sh --model Qwen/Qwen3.5-0.8B --precision 4bit --experiment qwen08_4bit_dpo_similar \
+     --objective dpo --pairing similar_length --rounds 1 --pool_limit 2000 --eval_limit 100 --batch_size 256 --results_dir results
 ```
 
 ```bash

@@ -2,9 +2,13 @@
 # Label-free self-training for ONE model at ONE precision, over several rounds.
 #
 #   round 0            the untrained model answers the test questions and the unlabelled train pool
-#   round k = 1..N     scripts/train_self_labels.py trains a fresh adapter on the confident answers
-#                      of round k-1; the model with that adapter answers the test questions and,
-#                      unless it is the last round, the pool again
+#   round k = 1..N     a fresh adapter is trained on round k-1's pool answers; the model with that
+#                      adapter answers the test questions and, unless it is the last round, the pool again
+#
+# Objectives (--objective):
+#   sft   scripts/train_self_labels.py: fine-tune on the confident answers (agreement >= --threshold)
+#   dpo   scripts/train_preference_pairs.py: length-normalised DPO on (majority, minority) pairs of
+#         questions with agreement >= --pair_threshold, paired by --pairing
 #
 # The pool is GSM8K train questions loaded without their answers; the test questions are GSM8K
 # test and are only ever evaluated. Every stage resumes, so the same command can be run again
@@ -13,6 +17,8 @@
 # Usage:
 #   bash run_self_training.sh --model Qwen/Qwen3.5-0.8B --precision 4bit --experiment qwen08_4bit_pilot \
 #        [--rounds 3] [--pool_limit 200] [--eval_limit 100] [--batch_size 64] [--results_dir DIR]
+#        [--objective sft|dpo] [--pairing similar_length|longest_shortest] [--pair_threshold 0.625]
+#        [--beta 2.0] [--epochs 2]
 #
 # Make script stop on first error
 set -e
@@ -28,6 +34,11 @@ N_SAMPLES=8
 BATCH_SIZE=64
 TRAIN_STEPS=200
 THRESHOLD=0.75
+OBJECTIVE="sft"
+PAIRING="similar_length"
+PAIR_THRESHOLD=0.625
+BETA=2.0
+EPOCHS=2
 # Generation settings of the stored GSM8K runs these rounds are compared with.
 MAX_NEW_TOKENS=512
 REP_PENALTY=1.0
@@ -50,6 +61,11 @@ while [[ "$#" -gt 0 ]]; do
         --batch_size) BATCH_SIZE="$2"; shift ;;
         --train_steps) TRAIN_STEPS="$2"; shift ;;
         --threshold) THRESHOLD="$2"; shift ;;
+        --objective) OBJECTIVE="$2"; shift ;;
+        --pairing) PAIRING="$2"; shift ;;
+        --pair_threshold) PAIR_THRESHOLD="$2"; shift ;;
+        --beta) BETA="$2"; shift ;;
+        --epochs) EPOCHS="$2"; shift ;;
         --max_new_tokens) MAX_NEW_TOKENS="$2"; shift ;;
         --repetition_penalty) REP_PENALTY="$2"; shift ;;
         --results_dir|--output_dir) RESULTS_DIR="$2"; shift ;;
@@ -57,6 +73,10 @@ while [[ "$#" -gt 0 ]]; do
     esac
     shift
 done
+
+if [[ "${OBJECTIVE}" != "sft" && "${OBJECTIVE}" != "dpo" ]]; then
+    echo "--objective must be sft or dpo, got ${OBJECTIVE}"; exit 1
+fi
 
 # Folder of a round's run files and of its adapter (naming lives in run_files.py).
 round_paths() {
@@ -93,19 +113,35 @@ generate() {
 for ROUND in $(seq 0 "${ROUNDS}"); do
   if [ "${ROUND}" -gt 0 ]; then
     echo "======================================================"
-    echo " Round ${ROUND} of ${ROUNDS}: train on the confident answers of round $((ROUND - 1))"
+    echo " Round ${ROUND} of ${ROUNDS}: train (${OBJECTIVE}) on the pool answers of round $((ROUND - 1))"
     echo "======================================================"
-    PYTHONPATH=. python scripts/train_self_labels.py \
-      --results_dir "${RESULTS_DIR}" \
-      --model "${MODEL}" \
-      --precision "${PRECISION}" \
-      --dataset "${POOL_DATASET}" \
-      --eval_dataset "${EVAL_DATASET}" \
-      --n_samples "${N_SAMPLES}" \
-      --experiment "${EXPERIMENT}" \
-      --round "${ROUND}" \
-      --threshold "${THRESHOLD}" \
-      --train_steps "${TRAIN_STEPS}"
+    if [ "${OBJECTIVE}" = "dpo" ]; then
+      PYTHONPATH=. python scripts/train_preference_pairs.py \
+        --results_dir "${RESULTS_DIR}" \
+        --model "${MODEL}" \
+        --precision "${PRECISION}" \
+        --dataset "${POOL_DATASET}" \
+        --eval_dataset "${EVAL_DATASET}" \
+        --n_samples "${N_SAMPLES}" \
+        --experiment "${EXPERIMENT}" \
+        --round "${ROUND}" \
+        --threshold "${PAIR_THRESHOLD}" \
+        --pairing "${PAIRING}" \
+        --beta "${BETA}" \
+        --epochs "${EPOCHS}"
+    else
+      PYTHONPATH=. python scripts/train_self_labels.py \
+        --results_dir "${RESULTS_DIR}" \
+        --model "${MODEL}" \
+        --precision "${PRECISION}" \
+        --dataset "${POOL_DATASET}" \
+        --eval_dataset "${EVAL_DATASET}" \
+        --n_samples "${N_SAMPLES}" \
+        --experiment "${EXPERIMENT}" \
+        --round "${ROUND}" \
+        --threshold "${THRESHOLD}" \
+        --train_steps "${TRAIN_STEPS}"
+    fi
   fi
 
   echo "======================================================"

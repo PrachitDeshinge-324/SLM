@@ -114,7 +114,8 @@ def pool_table(args, round_indices: list) -> list:
         trained, loss = "-", "-"
         if log_file.exists():
             log = json.loads(log_file.read_text())
-            trained = str(log["trained_solutions"])
+            dpo = log["settings"].get("objective") == "dpo"
+            trained = f"{log['trained_solutions']} pairs ({log['settings']['pairing']})" if dpo else str(log["trained_solutions"])
             if log["losses"]:
                 loss = f"{np.mean(log['losses'][:10]):.3f} -> {np.mean(log['losses'][-10:]):.3f}"
         lines.append(f"{index:5d} | {len(records)} | {len(labels)} ({len(labels) / len(records):.3f}) | "

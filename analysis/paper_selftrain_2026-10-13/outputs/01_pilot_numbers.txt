@@ -1,0 +1,59 @@
+Questions answered in every finished run: 100; unfinished runs left out: ['4bit round 3, 1024 tokens']
+  16bit untrained (target)         questions  100 | batch 256 | max_new_tokens 512 | adapter no
+  16bit round 1                    questions  100 | batch 256 | max_new_tokens 512 | adapter yes
+  16bit round 2                    questions  100 | batch 256 | max_new_tokens 512 | adapter yes
+  16bit round 3                    questions  100 | batch 256 | max_new_tokens 512 | adapter yes
+  4bit untrained b256 (control)    questions  100 | batch 256 | max_new_tokens 512 | adapter no
+  4bit untrained b128              questions  100 | batch 128 | max_new_tokens 512 | adapter no
+  4bit untrained b64 (round 0)     questions  100 | batch 64 | max_new_tokens 512 | adapter no
+  4bit round 1                     questions  100 | batch 256 | max_new_tokens 512 | adapter yes
+  4bit round 2                     questions  100 | batch 256 | max_new_tokens 512 | adapter yes
+  4bit round 3                     questions  100 | batch 256 | max_new_tokens 512 | adapter yes
+  4bit untrained, 1024 tokens      questions  100 | batch 256 | max_new_tokens 1024 | adapter no
+  4bit round 1, 1024 tokens        questions  100 | batch 256 | max_new_tokens 1024 | adapter yes
+  4bit round 2, 1024 tokens        questions  100 | batch 128 | max_new_tokens 1024 | adapter yes
+  4bit round 3, 1024 tokens        questions    0 | batch 128 | max_new_tokens 1024 | adapter yes
+
+=== Levels on the shared questions
+run                              | single answer | cut off | right among finished | voted | confident | confident and right | confident n | tokens
+16bit untrained (target)         | 0.486 | 0.179 | 0.592 | 0.680 | 0.400 | 0.925 | 40 | 331
+16bit round 1                    | 0.505 | 0.095 | 0.558 | 0.610 | 0.490 | 0.878 | 49 | 298
+16bit round 2                    | 0.481 | 0.091 | 0.530 | 0.550 | 0.480 | 0.833 | 48 | 294
+16bit round 3                    | 0.504 | 0.080 | 0.548 | 0.580 | 0.480 | 0.833 | 48 | 291
+4bit untrained b256 (control)    | 0.389 | 0.171 | 0.469 | 0.550 | 0.250 | 0.960 | 25 | 318
+4bit untrained b128              | 0.400 | 0.146 | 0.469 | 0.600 | 0.290 | 0.931 | 29 | 315
+4bit untrained b64 (round 0)     | 0.422 | 0.164 | 0.505 | 0.660 | 0.290 | 0.966 | 29 | 321
+4bit round 1                     | 0.440 | 0.086 | 0.482 | 0.530 | 0.390 | 0.923 | 39 | 290
+4bit round 2                     | 0.466 | 0.089 | 0.512 | 0.560 | 0.390 | 0.897 | 39 | 298
+4bit round 3                     | 0.445 | 0.074 | 0.480 | 0.530 | 0.410 | 0.902 | 41 | 282
+4bit untrained, 1024 tokens      | 0.398 | 0.107 | 0.445 | 0.530 | 0.320 | 0.906 | 32 | 391
+4bit round 1, 1024 tokens        | 0.445 | 0.043 | 0.465 | 0.540 | 0.390 | 0.897 | 39 | 315
+4bit round 2, 1024 tokens        | 0.476 | 0.034 | 0.493 | 0.550 | 0.460 | 0.891 | 46 | 321
+
+=== 4-bit rounds minus the matched untrained 4-bit control (batch 256). Points.
+round 1: single answer  +5.1 [ +0.9, +9.2] | cut off  -8.5 [-11.8, -5.1] | right among finished  +1.2 [ -3.5, +6.0] | voted  -2.0 [-11.0, +7.0]
+round 2: single answer  +7.8 [ +3.4,+12.2] | cut off  -8.3 [-11.2, -5.4] | right among finished  +4.3 [ -0.6, +9.1] | voted  +1.0 [ -8.0,+10.0]
+round 3: single answer  +5.6 [ +2.0, +9.4] | cut off  -9.8 [-13.4, -6.2] | right among finished  +1.1 [ -2.8, +5.2] | voted  -2.0 [-10.0, +6.0]
+
+=== 16-bit rounds minus untrained 16-bit. Points.
+round 1: single answer  +1.9 [ -2.0, +5.6] | cut off  -8.4 [-11.8, -4.9] | right among finished  -3.4 [ -7.9, +0.8] | voted  -7.0 [-15.0, +1.0]
+round 2: single answer  -0.5 [ -4.9, +3.5] | cut off  -8.8 [-12.2, -5.4] | right among finished  -6.3 [-10.7, -1.9] | voted -13.0 [-21.0, -6.0]
+round 3: single answer  +1.8 [ -2.7, +6.0] | cut off  -9.9 [-13.6, -6.4] | right among finished  -4.5 [ -8.9, -0.2] | voted -10.0 [-19.0, -1.0]
+
+=== Gap to the target: untrained 16-bit minus each 4-bit run. Points.
+4bit untrained b256 (control)   : single answer  +9.8 [ +5.5,+14.1] | cut off  +0.7 [ -2.2, +4.0] | right among finished +12.3 [ +7.2,+17.6] | voted +13.0 [ +4.0,+22.0]
+4bit round 1                    : single answer  +4.6 [ +0.4, +9.0] | cut off  +9.2 [ +5.6,+13.0] | right among finished +11.1 [ +6.1,+16.1] | voted +15.0 [ +7.0,+24.0]
+4bit round 2                    : single answer  +2.0 [ -2.7, +7.0] | cut off  +9.0 [ +5.9,+12.2] | right among finished  +8.0 [ +3.0,+13.3] | voted +12.0 [ +4.0,+21.0]
+4bit round 3                    : single answer  +4.1 [ -0.6, +9.4] | cut off +10.5 [ +6.9,+14.3] | right among finished +11.2 [ +5.8,+16.8] | voted +15.0 [ +8.0,+23.0]
+
+=== Untrained 4-bit at other batch sizes minus the batch-256 control. Points.
+4bit untrained b128             : single answer  +1.1 [ -2.5, +4.7] | cut off  -2.5 [ -5.4, +0.3] | right among finished  -0.1 [ -4.2, +4.2] | voted  +5.0 [ -4.0,+14.0]
+4bit untrained b64 (round 0)    : single answer  +3.4 [ +0.1, +6.8] | cut off  -0.8 [ -3.4, +2.0] | right among finished  +3.6 [ -0.3, +7.7] | voted +11.0 [ +3.0,+20.0]
+
+=== 1,024-token limit: trained 4-bit rounds minus untrained 4-bit, both at 1,024. Points.
+round 1: single answer  +4.7 [ +0.4, +9.1] | cut off  -6.5 [ -9.4, -3.9] | right among finished  +1.9 [ -2.7, +6.4] | voted  +1.0 [ -7.0, +9.0]
+round 2: single answer  +7.9 [ +3.4,+12.4] | cut off  -7.4 [-10.0, -4.9] | right among finished  +4.8 [ +0.0, +9.4] | voted  +2.0 [ -6.0,+10.0]
+untrained 1,024 minus untrained 512 control: single answer  +0.9 [ -2.8, +4.4] | cut off  -6.4 [ -9.1, -3.7] | right among finished  -2.4 [ -6.5, +1.7] | voted  -2.0 [-11.0, +7.0]
+gap to target at 1,024 (16-bit untrained at 512 minus 4-bit round k at 1,024):
+  round 1: single answer  +4.1 [ -0.4, +8.6] | cut off +13.6 [+10.0,+17.5] | right among finished +12.7 [ +7.6,+17.7] | voted +14.0 [ +6.0,+22.0]
+  round 2: single answer  +1.0 [ -4.2, +6.1] | cut off +14.5 [+11.0,+18.1] | right among finished  +9.9 [ +4.2,+15.6] | voted +13.0 [ +4.0,+22.0]
