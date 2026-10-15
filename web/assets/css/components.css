@@ -28,6 +28,7 @@ thead th { background: var(--surface-alt); color: var(--text-light); font-size: 
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: var(--surface-alt); }
 td.num, th.num { text-align: right; white-space: nowrap; }
+.better-mark { margin-left: 0.3em; font-weight: 700; color: var(--primary); }
 tr.group-row td { background: #f1f5f9; text-align: left; font-weight: 700; }
 table.dense { font-size: 0.85rem; }
 table.dense th, table.dense td { padding: 0.5rem 0.55rem; }

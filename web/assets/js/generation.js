@@ -36,8 +36,8 @@
             { label: 'Dataset' },
             { label: 'Precision' },
             { label: 'Cells', num: true, title: 'Model and sample count pairs that have a 16-bit run on the same token limit' },
-            { label: 'Voted accuracy', num: true, title: 'Mean change in points over the cells' },
-            { label: 'Single-sample accuracy', num: true, title: 'Mean change in points over the cells' },
+            { label: 'Voted accuracy', better: 'up', num: true, title: 'Mean change in points over the cells' },
+            { label: 'Single-sample accuracy', better: 'up', num: true, title: 'Mean change in points over the cells' },
             { label: 'Range (single sample)', num: true },
             { label: 'Intervals off zero', num: true, title: 'Cells where the 95% interval of the single-sample change excludes zero' }
         ]);
@@ -86,15 +86,15 @@
         { label: 'Precision' },
         { label: 'N', num: true, title: 'Samples per question' },
         { label: 'Questions', num: true },
-        { label: 'Voted accuracy', num: true, title: 'Majority answer is correct' },
-        { label: 'Single-sample accuracy', num: true, title: 'Share of all samples that finished and are correct' },
-        { label: 'Pass@N', num: true, title: 'At least one of the N samples is correct' },
+        { label: 'Voted accuracy', better: 'up', num: true, title: 'Majority answer is correct' },
+        { label: 'Single-sample accuracy', better: 'up', num: true, title: 'Share of all samples that finished and are correct' },
+        { label: 'Pass@N', better: 'up', num: true, title: 'At least one of the N samples is correct' },
         { label: 'Agreement', num: true, title: 'Mean share of samples that gave the majority answer' },
         { label: 'Diversity', num: true, title: 'Mean number of distinct answers' },
-        { label: 'Truncated', num: true, title: 'Share of samples that hit the token limit (they never vote)' },
-        { label: 'Δ voted', num: true, title: 'Change against 16-bit, points, 95% interval' },
-        { label: 'Δ single sample', num: true, title: 'Change against 16-bit, points, 95% interval' },
-        { label: 'Δ pass@N', num: true, title: 'Change against 16-bit, points, 95% interval' },
+        { label: 'Truncated', better: 'down', num: true, title: 'Share of samples that hit the token limit (they never vote)' },
+        { label: 'Δ voted', better: 'up', num: true, title: 'Change against 16-bit, points, 95% interval' },
+        { label: 'Δ single sample', better: 'up', num: true, title: 'Change against 16-bit, points, 95% interval' },
+        { label: 'Δ pass@N', better: 'up', num: true, title: 'Change against 16-bit, points, 95% interval' },
         { label: 'Notes' }
     ];
 

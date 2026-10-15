@@ -84,7 +84,17 @@
         var tr = el('tr');
         columns.forEach(function (c) {
             var th = el('th', c.num ? 'num' : null, c.label);
-            if (c.title) th.title = c.title;
+            var hint = null;
+            if (c.better) {
+                /* a column's `better` is 'up' (higher is better) or 'down' (lower is better); none means neither */
+                var up = c.better === 'up';
+                hint = up ? 'Higher is better.' : 'Lower is better.';
+                var mark = el('span', 'better-mark', up ? '↑' : '↓');
+                mark.setAttribute('role', 'img');
+                mark.setAttribute('aria-label', hint.slice(0, -1).toLowerCase());
+                th.appendChild(mark);
+            }
+            if (c.title || hint) th.title = [c.title, hint].filter(Boolean).join(' ');
             tr.appendChild(th);
         });
         return tr;

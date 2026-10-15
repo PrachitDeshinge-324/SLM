@@ -39,11 +39,11 @@
             { label: 'Precision' },
             { label: 'Samples', num: true, title: 'Answers drawn per question (N)' },
             { label: 'Questions', num: true },
-            { label: 'Labelled', num: true, title: 'Share of questions where at least 75% of all samples agree' },
-            { label: 'Label accuracy', num: true, title: 'Share of those labels that equal the reference answer' },
-            { label: 'Δ labelled vs 16-bit', num: true, title: 'Change in points, 95% paired interval' },
-            { label: 'Voted', num: true },
-            { label: 'Single answer', num: true },
+            { label: 'Labelled', better: 'up', num: true, title: 'Share of questions where at least 75% of all samples agree' },
+            { label: 'Label accuracy', better: 'up', num: true, title: 'Share of those labels that equal the reference answer' },
+            { label: 'Δ labelled vs 16-bit', better: 'up', num: true, title: 'Change in points, 95% paired interval' },
+            { label: 'Voted', better: 'up', num: true },
+            { label: 'Single answer', better: 'up', num: true },
             { label: 'Note', title: 'Why a run is not compared with 16-bit' }
         ]);
         var body = t.tBodies[0], lastGroup = null;
@@ -102,7 +102,7 @@
         var bothBeats = usable.filter(function (r) { return r.vote_vs_verifier.both_auroc > r.vote_vs_verifier.vote_auroc; }).length;
         var bothWorse = usable.filter(function (r) { return r.vote_vs_verifier.both_auroc < r.vote_vs_verifier.vote_auroc; }).length;
         var s = Rz.table([
-            { label: 'Score' }, { label: 'Median AUROC', num: true }, { label: 'Median label accuracy at the vote\'s number of labels', num: true }
+            { label: 'Score' }, { label: 'Median AUROC', better: 'up', num: true }, { label: 'Median label accuracy at the vote\'s number of labels', better: 'up', num: true }
         ]);
         [['Vote (agreement)', 'vote'], ['Verifier (approval)', 'verifier'], ['Both (product)', 'both']].forEach(function (p) {
             s.tBodies[0].appendChild(row([
@@ -118,8 +118,8 @@
         var t = Rz.table([
             { label: 'Model' }, { label: 'Precision' },
             { label: 'Labels', num: true, title: 'Questions the vote labels; every score is judged on this many' },
-            { label: 'AUROC vote', num: true }, { label: 'AUROC verifier', num: true }, { label: 'AUROC both', num: true },
-            { label: 'Label acc. vote', num: true }, { label: 'Label acc. verifier', num: true }, { label: 'Label acc. both', num: true },
+            { label: 'AUROC vote', better: 'up', num: true }, { label: 'AUROC verifier', better: 'up', num: true }, { label: 'AUROC both', better: 'up', num: true },
+            { label: 'Label acc. vote', better: 'up', num: true }, { label: 'Label acc. verifier', better: 'up', num: true }, { label: 'Label acc. both', better: 'up', num: true },
             { label: 'Approval', num: true, title: 'Share of all solutions the verifier approves' },
             { label: 'Note' }
         ]);
@@ -165,14 +165,14 @@
         var t = Rz.table([
             { label: 'Run' },
             { label: 'Batch · GPU', title: 'Batch size every question ran at, and the GPU' },
-            { label: 'Single answer', num: true }, { label: 'Δ single', num: true },
-            { label: 'Cut off', num: true }, { label: 'Δ cut off', num: true },
-            { label: 'Right among finished', num: true, title: 'Pooled over questions' },
-            { label: 'Δ same questions', num: true, title: 'Right among finished, compared question by question' },
-            { label: 'Voted', num: true }, { label: 'Δ voted', num: true },
+            { label: 'Single answer', better: 'up', num: true }, { label: 'Δ single', better: 'up', num: true },
+            { label: 'Cut off', better: 'down', num: true }, { label: 'Δ cut off', better: 'down', num: true },
+            { label: 'Right among finished', better: 'up', num: true, title: 'Pooled over questions' },
+            { label: 'Δ same questions', better: 'up', num: true, title: 'Right among finished, compared question by question' },
+            { label: 'Voted', better: 'up', num: true }, { label: 'Δ voted', better: 'up', num: true },
             { label: 'Voted lost / gained', num: true, title: 'Questions whose voted answer went from right to wrong / wrong to right' },
             { label: 'Confident', num: true, title: 'Share of test questions where at least 75% of samples agree' },
-            { label: 'No finished answer', num: true, title: 'Questions where every sample was cut off' },
+            { label: 'No finished answer', better: 'down', num: true, title: 'Questions where every sample was cut off' },
             { label: 'Tokens', num: true, title: 'Mean generated tokens per answer' }
         ]);
         e.test.forEach(function (r) {
@@ -199,10 +199,10 @@
         var dpo = e.labels.some(function (l) { return l.objective === 'dpo'; });
         var cols = [
             { label: 'Pool answered by' }, { label: 'Pool questions', num: true }, { label: 'Threshold', num: true },
-            { label: dpo ? 'Pairs' : 'Labelled', num: true }, { label: 'Label accuracy', num: true, title: 'Checked against the train answers after the run' },
-            { label: 'Wrong labels', num: true }, { label: dpo ? 'Training pairs' : 'Training solutions', num: true }
+            { label: dpo ? 'Pairs' : 'Labelled', better: 'up', num: true }, { label: 'Label accuracy', better: 'up', num: true, title: 'Checked against the train answers after the run' },
+            { label: 'Wrong labels', better: 'down', num: true }, { label: dpo ? 'Training pairs' : 'Training solutions', num: true }
         ];
-        if (dpo) cols.push({ label: 'Rejected answer was right', num: true, title: 'Pairs whose minority answer was in fact the right one' });
+        if (dpo) cols.push({ label: 'Rejected answer was right', better: 'down', num: true, title: 'Pairs whose minority answer was in fact the right one' });
         cols.push({ label: 'Next round trained', title: 'Objective, updates and learning rate of the adapter trained on these labels' },
                   { label: 'Loss first → last', num: true });
         var t = Rz.table(cols);
@@ -254,8 +254,8 @@
             { label: 'Round' }, { label: 'Questions', num: true },
             { label: 'Δ16 − Δ4, single', num: true, title: '16-bit change minus 4-bit change; negative means 16-bit gained less' },
             { label: 'Δ16 − Δ4, voted', num: true },
-            { label: 'Untrained 16-bit minus 4-bit, single', num: true, title: 'Gap left between the 4-bit model of this round and the untrained 16-bit model' },
-            { label: 'Untrained 16-bit minus 4-bit, voted', num: true }
+            { label: 'Untrained 16-bit minus 4-bit, single', better: 'down', num: true, title: 'Gap left between the 4-bit model of this round and the untrained 16-bit model' },
+            { label: 'Untrained 16-bit minus 4-bit, voted', better: 'down', num: true }
         ]);
         if (c.before) {
             t.tBodies[0].appendChild(row([
@@ -282,7 +282,7 @@
         if (!c || !c.rows.length) { note(target, 'No untrained control runs in the export.'); return; }
         var t = Rz.table([
             { label: 'Untrained 4-bit run' }, { label: 'GPU' }, { label: 'Batch', num: true }, { label: 'Token limit', num: true },
-            { label: 'Single answer', num: true }, { label: 'Cut off', num: true }, { label: 'Right among finished', num: true }, { label: 'Voted', num: true }
+            { label: 'Single answer', better: 'up', num: true }, { label: 'Cut off', better: 'down', num: true }, { label: 'Right among finished', better: 'up', num: true }, { label: 'Voted', better: 'up', num: true }
         ]);
         c.rows.forEach(function (r) {
             t.tBodies[0].appendChild(row([

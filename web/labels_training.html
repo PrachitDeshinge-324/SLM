@@ -18,6 +18,7 @@
             <li><strong>Part 1: the vote as a label source.</strong> Before a model can teach itself, it needs a way to tell which of its own answers to learn from, without an answer key. We measured two such signals at 16, 8 and 4-bit: agreement among 8 sampled answers (the vote), and the model judging its own answers (the verifier). This part is a self-contained measurement study.</li>
             <li><strong>Part 2: learning from the vote.</strong> The model trains on its own voted answers for several rounds, at 16-bit and 4-bit. Fine-tuning on the voted solutions (SFT) is the main loop; preference training on voted against minority answers (DPO) was tested for one round. Runs still in progress appear as such and fill in when they sync.</li>
         </ol>
+        <p class="muted small">In the table headings, ↑ means a higher value is better and ↓ a lower value is better. A column with no arrow has no better direction.</p>
     </section>
 
     <section class="content-box">

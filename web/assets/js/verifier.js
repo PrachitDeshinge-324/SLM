@@ -58,10 +58,10 @@
             { label: 'Dataset' },
             { label: 'Precision' },
             { label: 'Cells', num: true, title: 'Models with a comparable 16-bit run' },
-            { label: 'Δ voted accuracy', num: true, title: 'Generator majority, mean change in points' },
-            { label: 'Δ guided accuracy', num: true, title: 'Verifier-filtered majority, mean change in points' },
-            { label: 'Δ false positive rate', num: true, title: 'Mean change in points; a rise means more wrong traces approved' },
-            { label: 'Δ MCC', num: true, title: 'Mean change; a fall means worse discrimination' },
+            { label: 'Δ voted accuracy', better: 'up', num: true, title: 'Generator majority, mean change in points' },
+            { label: 'Δ guided accuracy', better: 'up', num: true, title: 'Verifier-filtered majority, mean change in points' },
+            { label: 'Δ false positive rate', better: 'down', num: true, title: 'Mean change in points; a rise means more wrong traces approved' },
+            { label: 'Δ MCC', better: 'up', num: true, title: 'Mean change; a fall means worse discrimination' },
             { label: 'FPR intervals off zero', num: true, title: 'Cells where the 95% interval of the FPR change excludes zero' }
         ]);
         var body = t.tBodies[0];
@@ -97,17 +97,17 @@
         { label: 'Precision' },
         { label: 'N', num: true, title: 'Solutions per question' },
         { label: 'Traces judged', num: true, title: 'Every solution to the questions of this row' },
-        { label: 'Cut off', num: true, title: 'Solutions that hit the token limit: counted as wrong, and they do not vote' },
-        { label: 'No verdict', num: true, title: 'Traces where the verifier\'s reply held no verdict; the rates leave them out' },
-        { label: 'Voted accuracy', num: true, title: 'Generator majority answer is correct' },
-        { label: 'Guided accuracy', num: true, title: 'Majority among the traces the verifier approved' },
-        { label: 'Guided − voted', num: true, title: 'Selection utility, points' },
+        { label: 'Cut off', better: 'down', num: true, title: 'Solutions that hit the token limit: counted as wrong, and they do not vote' },
+        { label: 'No verdict', better: 'down', num: true, title: 'Traces where the verifier\'s reply held no verdict; the rates leave them out' },
+        { label: 'Voted accuracy', better: 'up', num: true, title: 'Generator majority answer is correct' },
+        { label: 'Guided accuracy', better: 'up', num: true, title: 'Majority among the traces the verifier approved' },
+        { label: 'Guided − voted', better: 'up', num: true, title: 'Selection utility, points' },
         { label: 'Approval rate', num: true, title: 'Share of traces the verifier approved' },
-        { label: 'False positive rate', num: true, title: 'Share of incorrect traces the verifier approved' },
-        { label: 'MCC', num: true },
-        { label: 'Balanced accuracy', num: true },
-        { label: 'Δ FPR', num: true, title: 'Change against 16-bit, points, 95% interval' },
-        { label: 'Δ MCC', num: true, title: 'Change against 16-bit, 95% interval' },
+        { label: 'False positive rate', better: 'down', num: true, title: 'Share of incorrect traces the verifier approved' },
+        { label: 'MCC', better: 'up', num: true },
+        { label: 'Balanced accuracy', better: 'up', num: true },
+        { label: 'Δ FPR', better: 'down', num: true, title: 'Change against 16-bit, points, 95% interval' },
+        { label: 'Δ MCC', better: 'up', num: true, title: 'Change against 16-bit, 95% interval' },
         { label: 'Notes' }
     ];
 
