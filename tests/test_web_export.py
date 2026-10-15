@@ -241,6 +241,92 @@ def test_verifier_rows_are_not_compared_when_cut_off_status_or_token_limit_diffe
         assert rows["4bit"]["delta"] is None and "cut-off solutions are unknown" in rows["4bit"]["delta_note"]
 
 
+def test_vote_against_verifier_compares_scores_at_the_votes_number_of_labels():
+    from src.experiment_d.web_export import vote_against_verifier, vote_and_verdict
+
+    q1 = [_trace("18", True, True), _trace("18", True, False), _trace("5", False, True), _trace("18", True, True, truncated=True)]
+    q2 = [_trace("7", False, True)] * 4
+    q3 = [_trace("9", True, False)] * 3 + [_trace("9", True, None)]
+    q4 = [_trace("3", False, True, truncated=True)] * 4
+    # the cut-off "18" never votes but stays in the denominator; only verdicts on finished majority traces count
+    assert vote_and_verdict(q1) == (0.5, True, 0.5)
+    assert vote_and_verdict(q2) == (1.0, False, 1.0)
+    assert vote_and_verdict(q3) == (1.0, True, 0.0)
+    assert vote_and_verdict(q4) == (0.0, False, None)
+
+    out = vote_against_verifier([q1, q2, q3, q4], threshold=0.75)
+    assert out["labels_k"] == 2 and out["questions_without_verdict"] == 1
+    assert out["vote_label_accuracy"] == 0.5          # q2 and q3
+    assert out["verifier_label_accuracy"] == 0.5      # q2 (1.0) and q1 (0.5, ahead of q4's 0.5 by order)
+    assert abs(out["vote_auroc"] - 0.625) < 1e-9
+
+
+def _write_round_run(root, experiment, k, dataset, total, records, adapter=None):
+    """records: {qid: (reference answer, [answer per sample, None = cut off])}"""
+    from src.experiment_d.run_files import self_training_round_dir
+
+    folder = self_training_round_dir(root, experiment, k) / dataset / "generator" / "org_m"
+    folder.mkdir(parents=True, exist_ok=True)
+    with (folder / f"org_m_4bit_{dataset}_n8.jsonl").open("w") as handle:
+        handle.write(json.dumps({"type": "run_config", "model": "org/m", "precision": "4bit", "dataset": dataset, "n_samples": 8,
+                                 "total_questions": total, "max_new_tokens": 512, "gpu": "Tesla T4", "batch_size": 128,
+                                 "adapter_sha256": adapter}) + "\n")
+        for qid, (truth, answers) in records.items():
+            samples = [{"response": "unfinished" if a is None else f"Working {i}.\n#### {a}", "cutoff": a is None,
+                        "length": 512 if a is None else 100} for i, a in enumerate(answers)]
+            handle.write(json.dumps({"qid": qid, "dataset": dataset, "question": qid, "ground_truth": truth,
+                                     "raw_samples": samples, "performance": {"effective_batch_size": 128}}) + "\n")
+
+
+def test_self_training_experiment_rounds_labels_and_progress():
+    from src.experiment_d.run_files import adapter_dir
+    from src.experiment_d.web_export import score_self_training_experiment
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        right, wrong, cut = "18", "5", None
+        _write_round_run(root, "exp", 0, "gsm8k", 4, {
+            "t0": ("18", [right] * 8), "t1": ("18", [right] * 4 + [cut] * 4),
+            "t2": ("18", [wrong] * 8), "t3": ("18", [cut] * 8)})
+        _write_round_run(root, "exp", 1, "gsm8k", 4, {
+            "t0": ("18", [right] * 8), "t1": ("18", [right] * 8),
+            "t2": ("18", [wrong] * 8), "t3": ("18", [right] * 4 + [cut] * 4)}, adapter="abc")
+        _write_round_run(root, "exp", 0, "gsm8k_train", 3, {
+            "gsm8k_train_1": (None, ["10"] * 8),                 # labelled, right
+            "gsm8k_train_2": (None, ["3"] * 6 + ["4"] * 2),      # labelled, wrong
+            "gsm8k_train_3": (None, ["7"] * 5 + ["8"] * 3)})     # 5 of 8: not labelled at 0.75
+        _write_round_run(root, "exp", 1, "gsm8k_train", 3, {"gsm8k_train_1": (None, ["10"] * 8)})   # still running
+        log_dir = adapter_dir(root, "exp", 1, "org/m", "4bit")
+        log_dir.mkdir(parents=True)
+        (log_dir / "training_log.json").write_text(json.dumps({
+            "settings": {"objective": "sft", "threshold": 0.75, "train_steps": 200, "learning_rate": 1e-4},
+            "trained_solutions": 13, "losses": [0.2] * 10 + [0.1] * 20 + [0.05] * 10}))
+
+        spec = {"id": "exp", "part": "main", "objective": "sft", "precision": "4bit", "label": "SFT", "model": "org/m"}
+        entry, inner = score_self_training_experiment(root, spec, {"gsm8k_train_1": "10", "gsm8k_train_2": "4", "gsm8k_train_3": "7"})
+
+        assert entry["status"] == "in progress"
+        assert entry["in_progress"] == [{"stage": "round 1 pool", "done": 1, "total": 3}]
+        r0, r1 = entry["test"]
+        assert r0["change"] is None and r0["unfinished_questions"] == 1
+        assert abs(r0["single"] - 0.375) < 1e-9 and abs(r1["single"] - 0.625) < 1e-9
+        assert r0["voted"] == 0.5 and r1["voted"] == 0.75
+        assert r1["gpu"] == "Tesla T4" and r1["batches"] == [128] and r1["adapter"] is True
+        change = r1["change"]
+        assert abs(change["single"]["mean"] - 0.25) < 1e-9 and abs(change["cutoff"]["mean"] + 0.25) < 1e-9
+        assert (change["voted_lost"], change["voted_gained"]) == (0, 1)
+        same = change["finished_accuracy_same_questions"]
+        assert same["n"] == 3 and same["mean"] == 0.0        # t3 never finished in round 0, so it is left out
+
+        (labels,) = entry["labels"]
+        assert labels["round"] == 0 and labels["labelled"] == 2 and labels["label_accuracy"] == 0.5 and labels["wrong_labels"] == 1
+        assert labels["training"]["trained"] == 13 and labels["training"]["loss_first"] == 0.2 and labels["training"]["loss_last"] == 0.05
+        assert set(inner["tests"]) == {0, 1}
+
+        missing, none = score_self_training_experiment(root, {**spec, "id": "absent"}, {})
+        assert missing["status"] == "not synced" and none is None
+
+
 if __name__ == "__main__":
     test_question_counts_and_metrics()
     test_question_counts_can_keep_truncated_traces()
@@ -252,4 +338,6 @@ if __name__ == "__main__":
     test_standard_questions_keep_run_order_and_leave_short_runs_out()
     test_verifier_rows_cover_the_same_questions_and_every_trace()
     test_verifier_rows_are_not_compared_when_cut_off_status_or_token_limit_differs()
+    test_vote_against_verifier_compares_scores_at_the_votes_number_of_labels()
+    test_self_training_experiment_rounds_labels_and_progress()
     print("All web export tests passed!")

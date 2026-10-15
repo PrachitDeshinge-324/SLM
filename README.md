@@ -40,7 +40,7 @@ Findings, decisions and open questions: [RESEARCH_DOSSIER.md](RESEARCH_DOSSIER.m
 | `scripts/report_generator_metrics.py` | `results/<dataset>/generator/metrics/`: one CSV per dataset, calibration and accuracy plots |
 | `scripts/report_verifier_metrics.py` | `results/<dataset>/verifier_output/metrics/`: one CSV per model, confusion matrices |
 | `scripts/report_verifier_shared_questions.py` | `results/standardized_verifier_metrics/`: all models on the same 100 questions |
-| `scripts/export_web_data.py` | `web/assets/data/results.js`: every number on the Phase 1 and Phase 2 web pages, re-scored from `results/`. Verifier rows cover a fixed 100 questions and all their traces (truncated ones kept as wrong), so they differ from the two verifier reports |
+| `scripts/export_web_data.py` | `web/assets/data/results.js`: every number on the Phase 1, 2 and 3 web pages, re-scored from `results/`. Verifier rows cover a fixed 100 questions and all their traces (truncated ones kept as wrong), so they differ from the two verifier reports. Phase 3 also reads `results/self_training/` (the experiments listed in `SELF_TRAINING_EXPERIMENTS` in `web_export.py`; missing ones show as not synced) |
 
 Reports never trust the metrics stored inside a run file. They re-score every run from its raw outputs with the current code, drop truncated samples, and compare precisions on the questions they share.
 

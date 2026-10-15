@@ -16,16 +16,21 @@ traces. Truncated traces are therefore kept, as wrong traces, instead of dropped
 """
 import json
 import math
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 
+from src.experiment_d.answer_matching import answers_match
+from src.experiment_d.benchmarks import GSM8K_TRAIN_PARQUET, load_gsm8k_train_answers
+from src.experiment_d.evaluation_stats import auroc
 from src.experiment_d.rescoring import load_verifier_traces, rescore_record
 from src.experiment_d.run_files import (
-    generator_path_for_verifier_output, is_legacy_file, parse_run_name, read_run_config, safe_name, token_limit,
+    SELF_TRAINING_DIR, adapter_dir, generator_path_for_verifier_output, generator_run_path, is_legacy_file,
+    parse_run_name, read_run_config, safe_name, self_training_round_dir, token_limit,
 )
+from src.experiment_d.self_training import select_preference_pairs, select_pseudo_labels
 from src.experiment_d.verifier_metrics import COUNT_FIELDS, metrics_from_totals, question_counts
 
 PRECISIONS = ("16bit", "8bit", "4bit")
@@ -40,11 +45,18 @@ RESAMPLES = 2000
 CALIBRATION_BINS = 10
 CALIBRATION_MIN_COUNT = 5
 
+# The vote rule of the self-training loop: a question is labelled when at least this share of ALL its
+# samples give the majority answer (6 of 8). Cut-off samples never vote but stay in the denominator.
+LABEL_THRESHOLD = 0.75
+
 GENERATOR_DELTAS = (
     ("accuracy", "correctness"),
     ("sample_accuracy", "sample_accuracy"),
     ("pass_at_k", "oracle_correctness"),
+    ("label_share", "labelled"),
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Verifier metrics that get a paired interval against the 16-bit run: (output key, metrics_from_totals key).
 VERIFIER_DELTAS = (
@@ -154,10 +166,13 @@ def score_generator_run(path):
     precision = run_config.get("precision") or name.get("precision", "")
     n_samples = int(run_config.get("n_samples") or name.get("n_samples") or 0)
 
-    per_question, confidences, correctness = {}, [], []
+    per_question, confidences, correctness, labelled_right = {}, [], [], []
     sums = defaultdict(float)
     for record in records:
         metrics = rescore_record(record, dataset_id)
+        metrics["labelled"] = float(metrics["confidence_all"] >= LABEL_THRESHOLD - 1e-9)
+        if metrics["labelled"]:
+            labelled_right.append(float(metrics["correctness"]))
         key = record.get("qid", record["question"])
         per_question[key] = [float(metrics[source]) for _, source in GENERATOR_DELTAS]
         confidences.append(metrics["confidence"])
@@ -179,6 +194,9 @@ def score_generator_run(path):
         "accuracy": float(np.mean([v[0] for v in per_question.values()])),
         "sample_accuracy": float(np.mean([v[1] for v in per_question.values()])),
         "pass_at_k": float(np.mean([v[2] for v in per_question.values()])),
+        "label_share": len(labelled_right) / n,
+        "label_accuracy": float(np.mean(labelled_right)) if labelled_right else None,
+        "n_labelled": len(labelled_right),
         "confidence": sums["confidence"] / len(records),
         "confidence_all": sums["confidence_all"] / len(records),
         "diversity": sums["diversity"] / len(records),
@@ -256,6 +274,46 @@ def standard_questions(traces_by_precision: dict, n_samples: int, limit: int = V
     return questions, left_out
 
 
+def vote_and_verdict(traces: list) -> tuple:
+    """
+    (agreement, majority answer right, verifier score) of one question, from its relabelled traces.
+
+    Agreement is the majority count over ALL traces; cut-off traces never vote. The verifier score is
+    the approval rate among the finished traces that carry the majority answer, None without verdicts.
+    """
+    finished = [t for t in traces if t["answer"] is not None and t["truncated"] is not True]
+    counts = Counter(t["answer"] for t in finished)
+    if not counts:
+        return 0.0, False, None
+    majority, votes = counts.most_common(1)[0]
+    right = any(t["correct"] for t in finished if t["answer"] == majority)
+    verdicts = [bool(t["approved"]) for t in finished if t["answer"] == majority and t["approved"] is not None]
+    return votes / len(traces), right, (sum(verdicts) / len(verdicts) if verdicts else None)
+
+
+def vote_against_verifier(questions: list, threshold: float = LABEL_THRESHOLD) -> dict:
+    """
+    How well three label-free scores pick out questions whose majority answer is right: the vote's
+    agreement, the verifier's approval of the majority answer, and their product.
+
+    `questions` holds the relabelled traces of each question. For each score: AUROC, and the accuracy
+    of the k labels it ranks highest, with k = the number of questions the vote labels (agreement >=
+    threshold), so all three are compared at the same number of labels. A question without verdicts
+    gets a verifier score of 0.5 (no information).
+    """
+    rows = [vote_and_verdict(traces) for traces in questions]
+    agreement = np.array([r[0] for r in rows])
+    right = np.array([r[1] for r in rows], dtype=bool)
+    verdict = np.array([0.5 if r[2] is None else r[2] for r in rows])
+    k = int((agreement >= threshold - 1e-9).sum())
+    out = {"labels_k": k, "questions_without_verdict": sum(r[2] is None for r in rows)}
+    for name, score in (("vote", agreement), ("verifier", verdict), ("both", agreement * verdict)):
+        out[f"{name}_auroc"] = auroc(score, right)
+        top = np.argsort(-score, kind="stable")[:k]
+        out[f"{name}_label_accuracy"] = float(right[top].mean()) if k else None
+    return out
+
+
 def verifier_pairing_problem(base, row):
     """Why a verifier row cannot be compared with its 16-bit row, or None when it can."""
     if base is None:
@@ -318,6 +376,7 @@ def collect_verifier_runs(results_dir, questions: int = VERIFIER_QUESTIONS) -> t
             }
             for out_key, key in VERIFIER_FIELDS:
                 row[out_key] = metrics[key]
+            row["vote_vs_verifier"] = vote_against_verifier([traces[precision][q] for q in selected])
             if not row["truncation_unknown"]:     # the traces are the ones in the generator file, so its limit applies
                 row["max_new_tokens"] = token_limit(read_run_config(generator_path_for_verifier_output(files[precision])), dataset)
 
@@ -346,6 +405,325 @@ def verifier_delta(base: np.ndarray, other: np.ndarray, metrics_of, resamples: i
     for i, (name, _) in enumerate(VERIFIER_DELTAS):
         delta[name] = _interval((point[i], low[i], high[i]))
     return delta
+
+
+# ---------------------------------------------------------------- self-training runs
+
+SELF_TRAINING_MODEL = "Qwen/Qwen3.5-0.8B"
+
+# The experiments the Phase 3 page shows, in page order. Any not found under results/self_training/
+# are listed as not synced yet. `control`: an untrained run (a results root, relative to the results
+# directory) that replaces round 0 as the reference, for an experiment whose round 0 ran at another
+# batch size than its trained rounds.
+SELF_TRAINING_EXPERIMENTS = (
+    {"id": "q08_sft_16bit_p500", "part": "main", "objective": "sft", "precision": "16bit", "label": "SFT, 16-bit",
+     "note": "500 unlabelled train questions, 200 test questions, batch 128 on a T4."},
+    {"id": "q08_sft_4bit_p500", "part": "main", "objective": "sft", "precision": "4bit", "label": "SFT, 4-bit",
+     "note": "500 unlabelled train questions, 200 test questions, batch 128 on a T4."},
+    {"id": "qwen08_16bit_pilot", "part": "pilot", "objective": "sft", "precision": "16bit", "label": "SFT, 16-bit (pilot)",
+     "note": "200 unlabelled train questions, 100 test questions, batch 256 on an L4."},
+    {"id": "qwen08_4bit_pilot", "part": "pilot", "objective": "sft", "precision": "4bit", "label": "SFT, 4-bit (pilot)",
+     "control": "self_training/qwen08_4bit_batch_check/b256",
+     "note": "200 unlabelled train questions, 100 test questions on an L4. Round 0 ran at batch 64 and the trained "
+             "rounds at batch 256, so every round is compared with an untrained run at batch 256."},
+    {"id": "qwen08_4bit_dpo_similar1", "part": "dpo", "objective": "dpo", "precision": "4bit", "label": "DPO, 4-bit, 512 tokens",
+     "note": "One round of length-normalised DPO on (majority, minority) pairs of similar length; 200 unlabelled "
+             "train questions, 100 test questions, batch 128 on a T4."},
+    {"id": "qwen08_4bit_dpo_similar1_t1024", "part": "dpo", "objective": "dpo", "precision": "4bit",
+     "label": "DPO, 4-bit, 1,024 tokens",
+     "note": "The DPO test repeated with a 1,024-token limit, against an untrained run at the same limit."},
+)
+
+# 16-bit and 4-bit arms trained the same way, compared round by round.
+SELF_TRAINING_COMPARISONS = (
+    {"label": "Main run", "full": "q08_sft_16bit_p500", "quantized": "q08_sft_4bit_p500"},
+    {"label": "Pilot", "full": "qwen08_16bit_pilot", "quantized": "qwen08_4bit_pilot"},
+)
+
+# Untrained 4-bit runs of the same model on the same test questions: how far the numbers move with no training.
+SELF_TRAINING_CONTROLS = (
+    {"label": "Stored full-test run, older session", "root": ""},
+    {"label": "4-bit pilot, round 0", "root": "self_training/qwen08_4bit_pilot/round0"},
+    {"label": "Check run", "root": "self_training/qwen08_4bit_batch_check/b128"},
+    {"label": "Check run", "root": "self_training/qwen08_4bit_batch_check/b256"},
+    {"label": "Check run, 1,024 tokens", "root": "self_training/qwen08_4bit_tokens1024/untrained"},
+)
+
+TEST_DATASET, POOL_DATASET, ST_SAMPLES = "gsm8k", "gsm8k_train", 8
+
+
+def test_run_scores(path) -> tuple:
+    """(header, qid -> per-question numbers) of one test run, re-scored from its raw samples."""
+    header, records = read_generator_run(path)
+    scores = {}
+    for record in records:
+        metrics = rescore_record(record, header.get("dataset") or TEST_DATASET)
+        n = len(record["raw_samples"])
+        scores[record.get("qid", record["question"])] = {
+            "single": metrics["sample_accuracy"],
+            "cutoff": metrics["cutoff_rate"],
+            "voted": float(bool(metrics["correctness"])),
+            "right": metrics["sample_accuracy"] * n,
+            "finished": (1 - metrics["cutoff_rate"]) * n,
+            "confident": float(metrics["confidence_all"] >= LABEL_THRESHOLD - 1e-9),
+            "distinct": metrics["diversity"],
+            "tokens": float(np.mean([sample.get("length", 0) for sample in record["raw_samples"]])),
+            "batch": (record.get("performance") or {}).get("effective_batch_size") or header.get("batch_size"),
+        }
+    return header, scores
+
+
+def _shared(*score_sets) -> list:
+    return sorted(set.intersection(*[set(s) for s in score_sets])) if score_sets else []
+
+
+def _column(scores: dict, qids: list, key: str) -> np.ndarray:
+    return np.array([scores[q][key] for q in qids], float)
+
+
+def test_summary(scores: dict, qids: list) -> dict:
+    """Mean of each per-question number over `qids`; accuracy among finished answers is pooled."""
+    finished_per_question = _column(scores, qids, "finished")
+    finished = finished_per_question.sum()
+    return {
+        "unfinished_questions": int((finished_per_question == 0).sum()),
+        "single": _column(scores, qids, "single").mean(),
+        "cutoff": _column(scores, qids, "cutoff").mean(),
+        "finished_accuracy": _column(scores, qids, "right").sum() / finished if finished else None,
+        "voted": _column(scores, qids, "voted").mean(),
+        "confident": _column(scores, qids, "confident").mean(),
+        "distinct": _column(scores, qids, "distinct").mean(),
+        "tokens": _column(scores, qids, "tokens").mean(),
+    }
+
+
+def test_change(after: dict, before: dict, qids: list, resamples: int = RESAMPLES, seed: int = 0) -> dict:
+    """
+    `after` minus `before` on the same questions, each with a 95% paired bootstrap interval. Accuracy
+    among finished answers is a pooled ratio, so it is recomputed on every resample of the questions.
+    """
+    columns = ("single", "cutoff", "voted")
+    diff = np.array([[after[q][c] - before[q][c] for c in columns] for q in qids])
+    change = {"n_paired": len(qids)}
+    for name, row in zip(columns, paired_intervals(diff, resamples, seed)):
+        change[name] = _interval(row)
+
+    right_a, finished_a = _column(after, qids, "right"), _column(after, qids, "finished")
+    right_b, finished_b = _column(before, qids, "right"), _column(before, qids, "finished")
+
+    def ratio_change(index):
+        da, db = finished_a[index].sum(), finished_b[index].sum()
+        return right_a[index].sum() / da - right_b[index].sum() / db if da and db else np.nan
+
+    rng = np.random.default_rng(seed)
+    draws = [ratio_change(rng.integers(0, len(qids), len(qids))) for _ in range(resamples)]
+    change["finished_accuracy"] = _interval((ratio_change(np.arange(len(qids))), *np.nanpercentile(draws, [2.5, 97.5])))
+
+    # The pooled ratio shifts when questions drop out of it (every sample cut off), so also compare it
+    # within each question, on the questions where both runs finished at least one sample.
+    both = [q for q in qids if after[q]["finished"] > 0 and before[q]["finished"] > 0]
+    if both:
+        within = np.array([[after[q]["right"] / after[q]["finished"] - before[q]["right"] / before[q]["finished"]] for q in both])
+        change["finished_accuracy_same_questions"] = {**_interval(paired_intervals(within, resamples, seed)[0]), "n": len(both)}
+    else:
+        change["finished_accuracy_same_questions"] = None
+
+    voted_a, voted_b = _column(after, qids, "voted"), _column(before, qids, "voted")
+    change["voted_lost"] = int(((voted_b == 1) & (voted_a == 0)).sum())
+    change["voted_gained"] = int(((voted_b == 0) & (voted_a == 1)).sum())
+    return change
+
+
+def _run_facts(header: dict, scores: dict) -> dict:
+    """Where and how a test run was made: the facts two compared runs must share."""
+    return {
+        "gpu": header.get("gpu"),
+        "max_new_tokens": token_limit(header, TEST_DATASET),
+        "batches": sorted({s["batch"] for s in scores.values() if s["batch"] is not None}),
+        "adapter": bool(header.get("adapter_sha256")),
+    }
+
+
+def _round_indices(experiment_dir: Path) -> list:
+    return sorted(int(p.name[len("round"):]) for p in experiment_dir.glob("round*")
+                  if p.is_dir() and p.name[len("round"):].isdigit())
+
+
+def _training_facts(log: dict) -> dict:
+    settings = log.get("settings", {})
+    losses = log.get("losses") or []
+    window = 10 if len(losses) >= 20 else 1     # a short run (DPO) has too few steps to average over
+    return {
+        "objective": settings.get("objective", "sft"),
+        "trained": log.get("trained_solutions", log.get("selected_pairs")),
+        "steps": log.get("train_steps", settings.get("train_steps")),
+        "learning_rate": settings.get("learning_rate"),
+        "loss_first": float(np.mean(losses[:window])) if losses else None,
+        "loss_last": float(np.mean(losses[-window:])) if losses else None,
+    }
+
+
+def pool_labels(records: list, objective: str, threshold: float, pairing: str, train_answers: dict) -> dict:
+    """
+    The labels one round's pool answers give the next round, re-selected with the current code, and how
+    many were right. Answers are read here only to score the labels after the run, never to choose them.
+    """
+    if objective == "dpo":
+        items = select_preference_pairs(records, POOL_DATASET, threshold, pairing)
+        labels = {item["qid"]: item["label"] for item in items}
+        rejected = [answers_match(item["rejected_answer"], train_answers[item["qid"]]) for item in items if item["qid"] in train_answers]
+    else:
+        items = select_pseudo_labels(records, POOL_DATASET, threshold)
+        labels = {item["qid"]: item["label"] for item in items}
+        rejected = []
+    right = [answers_match(label, train_answers[qid]) for qid, label in labels.items() if qid in train_answers]
+    return {
+        "labelled": len(labels),
+        "label_accuracy": float(np.mean(right)) if right else None,
+        "wrong_labels": len(right) - int(sum(right)),
+        "items": len(items),
+        "rejected_right": float(np.mean(rejected)) if rejected else None,
+    }
+
+
+def score_self_training_experiment(results_dir, spec: dict, train_answers: dict) -> tuple:
+    """(page entry, internals for the cross-precision comparison) of one self-training experiment."""
+    results_dir = Path(results_dir)
+    model, precision = spec.get("model", SELF_TRAINING_MODEL), spec["precision"]
+    entry = {key: spec.get(key) for key in ("id", "part", "label", "note", "precision", "objective")}
+    entry["model"] = model
+    experiment_dir = results_dir / SELF_TRAINING_DIR / spec["id"]
+    if not experiment_dir.is_dir():
+        entry["status"] = "not synced"
+        return entry, None
+
+    rounds = _round_indices(experiment_dir)
+    tests, facts, in_progress = {}, {}, []
+    for k in rounds:
+        path = generator_run_path(self_training_round_dir(results_dir, spec["id"], k), model, precision, TEST_DATASET, ST_SAMPLES)
+        if not path.exists():
+            continue
+        header, scores = test_run_scores(path)
+        total = header.get("total_questions")
+        if total and len(scores) < total:
+            in_progress.append({"stage": f"round {k} test", "done": len(scores), "total": total})
+            continue
+        tests[k], facts[k] = scores, _run_facts(header, scores)
+
+    reference_label, reference, reference_facts = "round 0", tests.get(0), facts.get(0)
+    if spec.get("control"):
+        path = generator_run_path(results_dir / spec["control"], model, precision, TEST_DATASET, ST_SAMPLES)
+        if path.exists():
+            header, reference = test_run_scores(path)
+            reference_label, reference_facts = "untrained control", _run_facts(header, reference)
+
+    rows = []
+    if reference is not None:
+        qids = _shared(reference, *tests.values())
+        entry["test_questions"] = len(qids)
+        if spec.get("control"):
+            rows.append({"round": None, "name": "untrained control", **reference_facts, **test_summary(reference, qids), "change": None})
+        for k in sorted(tests):
+            is_reference = k == 0 and not spec.get("control")
+            rows.append({"round": k, "name": f"round {k}", **facts[k], **test_summary(tests[k], qids),
+                         "change": None if is_reference else test_change(tests[k], reference, qids)})
+    entry["reference"] = reference_label
+    entry["test"] = rows
+
+    labels = []
+    for k in rounds:
+        path = generator_run_path(self_training_round_dir(results_dir, spec["id"], k), model, precision, POOL_DATASET, ST_SAMPLES)
+        if not path.exists():
+            continue
+        header, records = read_generator_run(path)
+        total = header.get("total_questions")
+        if total and len(records) < total:
+            in_progress.append({"stage": f"round {k} pool", "done": len(records), "total": total})
+            continue
+        log_file = adapter_dir(results_dir, spec["id"], k + 1, model, precision) / "training_log.json"
+        log = json.loads(log_file.read_text()) if log_file.exists() else {}
+        settings = log.get("settings", {})
+        objective = settings.get("objective", spec.get("objective") or "sft")
+        threshold = settings.get("threshold", 0.625 if objective == "dpo" else LABEL_THRESHOLD)
+        row = {"round": k, "pool_questions": len(records), "objective": objective, "threshold": threshold,
+               **pool_labels(records, objective, threshold, settings.get("pairing", "similar_length"), train_answers),
+               "training": _training_facts(log) if log else None}
+        labels.append(row)
+    entry["labels"] = labels
+    entry["in_progress"] = in_progress
+    entry["status"] = "in progress" if in_progress else "synced"
+    return entry, {"tests": tests, "reference": reference}
+
+
+def compare_arms(full: dict, quantized: dict) -> dict:
+    """
+    16-bit against 4-bit, round by round, each against its own untrained reference on shared questions:
+    the gap before training, the difference of the two changes, and the gap left to the untrained 16-bit model.
+    """
+    def per_question(scores, qids, key):
+        return _column(scores, qids, key)
+
+    out = {"before": None, "rounds": []}
+    if not full or not quantized or full["reference"] is None or quantized["reference"] is None:
+        return out
+    full_ref, quant_ref = full["reference"], quantized["reference"]
+    qids = _shared(full_ref, quant_ref)
+    if qids:
+        gap = np.stack([per_question(full_ref, qids, k) - per_question(quant_ref, qids, k) for k in ("single", "voted")], axis=1)
+        intervals = paired_intervals(gap)
+        out["before"] = {"n_paired": len(qids), "single": _interval(intervals[0]), "voted": _interval(intervals[1])}
+    for k in sorted((set(full["tests"]) & set(quantized["tests"])) - {0}):
+        qids = _shared(full_ref, quant_ref, full["tests"][k], quantized["tests"][k])
+        if not qids:
+            continue
+        columns = []
+        for key in ("single", "voted"):
+            full_change = per_question(full["tests"][k], qids, key) - per_question(full_ref, qids, key)
+            quant_change = per_question(quantized["tests"][k], qids, key) - per_question(quant_ref, qids, key)
+            columns.append(full_change - quant_change)
+        for key in ("single", "voted"):
+            columns.append(per_question(full_ref, qids, key) - per_question(quantized["tests"][k], qids, key))
+        intervals = paired_intervals(np.stack(columns, axis=1))
+        out["rounds"].append({
+            "round": k, "n_paired": len(qids),
+            "difference_single": _interval(intervals[0]), "difference_voted": _interval(intervals[1]),
+            "gap_single": _interval(intervals[2]), "gap_voted": _interval(intervals[3]),
+        })
+    return out
+
+
+def untrained_controls(results_dir) -> dict:
+    """The untrained 4-bit runs of SELF_TRAINING_CONTROLS on the questions they share."""
+    scored = []
+    for spec in SELF_TRAINING_CONTROLS:
+        path = generator_run_path(Path(results_dir) / spec["root"], SELF_TRAINING_MODEL, "4bit", TEST_DATASET, ST_SAMPLES)
+        if path.exists():
+            header, scores = test_run_scores(path)
+            scored.append((spec, header, scores))
+    if not scored:
+        return {"questions": 0, "rows": []}
+    qids = _shared(*[scores for _, _, scores in scored])
+    rows = [{"name": spec["label"], **_run_facts(header, scores), **test_summary(scores, qids)} for spec, header, scores in scored]
+    return {"questions": len(qids), "rows": rows}
+
+
+def collect_self_training(results_dir) -> dict:
+    parquet = REPO_ROOT / GSM8K_TRAIN_PARQUET
+    train_answers = load_gsm8k_train_answers(str(parquet)) if parquet.exists() else {}
+    experiments, internals = [], {}
+    for spec in SELF_TRAINING_EXPERIMENTS:
+        entry, inner = score_self_training_experiment(results_dir, spec, train_answers)
+        experiments.append(entry)
+        internals[spec["id"]] = inner
+    comparisons = [{"label": c["label"], "full": c["full"], "quantized": c["quantized"],
+                    **compare_arms(internals.get(c["full"]), internals.get(c["quantized"]))}
+                   for c in SELF_TRAINING_COMPARISONS]
+    return {
+        "label_threshold": LABEL_THRESHOLD,
+        "experiments": experiments,
+        "comparisons": comparisons,
+        "controls": untrained_controls(results_dir),
+    }
 
 
 # ---------------------------------------------------------------- assembly and output
@@ -396,6 +774,8 @@ def build_web_data(results_dir) -> dict:
         "verifier": verifier,
         "verifier_questions": VERIFIER_QUESTIONS,
         "verifier_left_out": verifier_left_out,
+        "label_threshold": LABEL_THRESHOLD,
+        "self_training": collect_self_training(results_dir),
     }
 
 

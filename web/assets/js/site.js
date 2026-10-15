@@ -84,6 +84,12 @@
           summary: 'Whether quantized models can judge their own reasoning: false positive rate, MCC and what verifier-guided voting adds.',
           scripts: ['assets/data/results.js', 'assets/js/results.js', 'assets/js/verifier.js'] },
 
+        { id: 'labels-training', file: 'labels_training.html', nav: 'Phase 3: Labels & Self-Training', group: 'results', libs: ['mathjax'], toc: true,
+          title: 'Phase 3: Labels and Self-Training',
+          subtitle: 'Whether a quantized model\'s own votes make good labels, and what happens when it trains on them.',
+          summary: 'Label supply and accuracy by precision, the vote against the verifier, and SFT and DPO self-training at 16-bit and 4-bit.',
+          scripts: ['assets/data/results.js', 'assets/js/results.js', 'assets/js/labels-training.js'] },
+
         { id: 'audit', file: 'audit.html', nav: 'Audit', group: 'direction', toc: true, local: true, notice: 'local-only',
           title: 'Audit & New Direction',
           subtitle: 'What was wrong, what the data showed at the time, and the one idea worth a paper.',
