@@ -11,126 +11,158 @@
     <noscript><div class="callout warning">The tables on this page are drawn from <code>assets/data/results.js</code> and need JavaScript.</div></noscript>
 
     <section class="content-box">
-        <h2>About this page</h2>
+        <h2>The question</h2>
         <p class="muted small" id="source-line"></p>
-        <p>The page has two parts.</p>
-        <ol class="takeaways">
-            <li><strong>Part 1: the vote as a label source.</strong> Before a model can teach itself, it needs a way to tell which of its own answers to learn from, without an answer key. We measured two such signals at 16, 8 and 4-bit: agreement among 8 sampled answers (the vote), and the model judging its own answers (the verifier). This part is a self-contained measurement study.</li>
-            <li><strong>Part 2: learning from the vote.</strong> The model trains on its own voted answers for several rounds, at 16-bit and 4-bit. Fine-tuning on the voted solutions (SFT) is the main loop; preference training on voted against minority answers (DPO) was tested for one round. Runs still in progress appear as such and fill in when they sync.</li>
-        </ol>
-        <p class="muted small">In the table headings, ↑ means a higher value is better and ↓ a lower value is better. A column with no arrow has no better direction.</p>
+        <p>A small model can label its own training data without an answer key: sample several answers and keep the ones most samples agree on. This page asks two things. First, does quantization spoil those labels? Second, when the model trains on them for several rounds, what does it actually learn?</p>
+        <p class="muted small">In table headings, ↑ means a higher value is better and ↓ a lower value is better; a column with no arrow has no better direction. Each section keeps its supporting tables in the collapsed cards below it.</p>
     </section>
 
     <section class="content-box">
-        <h2>1.1 How a question gets a label</h2>
-        <p>For a question, draw $N$ answers. Cut-off answers (they hit the token limit) never vote. The majority answer $\hat a$ becomes the question's label when enough of <em>all</em> $N$ samples agree:</p>
+        <h2>Key takeaways</h2>
+        <p class="small">What the main run shows across its rounds, at 16-bit and at 4-bit, each with its evidence. The label says how firm it is: <strong>clear</strong> means every round agrees and the intervals exclude zero; <strong>steady</strong> means it moved the same way every round, for a number with no interval; <strong>within noise</strong> means the same direction every round but most intervals include zero; <strong>pattern</strong> and <strong>anomaly</strong> are read off the per-round numbers without a test; <strong>next</strong> is a proposal, not a result.</p>
+        <ol class="takeaways" id="takeaways"></ol>
+    </section>
+
+    <section class="content-box">
+        <h2>1. The idea: the vote as a teacher</h2>
+        <p>Draw $N$ answers to a question. Answers cut off at the token limit never vote. If enough of <em>all</em> $N$ samples agree, the majority answer $\hat a$ becomes the question's label, and the solutions that reach it become training data:</p>
         <div class="formula">$$\text{label } \hat a \quad\text{if}\quad \frac{n(\hat a)}{N} \ge \tau, \qquad \tau = 0.75 \;(\text{6 of 8})$$</div>
-        <div class="grid">
-            <div class="card">
-                <h3>Labelled</h3>
-                <p>The share of questions that receive a label. It is the supply of training data.</p>
+        <p>Two numbers decide whether this can work. <strong>Supply</strong> $n$ is how many questions get a label. <strong>Label accuracy</strong> $a$ is the share of those labels that are right, checked against the answer key only afterwards. A round of training therefore sees $n\,a$ right labels and $n(1-a)$ wrong ones. Self-training helps only if $a$ stays high as the loop goes on, because each round's trained model writes the next round's labels.</p>
+        <details class="fold">
+            <summary>The loop and the training objectives</summary>
+            <div class="fold-body">
+                <ol>
+                    <li><strong>Round 0</strong> is the untrained model. It answers the test questions (the control) and a pool of GSM8K train questions loaded without their answers.</li>
+                    <li>Pool questions are labelled by the rule above.</li>
+                    <li>A fresh LoRA adapter is trained on the frozen base at the same precision, every round.</li>
+                    <li>The base with the adapter applied but not merged (so a 4-bit base stays 4-bit) answers the same test questions with the same seeds, and answers the pool again for the next round's labels.</li>
+                </ol>
+                <div class="grid">
+                    <div class="card">
+                        <h3>SFT on voted solutions (main loop)</h3>
+                        <div class="formula">$$\mathcal{L}_{\text{SFT}} = -\frac{1}{T}\sum_{\text{solutions}}\sum_{t}\log p_\theta(x_t \mid x_{&lt;t})$$</div>
+                        <p>Next-token loss on every finished solution that reaches the voted answer; the prompt is masked. $T$ is the number of solution tokens in the batch.</p>
+                    </div>
+                    <div class="card">
+                        <h3>DPO on voted against minority (one round)</h3>
+                        <div class="formula">$$\mathcal{L}_{\text{DPO}} = -\log\sigma\!\Big(\beta\big[\Delta\bar\ell(\text{chosen}) - \Delta\bar\ell(\text{rejected})\big]\Big)$$</div>
+                        <p>One pair per question: a solution with the voted answer against one with another answer, of similar length. $\Delta\bar\ell$ is the mean per-token log-probability under the trained model minus under the frozen untrained model.</p>
+                    </div>
+                </div>
             </div>
-            <div class="card">
-                <h3>Label accuracy</h3>
-                <p>The share of labels that equal the reference answer. It is computed after the fact; the rule itself never sees the answer key.</p>
-            </div>
-        </div>
+        </details>
     </section>
 
     <section class="content-box">
-        <h2>1.2 Label supply and quality by precision</h2>
-        <p>Each row is one generation run, re-scored from its raw samples. The change is against the 16-bit run of the same model on the questions both contain, with a 95% paired bootstrap interval; green or red means the interval excludes zero.</p>
-        <div class="chips" id="label-chips" role="group" aria-label="Dataset"></div>
-        <div id="label-table"></div>
-    </section>
-
-    <section class="content-box">
-        <h2>1.3 The vote against the verifier</h2>
-        <p>Three label-free scores for "the voted answer is right": the vote's agreement, the verifier's approval of the solutions that carry the voted answer, and the two multiplied. Each is judged two ways.</p>
+        <h2>2. Does quantization spoil the labels?</h2>
         <ul>
-            <li><strong>AUROC:</strong> the chance that a question whose voted answer is right gets a higher score than one whose voted answer is wrong. 0.5 means no signal.</li>
-            <li><strong>Label accuracy at the vote's number of labels:</strong> each score picks as many questions as the vote labels (agreement ≥ 0.75), and we check how many of those labels are right. All three are compared at the same amount of training data.</li>
+            <li><strong>Fewer labels, about as accurate.</strong> Quantization mostly lowers how many questions reach the agreement threshold. Where a 4-bit model still agrees with itself, its label is usually about as often right as at 16-bit; Gemma is the exception. How much supply drops depends on the model.</li>
+            <li><strong>The vote is the better label source.</strong> Asking the model to judge its own answers (the verifier) separates right from wrong voted answers worse than agreement does, and multiplying the two does not reliably help. Several models' verifiers give no usable verdicts at all.</li>
         </ul>
+        <p>Each score below ranks questions by "the voted answer is right". <strong>AUROC</strong> is the chance a right voted answer outranks a wrong one (0.5 is no signal). <strong>Label accuracy at the vote's number of labels</strong> lets each score pick as many questions as the vote labels, so all three are compared at the same supply.</p>
         <div id="verifier-summary"></div>
-        <div id="verifier-table"></div>
-        <p class="muted small">Rows are scored on the same questions as the Phase 2 page. A verifier is marked unusable when fewer than 90% of its verdicts can be parsed, or when it approves almost everything (97% or more) or almost nothing (5% or less); the summary uses only usable rows.</p>
-    </section>
-
-    <section class="content-box">
-        <h2>1.4 What Part 1 supports</h2>
-        <ul>
-            <li><strong>Fewer labels, about as accurate.</strong> Quantization mostly lowers how many questions reach the agreement threshold. For most models, where a 4-bit model still agrees with itself its label is about as often right as at 16-bit; Gemma is the exception. Read the Labelled and Label accuracy columns of 1.2 together.</li>
-            <li><strong>The vote is the label source.</strong> On its own, the model judging its own answers ranks right and wrong voted answers clearly worse than the vote does. Multiplying the two gives mixed results: it lowers AUROC in more rows than it raises it, and changes label accuracy at a fixed number of labels little (1.3). Verifiers of several models also fail to give usable verdicts at all.</li>
-            <li><strong>How much quantization hurts depends on the model.</strong> Compare the change column across models in 1.2.</li>
-            <li><strong>Calibration</strong> of agreement against accuracy at each precision is drawn on the Phase 1 page; false positive rates and MCC of the verifier are on the Phase 2 page.</li>
-        </ul>
-        <p class="muted small">As a paper on its own, this part is a measurement study: does weight quantization change how good a small model's self-labels are? Its limits: one quantizer (bitsandbytes), nothing below 4 bits, and mostly GSM8K.</p>
-    </section>
-
-    <section class="content-box">
-        <h2>2.1 The self-training loop</h2>
-        <ol>
-            <li><strong>Round 0</strong> is the untrained model. It answers the test questions (the control) and a pool of GSM8K train questions loaded without their answers.</li>
-            <li><strong>Labels:</strong> pool questions are labelled by the rule in 1.1.</li>
-            <li><strong>Training:</strong> a fresh LoRA adapter on the frozen base, at the same precision, every round.</li>
-            <li><strong>Test:</strong> the base with the adapter applied but not merged, so a 4-bit base stays 4-bit, answers the same test questions with the same seeds.</li>
-            <li>The trained model answers the pool again, and its votes become the next round's labels.</li>
-        </ol>
-        <div class="grid">
-            <div class="card">
-                <h3>SFT on voted solutions</h3>
-                <div class="formula">$$\mathcal{L}_{\text{SFT}} = -\frac{1}{T}\sum_{\text{solutions}}\sum_{t}\log p_\theta(x_t \mid x_{&lt;t})$$</div>
-                <p>Next-token loss on every finished solution that reaches the voted answer; the prompt is masked. $T$ is the number of solution tokens in the batch.</p>
+        <details class="fold">
+            <summary>Label supply and accuracy for every run</summary>
+            <div class="fold-body">
+                <p class="small">Each row is one generation run, re-scored from its raw samples. The change is against the 16-bit run of the same model on the questions both contain, with a 95% paired bootstrap interval; green or red means the interval excludes zero.</p>
+                <div class="chips" id="label-chips" role="group" aria-label="Dataset"></div>
+                <div id="label-table"></div>
             </div>
-            <div class="card">
-                <h3>DPO on voted against minority</h3>
-                <div class="formula">$$\mathcal{L}_{\text{DPO}} = -\log\sigma\!\Big(\beta\big[\Delta\bar\ell(\text{chosen}) - \Delta\bar\ell(\text{rejected})\big]\Big)$$</div>
-                <p>One pair per question: a solution with the voted answer against one with another answer, of similar length. $\Delta\bar\ell$ is the mean per-token log-probability under the trained model minus under the frozen untrained model.</p>
+        </details>
+        <details class="fold">
+            <summary>The vote against the verifier, row by row</summary>
+            <div class="fold-body">
+                <div id="verifier-table"></div>
+                <p class="muted small">Rows are scored on the same questions as the Phase 2 page. A verifier is marked unusable when fewer than 90% of its verdicts can be parsed, or when it approves almost everything (97% or more) or almost nothing (5% or less); the summary uses only usable rows.</p>
             </div>
-        </div>
-        <p>Every change in single-answer accuracy splits into finishing more often and being right more often when finished:</p>
-        <div class="formula">$$\text{single-answer accuracy} = (1 - \text{cut-off rate}) \times \text{right among finished}$$</div>
-        <p class="muted small">Right among finished is pooled over questions, so it moves when questions drop out of it. The <em>same questions</em> column compares it question by question, on questions where both runs finished at least one answer.</p>
+        </details>
     </section>
 
     <section class="content-box">
-        <h2>2.2 Main run: 16-bit and 4-bit</h2>
-        <p>Both arms use the same pool, test questions, training settings, GPU type, batch size and library versions, so only the weight precision differs. Every round is compared with its own untrained round 0.</p>
-        <div id="main-runs"></div>
-        <h3>16-bit against 4-bit</h3>
-        <div id="main-comparison"></div>
+        <h2>3. Training on the vote at 16-bit and 4-bit</h2>
+        <div id="main-setup"></div>
+
+        <h3>3.1 What the gain is made of</h3>
+        <p>Single-answer accuracy $s$ is the product of finishing and being right when finished, where $c$ is the cut-off rate and $f$ the accuracy among finished answers:</p>
+        <div class="formula">$$s = (1 - c)\,f \quad\Longrightarrow\quad s_k - s_0 = \underbrace{(c_0 - c_k)\,f_0}_{\text{finishing more}} \;+\; \underbrace{(1 - c_k)\,(f_k - f_0)}_{\text{right more often when finished}}$$</div>
+        <p>The split is exact. If self-training improved reasoning, the second term would carry the gain; if it only taught the model to stop in time, the first would. Each arm is compared with its own round 0.</p>
+        <div id="finding-decomposition"></div>
+        <div id="decomposition-table"></div>
+
+        <h3>3.2 The labels drift</h3>
+        <p>Each round's model labels the pool again. If supply rises from $n_0$ to $n_k$ while accuracy moves from $a_0$ to $a_k$, the labels <em>added</em> since round 0 are right at the rate</p>
+        <div class="formula">$$a_{\text{added}} = \frac{n_k a_k - n_0 a_0}{n_k - n_0}$$</div>
+        <p>A low $a_{\text{added}}$ means the loop is growing its training set mostly at the margin, where the vote is least reliable.</p>
+        <div id="finding-labels"></div>
+        <div id="labels-table"></div>
+
+        <h3>3.3 The vote sharpens around its own errors</h3>
+        <p>Apply the same label rule to the held-out test questions: a <em>confident</em> question is one where at least 6 of 8 samples agree, and the share of confident questions whose answer is right is the label accuracy the model would reach on questions it has never trained on.</p>
+        <div id="finding-vote"></div>
+        <div id="vote-table"></div>
+
+        <details class="fold">
+            <summary>All per-round numbers and training settings, both arms</summary>
+            <div class="fold-body">
+                <p class="small">Right among finished is pooled over questions, so it moves when questions drop out of it; the <em>same questions</em> column compares it question by question, on questions where both runs finished at least one answer.</p>
+                <div id="main-full"></div>
+            </div>
+        </details>
     </section>
 
     <section class="content-box">
-        <h2>2.3 Pilot</h2>
-        <p>The first, smaller run. It found that batch size moves the numbers (see 2.4), which is why the 4-bit arm is compared with an untrained run at the batch size of its trained rounds.</p>
-        <div id="pilot-runs"></div>
-        <h3>16-bit against 4-bit</h3>
-        <div id="pilot-comparison"></div>
+        <h2>4. Does the 4-bit model catch up with 16-bit?</h2>
+        <p>Two quantities, both on the same test questions. The <strong>gap</strong> is how far round $k$ of the 4-bit model still trails the <em>untrained</em> 16-bit model; the <strong>difference of differences</strong> asks which arm gained more from its own training:</p>
+        <div class="formula">$$\text{gap}_k = s^{16}_0 - s^{4}_k, \qquad \Delta^{16}_k - \Delta^{4}_k = (s^{16}_k - s^{16}_0) - (s^{4}_k - s^{4}_0)$$</div>
+        <p>A gap that shrinks towards zero means training on its own votes brings the quantized model back to full-precision quality. A negative difference means the 4-bit model gained more.</p>
+        <div id="finding-catchup"></div>
+        <div id="catchup-table"></div>
     </section>
 
     <section class="content-box">
-        <h2>2.4 Untrained controls</h2>
-        <p>The same untrained 4-bit model on the same test questions, run in different sessions, at different batch sizes and token limits. The spread between these rows is how far the numbers move with no training at all.</p>
-        <div id="controls"></div>
+        <h2>5. What this supports so far</h2>
+        <div id="conclusions"></div>
+        <p class="muted small">Limits: one model (Qwen3.5-0.8B), one seed, one token limit, 200 test questions. Intervals of a few points are as fine as this sample can resolve.</p>
     </section>
 
     <section class="content-box">
-        <h2>2.5 DPO: one round</h2>
-        <p>Preference training on the model's own (voted, minority) pairs, tested at the usual token limit and at twice that limit.</p>
-        <div id="dpo-runs"></div>
-    </section>
-
-    <section class="content-box" data-no-toc>
-        <h2>How these numbers are made</h2>
-        <ul>
-            <li>Every run is re-scored from its stored raw answers with the current code; nothing is read from metrics stored in the run files.</li>
-            <li>A cut-off answer counts as wrong in single-answer accuracy and never votes.</li>
-            <li>Within an experiment, every round is scored on the questions all its finished rounds share. A round or pool that is still being written is listed as in progress and left out until it is complete.</li>
-            <li>Label accuracy uses the train answers only after the run, to score labels the loop chose without them.</li>
-            <li>Intervals are 95% paired bootstrap intervals over questions.</li>
-            <li>This page is regenerated with <code>python scripts/export_web_data.py</code>; nothing here is typed in by hand.</li>
-        </ul>
+        <h2>Earlier and supporting runs</h2>
+        <details class="fold">
+            <summary>Pilot: the first, smaller run at 16-bit and 4-bit</summary>
+            <div class="fold-body">
+                <p class="small">It found that batch size moves the numbers (next card), which is why its 4-bit arm is compared with an untrained run at the batch size of its trained rounds.</p>
+                <div id="pilot-runs"></div>
+                <h4>16-bit against 4-bit</h4>
+                <div id="pilot-comparison"></div>
+            </div>
+        </details>
+        <details class="fold">
+            <summary>Untrained controls: how far the numbers move with no training</summary>
+            <div class="fold-body">
+                <p class="small">The same untrained 4-bit model on the same test questions, run in different sessions, at different batch sizes and token limits. This is why the main run fixes one batch size, GPU type and library version for every round and both arms.</p>
+                <div id="controls"></div>
+            </div>
+        </details>
+        <details class="fold">
+            <summary>DPO: one round of preference training</summary>
+            <div class="fold-body">
+                <p class="small">Preference training on the model's own (voted, minority) pairs, tested at the usual token limit and at twice that limit.</p>
+                <div id="dpo-runs"></div>
+            </div>
+        </details>
+        <details class="fold">
+            <summary>How these numbers are made</summary>
+            <div class="fold-body">
+                <ul>
+                    <li>Every run is re-scored from its stored raw answers with the current code; nothing is read from metrics stored in the run files.</li>
+                    <li>A cut-off answer counts as wrong in single-answer accuracy and never votes.</li>
+                    <li>Within an experiment, every round is scored on the questions all its finished rounds share. A round or pool still being written is listed as in progress and left out until complete.</li>
+                    <li>Label accuracy uses the train answers only after the run, to score labels the loop chose without them. No reference answer reaches label selection or training.</li>
+                    <li>Intervals are 95% paired bootstrap intervals over questions.</li>
+                    <li>This page is regenerated with <code>python scripts/export_web_data.py</code>; no number on it is typed in by hand.</li>
+                </ul>
+            </div>
+        </details>
     </section>
 </main>
 

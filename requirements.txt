@@ -1,13 +1,16 @@
 # Core ML
-torch>=2.4.0
-transformers>=4.48.0
-accelerate>=1.0.0
+# Pinned so runs on different machines are comparable. torch, transformers and peft are the
+# versions every stored self-training run recorded (Colab, L4 and T4, Oct 2026); accelerate,
+# bitsandbytes and flash-linear-attention are what Colab installed on 15 Oct 2026.
+torch==2.11.0
+transformers==5.18.0
+accelerate==1.15.0
 
 # Quantization (CUDA only)
-bitsandbytes>=0.45.0
+bitsandbytes==0.50.2
 
 # LoRA adapters (self-training)
-peft>=0.13.0
+peft==0.21.1
 
 # Data
 pandas>=2.0.0
@@ -24,7 +27,7 @@ python-dotenv>=1.0.0
 sympy
 
 # Flash Attention / Fast Generation
-flash-linear-attention>=0.5.2
+flash-linear-attention==0.5.2
 
 #Datasets
 datasets
