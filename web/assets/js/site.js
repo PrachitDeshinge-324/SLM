@@ -153,7 +153,10 @@
                     theme: 'base',
                     themeVariables: { primaryColor: '#f1f5f9', primaryBorderColor: '#3182ce', lineColor: '#2d3748', textColor: '#2d3748' }
                 });
-                window.mermaid.run({ querySelector: '.mermaid' });
+                /* a cached copy can load before the page is parsed: wait, or later diagrams stay as text */
+                var run = function () { window.mermaid.run({ querySelector: '.mermaid' }); };
+                if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+                else run();
             });
         }
     };
