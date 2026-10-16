@@ -95,10 +95,10 @@
           subtitle: 'What was wrong, what the data showed at the time, and the one idea worth a paper.',
           summary: 'The early-October audit: bugs found and fixed, and the proposed contribution. A snapshot, kept local.' },
 
-        { id: 'next', file: 'next_steps.html', nav: 'Next Steps', group: 'direction',
+        { id: 'next', file: 'next_steps.html', nav: 'Next Steps', group: 'direction', libs: ['mermaid', 'mathjax'], toc: true,
           title: 'Next Steps',
-          subtitle: 'The next experiments, in order, and what would make each of them fail.',
-          summary: 'The clean rerun, more damage to measure, the estimator test, and the training loop that is still unrun.' }
+          subtitle: 'Self-training helped the 4-bit model and not the 16-bit one. Why we think that is, and the experiments that could prove us wrong.',
+          summary: 'The precision surprise from Phase 3, the noise-versus-consistent-error explanation, four stages of tests with their failure conditions, and what a paper would need.' }
     ];
 
     /* Developer machine: localhost, 127.0.0.1, [::1] or a file:// page. */

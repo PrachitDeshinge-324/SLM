@@ -9,43 +9,358 @@
 <script src="assets/js/site.js"></script>
 <main>
     <section class="content-box">
-        <h2>Where the project goes from here</h2>
+        <h2>In one minute</h2>
+        <p>We let a small language model (Qwen3.5-0.8B) teach itself grade-school math with no answer key. It answers each practice question several times, keeps the answers most of its attempts agree on, and trains on those. We ran the same loop on the full-precision model (16-bit) and on a compressed copy (4-bit).</p>
         <div class="callout success">
-            <h3>Summary (after the scoring fixes)</h3>
-            <p>The earlier plan (a self-improvement loop on Qwen 0.8B, or a harder dataset for DeepSeek) is superseded. After fixing the scoring, 8-bit is safe, 4-bit costs accuracy mainly in weak models, and the model-as-judge is weak everywhere. The promising result is that <strong>the drop in self-agreement tracks the drop in accuracy</strong> (r = 0.93 over 20 runs). Next: confirm it with a second quantizer, a 3-bit point and three seeds.<span data-local-only> See the local <a href="audit.html">Audit &amp; New Direction</a> page.</span></p>
+            <h3>The surprise</h3>
+            <p>The same loop <strong>helped the compressed model and slightly hurt the full-precision one</strong>. The 4-bit model became right more often, mostly on the questions compression had broken. The 16-bit model only learned to finish its answers within the length limit, and its majority vote got worse.</p>
         </div>
+        <p>This page explains what we think is happening and lists the experiments that could prove us wrong, in the order we plan to run them. It also says what a paper would need. Every number on it comes from <strong>one training run per precision on 200 test questions</strong>, so read them as a strong pilot, not a result. The full tables are on <a href="labels_training.html">Phase 3: Labels &amp; Self-Training</a>.</p>
+        <p class="muted small">This page replaces the earlier plan, which was written before the self-training loop had run.</p>
+    </section>
+
+    <section class="content-box">
+        <h2>The loop we ran</h2>
+        <div class="card diagram">
+            <div class="mermaid">
+                graph TD
+                    P["Practice questions<br/>(GSM8K train, answer key hidden)"] --> S["The model answers<br/>each question 8 times"]
+                    S --> V{"At least 6 of 8<br/>give the same<br/>answer?"}
+                    V -->|"yes (otherwise skip)"| K["That answer is the label;<br/>attempts reaching it<br/>are training examples"]
+                    K --> T["Train a small add-on<br/>(a LoRA adapter)<br/>on those examples"]
+                    T --> M["Updated model"]
+                    M -->|next round| S
+                    M --> E["Test questions:<br/>scored with the answer key,<br/>never trained on"]
+
+                    classDef default fill:#f8fafc,stroke:#3182ce,stroke-width:2px;
+                    classDef test fill:#f0fff4,stroke:#38a169,stroke-width:2px;
+                    class E test;
+            </div>
+            <p class="muted small">Round 0 is the untrained model. We ran four training rounds. Answers cut off at the 512-token limit never vote and are never trained on. The answer key is read only afterwards, to score the test questions and to check how many labels were right.</p>
+        </div>
+        <h3>Words used on this page</h3>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>16-bit / 4-bit</strong></td><td>The same model stored at full precision, or compressed to 4 bits per weight (bitsandbytes). Compression saves memory and costs some accuracy.</td></tr>
+                    <tr><td><strong>Single-answer accuracy</strong></td><td>How often one attempt is right. An attempt cut off at the length limit counts as wrong.</td></tr>
+                    <tr><td><strong>Vote accuracy</strong></td><td>How often the most common answer among 8 attempts is right.</td></tr>
+                    <tr><td><strong>Finishing vs. being right</strong></td><td>A gain in single-answer accuracy can come from finishing more often within the limit, or from finished answers being right more often. We split every gain into these two parts.</td></tr>
+                    <tr><td><strong>Label accuracy</strong></td><td>The share of the model's own labels that are actually right, checked against the answer key only after training.</td></tr>
+                    <tr><td><strong>Coverage</strong></td><td>How often at least one of the 8 attempts is right. No answer-picking rule can beat it.</td></tr>
+                    <tr><td><strong>Interval [a, b]</strong></td><td>95% bootstrap interval over questions. If it includes zero, the change could be noise.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="content-box">
+        <h2>What we found</h2>
+        <p>The two runs differ only in precision: same questions, prompt, random seed, batch size, length limit, GPU and training settings. Changes from round 0 to round 4, in points:</p>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th></th><th class="num">16-bit</th><th class="num">4-bit</th></tr></thead>
+                <tbody>
+                    <tr><td>Single-answer accuracy</td><td class="num">+0.9 <span class="ci">[−2.1, +4.1]</span></td><td class="num positive">+6.4 <span class="ci">[+3.4, +9.6]</span></td></tr>
+                    <tr><td>Vote accuracy</td><td class="num negative">−5.5 <span class="ci">[−11.0, 0.0]</span></td><td class="num">+5.5 <span class="ci">[0.0, +11.5]</span></td></tr>
+                    <tr><td>&nbsp;&nbsp;of the single-answer change: from finishing more often</td><td class="num">+2.9</td><td class="num">+2.5</td></tr>
+                    <tr><td>&nbsp;&nbsp;of the single-answer change: from finished answers being right more often</td><td class="num">−1.9</td><td class="num positive">+4.0</td></tr>
+                    <tr><td>Questions where the vote is confidently wrong (round 0 → 4)</td><td class="num">0 → 8</td><td class="num">2 → 14</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <p>Comparing the two directly (the 4-bit change minus the 16-bit change, question by question), the vote gains <strong>+11.0 points [+4.0, +18.5]</strong> more at 4-bit.</p>
 
         <div class="grid">
             <div class="card highlight">
-                <h3>Step 1: Clean rerun</h3>
+                <h3>The 4-bit gain is mostly repair</h3>
+                <p>Take the 37 test questions where, in <em>separate</em> earlier runs, the 16-bit model solved them at least 25 points more often than the 4-bit one: the questions compression broke. On those, the 4-bit model gains <strong>+14.5 points [+6.8, +22.6]</strong> and closes about half the gap. On the other questions it gains +4.3 [+0.8, +7.7].</p>
+            </div>
+            <div class="card">
+                <h3>The catch: the labels drift</h3>
+                <p>At both precisions the model's own labels get worse each round. Label accuracy falls from 0.94 to 0.83 at 16-bit and from 0.92 to 0.81 at 4-bit by round 3. Labels added after training are only 57–81% right. The share of training examples with a wrong label rises from about 6% to 16–19%. At 4-bit, the gain on finished answers peaks at round 1 and then slowly erodes.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="content-box">
+        <h2>Why we think it happens</h2>
+        <p>Training on your own majority answer does one thing: it makes the model more certain of the answer it already prefers. Researchers call this <strong>sharpening</strong>. Whether that helps depends on what kind of mistakes the model makes.</p>
+        <div class="grid">
+            <div class="card diagram">
+                <h3>4-bit: scattered mistakes</h3>
+                <div class="mermaid">
+                    graph TD
+                        A["Compression adds random slips:<br/>more distinct answers,<br/>about more arithmetic errors"] --> B["Most of the 8 attempts<br/>still agree on the right answer"]
+                        B --> C["Training on the agreed answer<br/>removes the slips"]
+                        C --> D["Repair: more answers right"]
+                        classDef default fill:#f0fff4,stroke:#38a169,stroke-width:2px;
+                </div>
+            </div>
+            <div class="card diagram">
+                <h3>16-bit: consistent mistakes</h3>
+                <div class="mermaid">
+                    graph TD
+                        A["The remaining mistakes are<br/>consistent misreadings<br/>of the question"] --> B["On those questions,<br/>the 8 attempts agree<br/>on a wrong answer"]
+                        B --> C["Training makes the<br/>wrong answer more certain"]
+                        C --> D["The vote gets worse"]
+                        classDef default fill:#fffaf0,stroke:#d69e2e,stroke-width:2px;
+                </div>
+            </div>
+        </div>
+        <p>In short: <strong>a vote can remove noise, but it cannot fix a consistent error. It only makes that error more confident.</strong> Compression adds noise, which is why the compressed model benefits. This is our hypothesis. The experiments below are designed to test it.</p>
+        <h3>Why the labels drift</h3>
+        <div class="card diagram">
+            <div class="mermaid">
+                graph TD
+                    A["Model trains on<br/>its own votes"] --> B["It becomes more certain<br/>about everything,<br/>right and wrong"]
+                    B --> C["More questions pass<br/>the 6-of-8 bar,<br/>some with a wrong answer"]
+                    C --> D["Those wrong labels are<br/>trained on next round"]
+                    D --> A
+                    classDef default fill:#faf5ff,stroke:#805ad5,stroke-width:2px;
+            </div>
+            <p class="muted small">Agreement rises faster than accuracy: 6–13 points against 1–6. Once a model has trained on its own agreement, rising agreement no longer shows that it improved.</p>
+        </div>
+    </section>
+
+    <section class="content-box">
+        <h2>Objections we have already checked</h2>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>A sceptic might say</th><th>What we checked</th><th>Result</th></tr></thead>
+                <tbody>
+                    <tr><td>"The 4-bit model starts lower, so it simply has more room to improve."</td><td>Compared the two precisions on questions they found equally hard, grouped by how often each precision solved them in separate earlier runs.</td><td>The 4-bit model still gains <strong>+5.6 points [+1.1, +10.2]</strong> more. The difference is in the middle-difficulty questions.</td></tr>
+                    <tr><td>"Picking the 'broken' questions guarantees they bounce back."</td><td>The broken questions were picked from separate earlier runs, not from the training run's own starting point.</td><td>Bouncing back from a bad draw cannot explain the +14.5 points.</td></tr>
+                    <tr><td>"Maybe the starting point was just a lucky or unlucky run."</td><td>Compared round 0 with a separate untrained run of the same model.</td><td>Within 2 points for both precisions. An older, smaller 4-bit pilot failed this check (14 points off), so we do not use its numbers.</td></tr>
+                    <tr><td>"It's one run on 200 questions."</td><td>—</td><td><strong>True, and not yet addressed.</strong> That is what Stages 1 and 2 are for.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="content-box">
+        <h2>The plan</h2>
+        <p>Four stages. Stage 1 is cheap: about 30 GPU-hours, against 170–210 per model for Stage 2. Whatever it shows, we learn it before the expensive part. Only two of its results can stop or redirect the study; the others shape the training rule and how we word the explanation.</p>
+        <div class="card diagram">
+            <div class="mermaid">
+                graph TD
+                    S1["Stage 1: four quick tests<br/>about 30 GPU-hours"] --> C1(["Checkpoint 1:<br/>does the 4-bit advantage<br/>come back with a<br/>second seed?"])
+                    C1 -->|no| F["Fallback<br/>paper"]
+                    C1 -->|yes| C2(["Checkpoint 2:<br/>does training on random<br/>own answers do as well<br/>as the real loop?"])
+                    C2 -->|yes| P["Pivot<br/>paper"]
+                    C2 -->|"no, or only partly"| S2["Stage 2: replicate<br/>3 seeds, all 1,319<br/>test questions"]
+                    S2 --> S3["Stage 3: generalise<br/>more models,<br/>SVAMP, 8-bit"]
+                    S3 --> S4["Stage 4: the revised<br/>training rule"]
+                    classDef default fill:#f8fafc,stroke:#3182ce,stroke-width:2px;
+                    classDef gate fill:#faf5ff,stroke:#805ad5,stroke-width:2px;
+                    classDef exit fill:#fffaf0,stroke:#d69e2e,stroke-width:2px;
+                    class C1,C2 gate;
+                    class F,P exit;
+            </div>
+            <p class="muted small">Frozen labels and the borrowed teacher are not checkpoints. Their results decide which training rule enters Stage 2 first and how we word the explanation, not whether the study continues. An unclear result at a checkpoint is settled by a cheap rerun before anything else (see <a href="#how-each-stage-1-test-is-read">how each test is read</a>). The fallback and pivot papers are described under <a href="#if-stage-1-fails">If Stage 1 fails</a>.</p>
+        </div>
+
+        <h3>The experiments</h3>
+        <p>Every experiment is the loop above with one thing changed. Each row says what would show our explanation is wrong.</p>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Experiment</th><th>What changes</th><th>Question it answers</th><th>If we are right</th><th>If we are wrong</th></tr></thead>
+                <tbody>
+                    <tr class="group-row"><td colspan="5">Stage 1: quick tests (200 test questions, as before). The first two are checkpoints.</td></tr>
+                    <tr><td><strong>Second seed</strong> <span class="badge purple">checkpoint 1</span></td><td>Rounds 0–1 rerun with a different random seed, both precisions.</td><td>Does the precision difference come back?</td><td>The 4-bit gain is back, and larger than the 16-bit gain.</td><td>It vanishes: we write the fallback paper.</td></tr>
+                    <tr><td><strong>Random-answer control</strong> <span class="badge purple">checkpoint 2</span></td><td>Same questions and number of examples, but the training answers are the model's own finished answers picked at random, ignoring the vote.</td><td>Does the gain come from the vote, or from any extra training on the model's own writing?</td><td>Clearly smaller gain than the real loop.</td><td>The same gain: the vote is not the source, and the study pivots.</td></tr>
+                    <tr><td><strong>Frozen labels</strong></td><td>Labels come once from the untrained model and are never rewritten. Later rounds keep only new answers that match them.</td><td>Is label drift what erodes the gain?</td><td>4-bit keeps its round-1 gain through round 4. At 16-bit we expect only a slower fall, because sharpening itself does part of the harm.</td><td>The same erosion as the current loop. This changes the training rule, not the study.</td></tr>
+                    <tr><td><strong>Borrowed teacher</strong></td><td>The 4-bit model trains on the 16-bit model's agreed answers instead of its own (still no answer key).</td><td>Is the 4-bit gain a return towards full-precision behaviour?</td><td>At least as large a gain on the broken questions.</td><td>A smaller gain there: we reword the explanation.</td></tr>
+                    <tr class="group-row"><td colspan="5">Stage 2: replication</td></tr>
+                    <tr><td><strong>Full replication</strong></td><td>3 seeds, all 1,319 test questions, 1,000 practice questions, both precisions, for the current loop and frozen labels.</td><td>Is the effect real at a size that can resolve 2 points?</td><td>4-bit single-answer gain ≥ 2 points, interval excluding zero.</td><td>Gains inside the noise.</td></tr>
+                    <tr><td><strong>No-training rerun</strong></td><td>The untrained model rerun with each seed.</td><td>How much do numbers move with no training at all?</td><td>Small next to the training effect.</td><td>As large as the training effect.</td></tr>
+                    <tr><td><strong>Answer-key upper bound</strong></td><td>The same loop with true answers as labels (uses the answer key, so it is a reference, not a method).</td><td>How much of the possible gain does the vote recover?</td><td>The vote recovers a large share at 4-bit, little at 16-bit.</td><td>—</td></tr>
+                    <tr class="group-row"><td colspan="5">Stage 3: does it generalise?</td></tr>
+                    <tr><td><strong>8-bit</strong></td><td>The same loop at 8-bit.</td><td>Does repair grow with the damage compression causes?</td><td>8-bit gains less than 4-bit (8-bit costs this model only 0–2 vote points to begin with, against about 7 at 4-bit).</td><td>8-bit gains as much as 4-bit.</td></tr>
+                    <tr><td><strong>More models</strong></td><td>Gemma-3-1B, Llama-3.2-1B and Qwen3.5-2B, whose 4-bit damage we have already measured (from about 20 points down to about 2).</td><td>Does repair grow with damage across models?</td><td>More damage, more repair.</td><td>No relation.</td></tr>
+                    <tr><td><strong>Base model</strong></td><td>A model that has not been instruction-tuned, if one of these families provides it.</td><td>Earlier work suggests confidence-based training helps base models and hurts tuned ones. Does that interact with precision?</td><td>—</td><td>—</td></tr>
+                    <tr><td><strong>SVAMP</strong></td><td>A second set of arithmetic word problems.</td><td>Is it specific to GSM8K?</td><td>Same pattern.</td><td>No pattern.</td></tr>
+                    <tr class="group-row"><td colspan="5">Stage 4: the method</td></tr>
+                    <tr><td><strong>Revised objective</strong></td><td>See the next section.</td><td>Can one training rule improve both precisions?</td><td>4-bit keeps its gain and 16-bit stops losing.</td><td>It helps only at 4-bit; the paper is then a mechanism study.</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <h3 id="how-each-stage-1-test-is-read">How each Stage 1 test is read</h3>
+        <p>Fixed before running, so a result cannot steer how it is read. At 200 questions only large differences are visible, so every test has an "unclear" outcome with a cheap way to settle it. "Interval" is the 95% interval over questions; pilot values are in brackets.</p>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Test</th><th>Pass</th><th>Fail</th><th>Unclear, and how we settle it</th><th>What it decides</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>Second seed</strong><br/><span class="small muted">round 0 → 1, both precisions</span></td><td>The 4-bit single-answer gain is positive with an interval excluding zero, and larger than the 16-bit gain (pilot: +5.3 against +1.9).</td><td>The 4-bit gain is zero or below, or no larger than the 16-bit gain.</td><td>A positive but uncertain gain. Run a third seed: about 8 GPU-hours.</td><td>Whether there is a precision story at all.</td></tr>
+                    <tr><td><strong>Random-answer control</strong><br/><span class="small muted">4-bit, round 1, against the real loop on the same questions</span></td><td>The control gains less than the real loop (pilot: +5.3), with the difference's interval excluding zero. If the control also gains clearly, we report how the gain splits.</td><td>The control gains within 1 point of the real loop, or more.</td><td>Anything in between. Rerun both on all 1,319 test questions, round 1 only. The existing round-1 adapters can be reused, so only answering is needed: about 5 GPU-hours per arm.</td><td>Whether the vote is the source of the gain.</td></tr>
+                    <tr><td><strong>Frozen labels</strong><br/><span class="small muted">both precisions, rounds 1–3</span></td><td>At 4-bit, the gain on finished answers at round 3 stays near its round-1 level, while the current loop's fell (pilot: +5.2 → +3.4).</td><td>It erodes the same way. Or it ends more than 2 points <em>below</em> the current loop, which would mean more labels matter more than cleaner ones.</td><td>Likely at this size: the pilot erosion is under 2 points. We read the direction only; Stage 2 runs frozen labels at full size anyway.</td><td>Which training rule enters Stage 2 first.</td></tr>
+                    <tr><td><strong>Borrowed teacher</strong><br/><span class="small muted">4-bit, round 1, the 37 broken questions</span></td><td>A gain on the broken questions at least as large as with its own answers (pilot: +13.2).</td><td>A clearly smaller gain, with the difference's interval excluding zero.</td><td>Likely with only 37 questions. We read the direction and recheck in Stage 3 with more models.</td><td>How we word the explanation.</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <details class="fold">
+            <summary>Notes on the design choices</summary>
+            <div class="fold-body">
                 <ul>
-                    <li>Use the fixed prompts (no double start token, pinned Llama date, DeepSeek instructions in the user turn, shared SVAMP prompt).</li>
-                    <li>Raise the token limit until truncation is below 5%.</li>
-                    <li>Run all precisions of a model together; three seeds; 100&ndash;200 questions.</li>
+                    <li><strong>Random-answer control, done properly.</strong> Shuffling labels between questions would pair answers with the wrong questions and teach only format. Picking random finished answers to the <em>same</em> question keeps everything except the vote's choice, which is the one thing we want to remove.</li>
+                    <li><strong>8-bit is not just "less noise".</strong> bitsandbytes 8-bit keeps its largest weights at 16 bits, and in our earlier runs 8-bit also differs from 16-bit by a floating-point format change. So we first confirm that its starting damage is in between (Phase 1: 0–2 vote points for this model, against about 7 at 4-bit) before reading it as a dose.</li>
+                    <li><strong>Model choice.</strong> We pick models whose damage we already measured in <a href="generation.html">Phase 1</a>, so they span the range. Gemma-3-1B is a special case: at 4-bit it mostly changed how it writes answers, so it tests a different kind of damage.</li>
+                    <li><strong>SVAMP.</strong> We set it aside earlier because larger models are near its ceiling. For 0.8–2B models there is smaller but real room: Qwen3.5-0.8B votes 83% right at 16-bit and loses about 4 points per answer at 4-bit. MATH-500 is likely too hard for 0.8B; keep it for the 2B model.</li>
+                    <li><strong>Fix the bookkeeping first.</strong> The report's loss column is wrong for runs under 20 steps, and the label statistics for preference (DPO) runs use the wrong threshold. Both must be fixed before replication. Training should also run a fixed number of passes over the data, not a fixed number of steps: today later rounds see each example less than once.</li>
                 </ul>
             </div>
+        </details>
+    </section>
+
+    <section class="content-box">
+        <h2>If Stage 1 fails</h2>
+        <p>"Failing" is not one outcome. Each possible result has a meaning and a next step, decided now. Only the first two rows end the current story, and even the second leaves a paper.</p>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>If this happens</th><th>What it means</th><th>What we do next</th><th>What we would publish</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>The 4-bit advantage does not come back with a second seed</strong></td><td>The pilot was noise. The main claim is gone.</td><td>Stop scaling. Write up what does not depend on it.</td><td><span class="badge red">fallback paper</span></td></tr>
+                    <tr><td><strong>Training on random own answers does as well as the real loop</strong></td><td>The vote is not doing the work: training the 4-bit model on any of its own finished answers repairs it.</td><td>Test whether its own answers to other kinds of questions also help, and whether the same training helps 16-bit (we expect not). Compare with the borrowed teacher, which is ordinary distillation from the full model.</td><td><span class="badge orange">pivot paper</span></td></tr>
+                    <tr><td>Random answers recover part of the gain</td><td>Part of the gain is training on its own writing, part is the vote's choice.</td><td>Report the split. Continue to Stage 2.</td><td><span class="badge green">main paper</span> with a cleaner breakdown</td></tr>
+                    <tr><td>Frozen labels do not help</td><td>Drift is not what stops the gain after round 1. More likely the gain simply reaches its limit.</td><td>Keep the precision story and drop frozen labels as the fix. Test "stop after one round". A stopping rule that needs no answer key then becomes the central method question.</td><td><span class="badge green">main paper</span> with a different method</td></tr>
+                    <tr><td>Frozen labels do worse</td><td>More labels matter more than cleaner labels.</td><td>Let the untrained model label more questions, with more attempts each, instead of letting the trained model relabel.</td><td><span class="badge green">main paper</span>; drift becomes "the price of more labels"</td></tr>
+                    <tr><td>The borrowed teacher helps less on the broken questions</td><td>The 4-bit model repairs itself in its own way rather than moving back towards the full-precision model.</td><td>Reword the explanation: "removes its own noise", not "returns to full precision".</td><td><span class="badge green">main paper</span>, the mildest outcome</td></tr>
+                    <tr><td>The 16-bit vote still falls with frozen labels</td><td>Partly expected: our explanation says the 16-bit harm comes from sharpening itself, not only from wrong labels.</td><td>Note it.</td><td>Supports the <span class="badge green">main paper</span></td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="grid">
             <div class="card">
-                <h3>Step 2: More damage to measure</h3>
+                <h3>The pivot paper</h3>
+                <p><strong>Claim:</strong> a compressed model can recover part of the accuracy it lost by training on its own answers. No answer key and no full-precision model are needed, and no vote either.</p>
+                <p><strong>Closest prior work:</strong> <a href="https://arxiv.org/abs/2305.17888">LLM-QAT</a> (Liu et al., Findings of ACL 2024) trains a compressed model on text generated by the <em>full-precision</em> model. The pivot would use only the compressed model's own answers.</p>
+                <p><strong>It would need:</strong> training on its own answers to other kinds of questions; the same training at 16-bit as a control; the 8-bit dose; and the borrowed teacher as the distillation reference.</p>
+            </div>
+            <div class="card">
+                <h3>The fallback paper</h3>
+                <p><strong>Claim:</strong> what a small compressed model actually learns from its own votes, and how to tell without an answer key. It rests on results that already hold, whatever Stage 1 shows:</p>
                 <ul>
-                    <li>Add GPTQ or GGUF Q4 and a 3-bit point.</li>
-                    <li>Keep the models where 4-bit actually hurts (Qwen-0.8B, Gemma-1B) and add one more weak family.</li>
+                    <li><strong>Label drift</strong>, measured round by round in all four self-training runs so far, at both precisions.</li>
+                    <li><strong>The finishing trap:</strong> at 16-bit the whole gain is finishing within the length limit, and the split above tells it apart from real improvement.</li>
+                    <li><strong>A documented preference-training failure:</strong> the model drifted into a re-reading style found in none of its training examples.</li>
+                    <li><strong>From the <a href="generation.html">Phase 1</a> data:</strong> the drop in self-agreement predicts the accuracy lost to compression on models it was not fitted to (0.85 points average error, against 3.36 for "assume no change"). The vote hides part of the damage. Compression leaves label accuracy unchanged in every model but one (Gemma-3-1B), and only reduces how many labels there are.</li>
                 </ul>
+                <p class="small muted">A workshop or Findings paper about measurement. Less striking than the precision story, but reusable.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="content-box">
+        <h2>How we will judge success</h2>
+        <p>Fixed in advance. An experiment improves the model only if all five hold on 1,319 questions, at that precision:</p>
+        <ol class="takeaways">
+            <li>Single-answer accuracy up by at least 2 points, with an interval excluding zero.</li>
+            <li>Vote accuracy no more than 1 point below the start.</li>
+            <li>Accuracy of finished answers no more than 1 point below the start, so the gain is not just "finishes more".</li>
+            <li>Coverage no more than 1.5 points below the start.</li>
+            <li>Warning signals that training never optimises, such as the rate of arithmetic slips, move the same way as accuracy.</li>
+        </ol>
+        <p>Label accuracy is tracked but is <em>not</em> a success criterion: the 4-bit run improved even while its labels drifted. How the current loop scores today (200 questions, so indicative only):</p>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Criterion</th><th class="num">16-bit</th><th class="num">4-bit</th></tr></thead>
+                <tbody>
+                    <tr><td>1. Single-answer accuracy ≥ +2, interval excludes zero</td><td class="num negative">no (+0.9)</td><td class="num positive">yes (+6.4)</td></tr>
+                    <tr><td>2. Vote accuracy ≥ −1</td><td class="num negative">no (−5.5)</td><td class="num positive">yes (+5.5)</td></tr>
+                    <tr><td>3. Finished-answer accuracy ≥ −1</td><td class="num negative">no (−3.1)</td><td class="num positive">yes (+3.7)</td></tr>
+                    <tr><td>4. Coverage ≥ −1.5</td><td class="num">borderline (−1.5)</td><td class="num positive">yes (+3.0)</td></tr>
+                    <tr><td>5. Warning signals agree</td><td class="num negative">no (arithmetic slips rise)</td><td class="num positive">yes (arithmetic slips fall)</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="content-box">
+        <h2>The revised training rule</h2>
+        <p>If Stage 1 confirms that drift erodes the gain, the method we will test makes three changes to the loop:</p>
+        <div class="card diagram">
+            <div class="mermaid">
+                graph TD
+                    R0["Once: the untrained model<br/>answers each practice<br/>question 16 times"] --> L["Frozen labels, plus an<br/>evidence score per question"]
+                    L --> K["Each round: the current model<br/>answers again; keep finished<br/>answers matching the label"]
+                    K --> T["Train: weight questions by<br/>evidence, plus a light tie<br/>to the untrained model"]
+                    T -->|next round| K
+                    classDef default fill:#f8fafc,stroke:#3182ce,stroke-width:2px;
+            </div>
+        </div>
+        <div class="grid cols-3">
+            <div class="card">
+                <h3>1. Frozen labels</h3>
+                <p>Removes the drift loop by construction: a trained model never writes labels.</p>
             </div>
             <div class="card">
-                <h3>Step 3: Test the estimator</h3>
+                <h3>2. Evidence weights</h3>
+                <p>Each question counts once, more or less depending on evidence the vote does not use: the model's own check of its answer, and re-computing the arithmetic in its working. A question backed only by the vote counts for less.</p>
+            </div>
+            <div class="card">
+                <h3>3. A tie set per precision</h3>
+                <p>At 16-bit the tie keeps the variety of answers the vote depends on. At 4-bit it must stay weak: the untrained 4-bit model is the noisy one, and a strong tie would pull it back to its slips.</p>
+            </div>
+        </div>
+        <details class="fold">
+            <summary>The rule as a formula</summary>
+            <div class="fold-body">
+                <div class="formula">$$\mathcal L(\theta) = \frac{1}{|\mathcal C|}\sum_{q\in\mathcal C} w_q\,\overline{\ell}_\theta(S_q) \;+\; \lambda\,\frac{1}{|\mathcal P|}\sum_{q\in\mathcal P}\overline{\ell}_\theta(B_q)$$</div>
+                <p class="small">$\overline{\ell}_\theta(Y)$ is the average per-token loss on a set of answers $Y$. $\mathcal C$ is the labelled questions; $S_q$ the current model's finished answers that match the frozen label of question $q$; $w_q \in [0, 1]$ its evidence weight. $\mathcal P$ is all practice questions; $B_q$ the untrained model's own answers to them. Answers cut off at the limit are included without an end token, so the tie keeps the original length distribution. The second term is a sampled estimate of how far the model has drifted from where it started. $\lambda$ is chosen separately per precision, without the answer key: the smallest value that keeps label-free warning signals within run-to-run noise.</p>
+                <p class="small">For preference training (DPO), which made the model ramble in an earlier test, the plan is a bounded version (IPO-style, a small target margin) plus a term that keeps the preferred answer likely. In that test the model drifted into a "wait, let me re-read" style that appeared in none of its training examples.</p>
+            </div>
+        </details>
+    </section>
+
+    <section class="content-box">
+        <h2>What a paper would claim</h2>
+        <p><strong>Working title:</strong> <em>Quantization noise makes self-training repair: a precision-controlled study of majority-vote self-training.</em> The title has to be earned by Stages 1–3.</p>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Contribution</th><th>Status</th></tr></thead>
+                <tbody>
+                    <tr><td>The same self-training rule repairs 4-bit errors and entrenches 16-bit errors.</td><td><span class="badge orange">one run</span> Stages 1–2</td></tr>
+                    <tr><td>Label drift measured round by round: agreement stops meaning correctness, at both precisions.</td><td><span class="badge orange">one run per precision</span> robust across 4 runs so far</td></tr>
+                    <tr><td>Mechanism: sharpening removes noise but not consistent errors, tested by the controls, damage strata and the 8-bit dose.</td><td><span class="badge red">hypothesis</span> Stages 1 and 3</td></tr>
+                    <tr><td>Label-free warning signals (arithmetic slips, self-check verdicts, coverage) that track real progress, and a stopping rule built on them.</td><td><span class="badge red">early</span> small counts so far</td></tr>
+                    <tr><td>The revised training rule, if it improves both precisions.</td><td><span class="badge red">not run</span> Stage 4</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <p><strong>What is new.</strong> Earlier work self-trained a 4-bit model (MACA), but no paper we found varies precision inside the loop and compares. We searched carefully but not exhaustively. One related paper (QuRL, on reinforcement learning with a compressed model) still needs a full read before we claim novelty.</p>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>If we have…</th><th>Realistic venue</th></tr></thead>
+                <tbody>
+                    <tr><td>Only the current pilot</td><td>Workshop at most</td></tr>
+                    <tr><td>Stages 1–3 hold: replication, more models, 8-bit, controls, frozen labels</td><td>TMLR (suits a careful mechanism study) or ACL/EMNLP Findings</td></tr>
+                    <tr><td>…and the revised rule improves both precisions across models</td><td>Main track (ICLR, ACL). Hard: at 16-bit there is little noise for a vote to remove.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="content-box">
+        <h2>Risks and cost</h2>
+        <div class="grid">
+            <div class="card">
+                <h3>Compute</h3>
+                <p>From our own runs on a T4 GPU: about <strong>1.6 seconds per generated answer</strong>. One round at the current size (200 test and 500 practice questions, 8 answers each) takes about 3 hours.</p>
                 <ul>
-                    <li>Predict each quantized model's accuracy change from its agreement change, on held-out models.</li>
-                    <li>Beat two label-free baselines: flip rate against 16-bit, and cross-model disagreement.</li>
-                    <li>Falsified if the held-out error is no better than "assume no change".</li>
+                    <li><strong>Stage 1:</strong> about 30 GPU-hours. Frozen labels reuse the existing round 0.</li>
+                    <li><strong>Stage 2, per model:</strong> 3 seeds × 2 precisions at full size, about 170–210 GPU-hours.</li>
                 </ul>
+                <p>A faster sampler (vLLM, tried once and reverted) is the biggest possible saving. Fewer test rounds (rounds 0, 1 and last only) is the next.</p>
             </div>
             <div class="card">
-                <h3>Optional: settle the verifier question</h3>
-                <p>Freeze the 16-bit traces and let every precision judge the same set. A short negative result that removes the trace-pool confound from the verifier comparison.</p>
-            </div>
-            <div class="card">
-                <h3>Later: Experiment B</h3>
-                <p>The self-improvement training loop is still unrun. Only start it if the estimator holds up, and track vote accuracy against sample accuracy each round to catch collapse early.</p>
+                <h3>What could sink the story</h3>
+                <ul>
+                    <li>The random-answer control gains as much: the vote is not the cause, and we switch to the pivot paper.</li>
+                    <li>The effect does not replicate across seeds or models: we write the fallback paper.</li>
+                    <li>Repair does not grow with damage: the noise explanation is wrong.</li>
+                    <li>No label-free stopping rule works. Today we would not know without the answer key when to stop training, and that is an open problem in the field.</li>
+                </ul>
             </div>
         </div>
     </section>
