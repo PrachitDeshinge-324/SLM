@@ -51,6 +51,8 @@ from src.experiment_d.verifier_variants import (
     VARIANTS,
     aggregate,
     backward_messages,
+    select_traces,
+    settings_mismatch,
     generate_in_groups,
     backward_score,
     mask_conditions,
@@ -78,6 +80,11 @@ def parse_args():
     parser.add_argument("--questions", type=int, default=100, help="Judge at most this many questions of the set")
     parser.add_argument("--dtype", type=str, choices=("auto", "float16", "bfloat16"), default="auto",
                         help="Weight dtype. auto = bfloat16 where reported (also on a T4, which runs it slowly); the dtype is recorded in the output header")
+    parser.add_argument("--skip_cutoff", action="store_true", help="Do not judge solutions cut off at the token limit (they never vote)")
+    parser.add_argument("--contested_only", action="store_true",
+                        help="Judge nothing in a question whose finished solutions all give the same answer (no verifier can change that vote)")
+    parser.add_argument("--max_per_answer", type=int, default=None, help="Judge at most this many solutions per distinct answer")
+    parser.add_argument("--pilot", action="store_true", help="Shorthand for --skip_cutoff --contested_only --max_per_answer 2")
     parser.add_argument("--dry_run", action="store_true", help="No model: load the tokenizer, print a prompt and count the generations")
     parser.add_argument("--verdicts", type=int, default=None, help="Samples per solution (per condition for backward); default per variant")
     parser.add_argument("--max_new_tokens", type=int, default=None)
@@ -90,6 +97,10 @@ def parse_args():
     parser.add_argument("--tau", type=float, default=CRITIC_THRESHOLD, help="critic: decision threshold on the correct rate")
     args = parser.parse_args()
     args.n_samples = parse_n_samples(args.n_samples)
+    if args.pilot:
+        args.skip_cutoff, args.contested_only = True, True
+        args.max_per_answer = args.max_per_answer or 2
+    args.extractor = get_extractor(args.dataset)
     defaults = DEFAULTS[args.variant]
     if args.verdicts is None:
         args.verdicts = defaults["n"]
@@ -100,9 +111,11 @@ def parse_args():
     return args
 
 
-def solutions_of(record: dict) -> list:
-    """(trace index, sample) of every stored solution of a question, truncated ones included."""
-    return list(enumerate(record["raw_samples"]))
+def solutions_of(record: dict, args) -> list:
+    """(trace index, sample) of the stored solutions to judge (every one, unless a selection flag is set)."""
+    samples = record["raw_samples"]
+    keep = select_traces(samples, args.extractor, args.skip_cutoff, args.contested_only, args.max_per_answer)
+    return [(index, samples[index]) for index in keep]
 
 
 def base_row(record: dict, index: int, sample: dict, variant: str) -> dict:
@@ -155,7 +168,7 @@ def mc_rows(model, tokenizer, records: list, args) -> list:
         raise RuntimeError("'Correct' and 'Incorrect' start with the same token; the two-way probability is undefined")
     rows = []
     for record in records:
-        for index, sample in solutions_of(record):
+        for index, sample in solutions_of(record, args):
             prompt = build_prompt(tokenizer, verification_messages("mc", record["question"], sample["response"]))
             ids = tokenizer(prompt, add_special_tokens=False, return_tensors="pt")["input_ids"].to(device)
             logp = torch.log_softmax(model(input_ids=ids, use_cache=False, logits_to_keep=1).logits[0, -1].float(), -1)
@@ -167,7 +180,7 @@ def mc_rows(model, tokenizer, records: list, args) -> list:
 
 def sampled_rows(model, tokenizer, records: list, args) -> list:
     """cot_binary, cot_score, critic, judge5: `verdicts` sampled responses per solution, parsed and aggregated."""
-    items = [(record, index, sample) for record in records for index, sample in solutions_of(record)]
+    items = [(record, index, sample) for record in records for index, sample in solutions_of(record, args)]
     prompts = [build_prompt(tokenizer, verification_messages(args.variant, record["question"], sample["response"]))
                for record, _, sample in items]
     grouped = generate(model, tokenizer, prompts, args)
@@ -185,7 +198,7 @@ def backward_rows(model, tokenizer, records: list, args) -> list:
     units = []     # (qid, answer key, answer text, masked value, prompt)
     for record in records:
         seen = set()
-        for _, sample in solutions_of(record):
+        for _, sample in solutions_of(record, args):
             answer = None if sample.get("cutoff") else extractor(sample["response"])
             if answer is None or normalize_answer(answer) in seen:
                 continue
@@ -199,7 +212,7 @@ def backward_rows(model, tokenizer, records: list, args) -> list:
         per_answer.setdefault((qid, key), []).append([parse_backward(response, value) for response in responses])
     rows = []
     for record in records:
-        for index, sample in solutions_of(record):
+        for index, sample in solutions_of(record, args):
             answer = None if sample.get("cutoff") else extractor(sample["response"])
             key = None if answer is None else (record["qid"], normalize_answer(answer))
             scored = backward_score(per_answer[key]) if key in per_answer else {"conditions": 0, "samples": 0, "matches": 0, "score": None}
@@ -210,7 +223,7 @@ def backward_rows(model, tokenizer, records: list, args) -> list:
 def self_correct_rows(model, tokenizer, records: list, args) -> list:
     """Intrinsic self-correction: review, then revise, both greedy; an unchanged answer is read as an approval."""
     extractor = get_extractor(args.dataset)
-    items = [(record, index, sample) for record in records for index, sample in solutions_of(record)]
+    items = [(record, index, sample) for record in records for index, sample in solutions_of(record, args)]
     base = lambda record: get_messages(args.dataset, record["question"])
     review = [build_prompt(tokenizer, self_correct_messages(base(r), s["response"])) for r, _, s in items]
     feedback = generate_greedy(model, tokenizer, review, args.max_new_tokens, args.batch_size)
@@ -235,9 +248,10 @@ def dry_run(args, records: list):
     """Print what a run would send to the model, without loading it: the first prompt and the generation counts."""
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
-    first = records[0]
-    sample = first["raw_samples"][0]
-    solutions = sum(len(record["raw_samples"]) for record in records)
+    first = next((r for r in records if solutions_of(r, args)), records[0])
+    sample = first["raw_samples"][solutions_of(first, args)[0][0] if solutions_of(first, args) else 0]
+    solutions = sum(len(solutions_of(record, args)) for record in records)
+    stored = sum(len(record["raw_samples"]) for record in records)
     if args.variant in ("mc", "cot_binary", "cot_score", "critic", "judge5"):
         prompt = build_prompt(tokenizer, verification_messages(args.variant, first["question"], sample["response"]))
         generations = 0 if args.variant == "mc" else solutions * args.verdicts
@@ -246,7 +260,7 @@ def dry_run(args, records: list):
         extractor = get_extractor(args.dataset)
         units = 0
         for record in records:
-            answers = {normalize_answer(a) for a in (None if s.get("cutoff") else extractor(s["response"]) for s in record["raw_samples"]) if a}
+            answers = {normalize_answer(a) for a in (None if s.get("cutoff") else extractor(s["response"]) for _, s in solutions_of(record, args)) if a}
             units += len(answers) * len(mask_conditions(record["question"], args.max_conditions))
         masked = mask_conditions(first["question"], args.max_conditions)
         prompt = build_prompt(tokenizer, backward_messages(masked[0][1], "ANSWER")) if masked else "(the first question has no numbers)"
@@ -257,7 +271,7 @@ def dry_run(args, records: list):
         generations = solutions * 2
         note = f"{solutions} solutions x 2 greedy steps (review, revise)"
     print(f"--- first prompt of {args.variant} ({len(tokenizer(prompt, add_special_tokens=False)['input_ids'])} tokens) ---\n{prompt}\n---")
-    print(f"{len(records)} questions, {solutions} stored solutions. Generations: {generations} ({note}); "
+    print(f"{len(records)} questions, {solutions} of {stored} stored solutions selected. Generations: {generations} ({note}); "
           f"up to {args.max_new_tokens} new tokens each.")
 
 
@@ -284,27 +298,35 @@ def main():
         return
 
     model, tokenizer = load_model_and_tokenizer(args.model, args.precision, dtype=None if args.dtype == "auto" else args.dtype)
+    header = {"type": "run_config", "variant": args.variant, "generator_run": str(run_file), "model": args.model,
+              "precision": args.precision, "dataset": args.dataset, "generator_n_samples": args.n_samples,
+              "questions": len(records), "question_ids": [r["qid"] for r in records],
+              "question_set": args.question_set, "skip_cutoff": args.skip_cutoff,
+              "contested_only": args.contested_only, "max_per_answer": args.max_per_answer, "verdicts": args.verdicts,
+              "max_new_tokens": args.max_new_tokens, "temperature": args.temperature, "top_p": args.top_p,
+              "top_k": args.top_k, "tau": args.tau, "max_conditions": args.max_conditions, "dtype": str(model.dtype),
+              "device": str(model_device(model)), "torch_version": torch.__version__}
     done = set()
     if output.exists():
         with output.open() as handle:
             for line in handle:
-                if line.strip():
-                    row = json.loads(line)
-                    if "qid" in row:
-                        done.add((row["qid"], row["trace_index"]))
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                if row.get("type") == "run_config":
+                    # Resume only a run with the same settings: appending under another run's header mixes them.
+                    changed = settings_mismatch(row, header)
+                    if changed:
+                        raise RuntimeError(f"{output} holds a run with other settings ({', '.join(changed)}). "
+                                           "Delete it or use another --results_dir.")
+                elif "qid" in row:
+                    done.add((row["qid"], row["trace_index"]))
     else:
         output.parent.mkdir(parents=True, exist_ok=True)
-        header = {"type": "run_config", "variant": args.variant, "generator_run": str(run_file), "model": args.model,
-                  "precision": args.precision, "dataset": args.dataset, "generator_n_samples": args.n_samples,
-                  "questions": len(records), "question_ids": [r["qid"] for r in records],
-                  "question_set": args.question_set, "verdicts": args.verdicts, "max_new_tokens": args.max_new_tokens,
-                  "temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k, "tau": args.tau,
-                  "max_conditions": args.max_conditions, "dtype": str(model.dtype), "device": str(model_device(model)),
-                  "torch_version": torch.__version__}
         output.write_text(json.dumps(header) + "\n")
 
     todo = [record for record in records
-            if any((record["qid"], i) not in done for i, _ in solutions_of(record))]
+            if any((record["qid"], i) not in done for i, _ in solutions_of(record, args))]
     print(f"{args.variant}: {len(records)} questions, {len(records) - len(todo)} already done, {len(todo)} to do; "
           f"verdicts {args.verdicts}, max_new_tokens {args.max_new_tokens}.")
     start = time.time()

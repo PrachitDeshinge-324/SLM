@@ -171,6 +171,49 @@ def two_way_probability(logp_correct: float, logp_incorrect: float) -> float:
     return 1.0 / (1.0 + math.exp(gap)) if gap < 700 else 0.0
 
 
+# ---------------------------------------------------------------- which stored solutions to judge
+
+def select_traces(samples: list, extractor, skip_cutoff: bool = False, contested_only: bool = False,
+                  max_per_answer=None) -> list:
+    """
+    Indices of the stored solutions to judge, from the model's own answers only (no reference answer).
+
+    skip_cutoff: leave out solutions cut off at the token limit; they never vote, so no verdict on them can
+        change the vote.
+    contested_only: judge nothing when every finished solution gives the same answer; no verifier can change
+        that vote, and such a question has no right-against-wrong pair to rank.
+    max_per_answer: judge at most this many solutions (the first in trace order) for each distinct answer;
+        an answer's score is then estimated from them.
+    """
+    keys = []
+    for sample in samples:
+        answer = None if sample.get("cutoff", False) else extractor(sample["response"])
+        keys.append(None if answer is None else normalize_answer(answer))
+    if contested_only and len({k for k in keys if k is not None}) < 2:
+        return []
+    kept, per_answer = [], {}
+    for index, (sample, key) in enumerate(zip(samples, keys)):
+        if skip_cutoff and sample.get("cutoff", False):
+            continue
+        if max_per_answer is not None and key is not None:
+            if per_answer.get(key, 0) >= max_per_answer:
+                continue
+            per_answer[key] = per_answer.get(key, 0) + 1
+        kept.append(index)
+    return kept
+
+
+# ---------------------------------------------------------------- resuming
+
+RUN_SETTINGS = ("variant", "question_ids", "verdicts", "max_new_tokens", "temperature", "top_p", "top_k", "tau",
+                "max_conditions", "skip_cutoff", "contested_only", "max_per_answer", "dtype")
+
+
+def settings_mismatch(header: dict, settings: dict) -> list:
+    """The run settings in which an existing output file differs from a new run (a missing one differs too)."""
+    return [key for key in RUN_SETTINGS if key in settings and header.get(key, "<missing>") != settings[key]]
+
+
 # ---------------------------------------------------------------- batching
 
 def generate_in_groups(prompts: list, sample, verdicts: int, batch_size: int, out_of_memory=(MemoryError,),

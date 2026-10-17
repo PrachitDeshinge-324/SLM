@@ -122,4 +122,24 @@ except Boom:
     pass                                                                            # one prompt per group still fails: raised, not swallowed
 assert generate_in_groups([], fake, 2, 8)[0] == []
 
+# Choosing which stored solutions to judge, from the model's own answers only.
+from src.experiment_d.verifier_variants import select_traces
+read = lambda text: text.split("#### ")[-1] if "#### " in text else None
+mk = lambda answer, cut=False: {"response": f"work\n#### {answer}" if answer else "no answer", "cutoff": cut}
+samples = [mk("5"), mk("5"), mk("5"), mk("7"), mk("9", cut=True), mk(None), mk("7"), mk("5.0")]
+assert select_traces(samples, read) == list(range(8))                                 # no filter: everything
+assert select_traces(samples, read, skip_cutoff=True) == [0, 1, 2, 3, 5, 6, 7]       # the cut-off one is left out
+assert select_traces(samples, read, max_per_answer=2) == [0, 1, 3, 4, 5, 6]          # "5" == "5.0": at most two of them
+assert select_traces(samples, read, skip_cutoff=True, contested_only=True, max_per_answer=2) == [0, 1, 3, 5, 6]
+unanimous = [mk("5"), mk("5.00"), mk("8", cut=True), mk(None)]
+assert select_traces(unanimous, read, contested_only=True) == []                     # one answer among finished: nothing to judge
+assert select_traces(unanimous, read) == [0, 1, 2, 3]
+
+# Resuming: a run with other settings must not be appended to.
+from src.experiment_d.verifier_variants import settings_mismatch
+old = {"variant": "critic", "question_ids": ["q1"], "verdicts": 2, "max_new_tokens": 120}
+assert settings_mismatch(old, dict(old)) == []
+assert settings_mismatch(old, {**old, "verdicts": 4, "question_ids": ["q1", "q2"]}) == ["question_ids", "verdicts"]
+assert settings_mismatch(old, {**old, "dtype": "torch.bfloat16"}) == ["dtype"]          # missing in the old header counts as different
+
 print("All verifier variant tests passed!")
