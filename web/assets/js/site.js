@@ -84,6 +84,12 @@
           summary: 'Whether quantized models can judge their own reasoning: false positive rate, MCC and what verifier-guided voting adds.',
           scripts: ['assets/data/results.js', 'assets/js/results.js', 'assets/js/verifier.js'] },
 
+        { id: 'gen-vs-ver', file: 'generator_vs_verifier.html', nav: 'Generator vs Verifier', group: 'results',
+          title: 'Generator vs Verifier',
+          subtitle: 'Each model\'s own answers against its own verifier\'s pick, as one answer and as a vote, on the same questions and samples.',
+          summary: 'One table across all models, precisions and datasets: generator and verifier accuracy, single and voted, and the difference.',
+          scripts: ['assets/data/generator_vs_verifier.js', 'assets/js/generator-vs-verifier.js'] },
+
         { id: 'labels-training', file: 'labels_training.html', nav: 'Phase 3: Labels & Self-Training', group: 'results', libs: ['mathjax'], toc: true,
           title: 'Phase 3: Labels and Self-Training',
           subtitle: 'Whether a quantized model\'s own votes make good labels, and what happens when it trains on them.',

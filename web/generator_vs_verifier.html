@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+<script src="assets/js/site.js"></script>
+<main>
+    <noscript><div class="callout warning">The table on this page is drawn from <code>assets/data/generator_vs_verifier.js</code> and needs JavaScript.</div></noscript>
+
+    <section class="content-box">
+        <h2>Generator and verifier accuracy</h2>
+        <p class="muted small" id="gv-source"></p>
+        <ul>
+            <li><strong>Single:</strong> the generator's single answer is the share of all sampled answers that are right. The verifier's single answer is one answer picked among those the model itself approved.</li>
+            <li><strong>Voted:</strong> the generator's vote is the majority answer of its samples. The verifier's vote is the majority among the approved samples only.</li>
+            <li><strong>Δ</strong> is verifier minus generator, in points: <span class="positive">green</span> when the verifier is higher, <span class="negative">red</span> when it is lower. The small line under it is a 95% bootstrap interval over questions; when it includes zero, the difference may be noise.</li>
+        </ul>
+        <div id="gv-table"></div>
+    </section>
+
+    <section class="content-box">
+        <h2>How these numbers are made</h2>
+        <ul>
+            <li>Each model is scored on the same 100 questions at every precision (the first ones every precision completed, as on the Phase 2 page), with all 8 samples of each. The verifier is the same model at the same precision, judging those samples.</li>
+            <li>A sample cut off at the token limit counts as wrong and does not vote. If the verifier approves nothing for a question, its vote falls back to the plain vote and its single answer to a random sample.</li>
+            <li>Answers are re-extracted and verdicts re-parsed with the current code. Reference answers are used only to score. Regenerate with <code>python scripts/export_generator_vs_verifier.py</code>.</li>
+        </ul>
+    </section>
+</main>
+</body>
+</html>
