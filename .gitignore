@@ -82,6 +82,7 @@ results/
 !/README.md
 !/RESEARCH_DOSSIER.md
 !/RESEARCH_DOSSIER_PAPERS.md
+!/STATUS.md
 
 # Regenerable analysis cache
 analysis/**/cache.pkl

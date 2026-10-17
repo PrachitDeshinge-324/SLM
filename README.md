@@ -2,7 +2,7 @@
 
 A small model answers each question several times, the answers are put to a vote, and the model is asked to judge its own solutions. This is done at 16-bit, 8-bit and 4-bit weight precision to see what quantization does to those self-judgment signals.
 
-Findings, decisions and open questions: [RESEARCH_DOSSIER.md](RESEARCH_DOSSIER.md). Paper-by-paper literature review: [RESEARCH_DOSSIER_PAPERS.md](RESEARCH_DOSSIER_PAPERS.md).
+**Current status, issue register and next steps: [STATUS.md](STATUS.md).** Findings, decisions and open questions: [RESEARCH_DOSSIER.md](RESEARCH_DOSSIER.md). Paper-by-paper literature review: [RESEARCH_DOSSIER_PAPERS.md](RESEARCH_DOSSIER_PAPERS.md).
 
 ## Layout
 
@@ -20,8 +20,8 @@ Findings, decisions and open questions: [RESEARCH_DOSSIER.md](RESEARCH_DOSSIER.m
 | `data/` | GSM8K and CommonsenseQA files; MATH-500 and SVAMP are downloaded |
 | `results/` | Run files and reports (not in git; synced with Google Drive) |
 | `web/` | Project site (static; the result pages are generated from `results/` by `scripts/export_web_data.py`) |
-| `Docs/` | Original proposal and mentor documents (not in git) |
-| `archive/` | Superseded scripts, documents, notebooks and duplicates (not in git) |
+| `Docs/` | Original proposal and mentor documents; `Docs/research_notes/` holds the setup comparison, objective review, and token-signal and verifier plans (not in git) |
+| `archive/` | Superseded scripts, documents, notebooks and duplicates, indexed in `archive/README.md` (not in git) |
 
 ### Pipeline scripts
 
