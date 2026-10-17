@@ -59,6 +59,24 @@ def generator_path_for_verifier_output(verifier_output_file) -> Path:
     return path.parent.parent.parent / "generator" / path.parent.name / path.name.replace("verifier_output_", "", 1)
 
 
+def token_signals_path(results_dir, model: str, precision: str, dataset: str, n_samples, experiment=None, round_index=None) -> Path:
+    """
+    Token-level signals of a generator run's stored solutions (see token_signals.py), beside the run.
+    With `experiment` and `round_index` the run is the one of that self-training round.
+    """
+    root = self_training_round_dir(results_dir, experiment, round_index) if experiment else Path(results_dir)
+    run = generator_run_path(root, model, precision, dataset, n_samples)
+    return run.parent.parent.parent / "token_signals" / run.parent.name / f"token_signals_{run.name}"
+
+
+def verifier_variants_path(results_dir, model: str, precision: str, dataset: str, n_samples, variant: str,
+                           experiment=None, round_index=None) -> Path:
+    """Verdicts of one verifier design (see verifier_variants.py) on a generator run's stored solutions."""
+    root = self_training_round_dir(results_dir, experiment, round_index) if experiment else Path(results_dir)
+    run = generator_run_path(root, model, precision, dataset, n_samples)
+    return run.parent.parent.parent / "verifier_variants" / run.parent.name / f"{variant}_{run.name}"
+
+
 def parse_run_name(file_name: str):
     """
     {'model', 'precision', 'dataset', 'n_samples'} from a run file name, or None if it is not one.

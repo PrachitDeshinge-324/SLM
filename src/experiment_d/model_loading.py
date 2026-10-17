@@ -34,13 +34,16 @@ def select_device(model_id: str = ""):
     return "cpu"
 
 
-def load_model_and_tokenizer(model_id: str, precision: str = "16bit", adapter_path=None):
+def load_model_and_tokenizer(model_id: str, precision: str = "16bit", adapter_path=None, dtype=None):
     """
     Loads a model and tokenizer based on the requested precision.
     precision can be '16bit', '8bit', or '4bit'.
 
     adapter_path: optional folder of a LoRA adapter trained on this model. It is applied on top of
     the base weights and not merged into them, so a quantized base stays quantized.
+
+    dtype: None (the default) picks bfloat16 where the GPU reports it, else float16; "float16", "bfloat16" or
+    "float32" override it. A T4 has no bfloat16 tensor cores, so it reports bf16 but runs it slowly.
 
     Note: 8-bit and 4-bit require bitsandbytes and typically a CUDA backend.
     """
@@ -59,6 +62,8 @@ def load_model_and_tokenizer(model_id: str, precision: str = "16bit", adapter_pa
         best_dtype = torch.float32
     else:
         best_dtype = torch.float16
+    if dtype is not None:
+        best_dtype = {"float16": torch.float16, "bfloat16": torch.bfloat16, "float32": torch.float32}[dtype]
 
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
     if tokenizer.pad_token is None:
