@@ -69,6 +69,14 @@ def token_signals_path(results_dir, model: str, precision: str, dataset: str, n_
     return run.parent.parent.parent / "token_signals" / run.parent.name / f"token_signals_{run.name}"
 
 
+def verifier_variants_path(results_dir, model: str, precision: str, dataset: str, n_samples, variant: str,
+                           experiment=None, round_index=None) -> Path:
+    """Verdicts of one verifier design (see verifier_variants.py) on a generator run's stored solutions."""
+    root = self_training_round_dir(results_dir, experiment, round_index) if experiment else Path(results_dir)
+    run = generator_run_path(root, model, precision, dataset, n_samples)
+    return run.parent.parent.parent / "verifier_variants" / run.parent.name / f"{variant}_{run.name}"
+
+
 def parse_run_name(file_name: str):
     """
     {'model', 'precision', 'dataset', 'n_samples'} from a run file name, or None if it is not one.
