@@ -20,6 +20,9 @@ from dotenv import load_dotenv
 # Ensure the repository root directory is in sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# Progress must show up as it happens, also when the output goes through a pipe or a notebook's %%bash cell.
+sys.stdout.reconfigure(line_buffering=True)
+
 from src.experiment_d.warning_filters import silence_harmless_warnings
 
 silence_harmless_warnings()
