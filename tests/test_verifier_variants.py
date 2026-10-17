@@ -88,4 +88,38 @@ try:
 except ValueError:
     pass
 
+# Grouping by prompt length and the out-of-memory back-off.
+from src.experiment_d.verifier_variants import generate_in_groups
+prompts = ["x" * n for n in (50, 10, 30, 20, 40, 60)]
+seen = []
+def fake(group, sequences):
+    seen.append((len(group), sequences, [len(p) for p in group]))
+    return [[f"{len(p)}"] * 2 for p in group]
+results, per_group = generate_in_groups(prompts, fake, verdicts=2, batch_size=8, log=lambda *_: None)
+assert per_group == 4 and [s[0] for s in seen] == [4, 2] and all(s[1] == s[0] * 2 for s in seen)
+assert seen[0][2] == [10, 20, 30, 40] and seen[1][2] == [50, 60]                   # shortest prompts together
+assert [r[0] for r in results] == ["50", "10", "30", "20", "40", "60"]            # results back in the input order
+
+calls = []
+class Boom(Exception):
+    pass
+def limited(group, sequences):
+    calls.append(sequences)
+    if sequences > 4:
+        raise Boom()
+    return [["ok"] * 2 for _ in group]
+freed = []
+results, per_group = generate_in_groups(prompts, limited, verdicts=2, batch_size=8, out_of_memory=(Boom,),
+                                        on_out_of_memory=lambda: freed.append(1), log=lambda *_: None)
+assert per_group == 2 and calls[0] == 8 and calls[1] == 4 and len(freed) == 1 and all(r == ["ok", "ok"] for r in results)
+
+def always(group, sequences):
+    raise Boom()
+try:
+    generate_in_groups(prompts, always, verdicts=2, batch_size=8, out_of_memory=(Boom,), log=lambda *_: None)
+    raise AssertionError("expected Boom")
+except Boom:
+    pass                                                                            # one prompt per group still fails: raised, not swallowed
+assert generate_in_groups([], fake, 2, 8)[0] == []
+
 print("All verifier variant tests passed!")

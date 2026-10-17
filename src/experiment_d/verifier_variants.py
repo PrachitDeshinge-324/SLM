@@ -171,6 +171,39 @@ def two_way_probability(logp_correct: float, logp_incorrect: float) -> float:
     return 1.0 / (1.0 + math.exp(gap)) if gap < 700 else 0.0
 
 
+# ---------------------------------------------------------------- batching
+
+def generate_in_groups(prompts: list, sample, verdicts: int, batch_size: int, out_of_memory=(MemoryError,),
+                       on_out_of_memory=lambda: None, log=print) -> tuple:
+    """
+    (responses per prompt in the order given, prompts per group that worked) for `verdicts` samples each.
+
+    Prompts are sorted by length and sent in groups of batch_size // verdicts, so a group is padded to
+    its own longest prompt, not to the longest of the whole call. `sample(group prompts, sequences)` does
+    the generation. When it raises one of `out_of_memory`, the group size is halved and the group retried,
+    down to one prompt; the returned size lets a caller keep the smaller batch for its next call.
+    """
+    order = sorted(range(len(prompts)), key=lambda i: len(prompts[i]))
+    per_group = max(1, batch_size // verdicts)
+    results = [None] * len(prompts)
+    start = 0
+    while start < len(order):
+        group = order[start:start + per_group]
+        try:
+            grouped = sample([prompts[i] for i in group], len(group) * verdicts)
+        except out_of_memory:
+            if per_group == 1:
+                raise
+            per_group = max(1, per_group // 2)
+            on_out_of_memory()
+            log(f"    out of memory: {per_group} prompts x {verdicts} = {per_group * verdicts} sequences per batch from now on")
+            continue
+        for index, responses in zip(group, grouped):
+            results[index] = responses
+        start += len(group)
+    return results, per_group
+
+
 # ---------------------------------------------------------------- backward verification (Self-verification)
 
 _NUMBER = re.compile(r"(?<![\w.])\d[\d,]*(?:\.\d+)?")

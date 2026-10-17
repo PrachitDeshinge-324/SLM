@@ -51,6 +51,7 @@ from src.experiment_d.verifier_variants import (
     VARIANTS,
     aggregate,
     backward_messages,
+    generate_in_groups,
     backward_score,
     mask_conditions,
     parse_backward,
@@ -107,12 +108,21 @@ def base_row(record: dict, index: int, sample: dict, variant: str) -> dict:
 
 
 def generate(model, tokenizer, prompts: list, args) -> list:
-    """`verdicts` sampled responses per prompt, as the verifier papers draw them."""
-    grouped, tokens_per_second, _, _ = sample_responses(
-        model, tokenizer, prompts, n_samples=args.verdicts, temperature=args.temperature, top_k=args.top_k,
-        top_p=args.top_p, max_new_tokens=args.max_new_tokens, batch_size=args.batch_size)
-    print(f"    {tokens_per_second:.0f} generated tokens/s", flush=True)
-    return grouped
+    """
+    `verdicts` sampled responses per prompt, as the verifier papers draw them. Prompts are grouped by length
+    and the batch is halved (and kept smaller for the rest of the run) when the GPU runs out of memory.
+    """
+    def sample(group, sequences):
+        grouped, tokens_per_second, _, _ = sample_responses(
+            model, tokenizer, group, n_samples=args.verdicts, temperature=args.temperature, top_k=args.top_k,
+            top_p=args.top_p, max_new_tokens=args.max_new_tokens, batch_size=sequences)
+        print(f"    {len(group)} prompts x {args.verdicts}: {tokens_per_second:.0f} generated tokens/s", flush=True)
+        return grouped
+
+    results, per_group = generate_in_groups(prompts, sample, args.verdicts, args.batch_size, (torch.cuda.OutOfMemoryError,),
+                                            torch.cuda.empty_cache)
+    args.batch_size = per_group * args.verdicts      # keep a batch that fitted for the next chunk
+    return results
 
 
 @torch.inference_mode()
