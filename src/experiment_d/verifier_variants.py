@@ -16,6 +16,8 @@ generator prompt asks for) where a paper uses another phrase.
   critic       Generalisation gap (2606.01075): a critic that goes through the steps first, then a fixed
                closing line; 16 verdicts per solution; positive at a correct-rate >= tau (0.6), negative at an
                incorrect-rate >= tau, otherwise discarded.
+  critic_forced  The same, with the start of the answer pre-filled ("Let me check the solution step by step.
+               Step 1:") so the model checks the steps before its verdict. Our addition, not in the paper.
   judge5       Self-Rewarding LMs (2401.10020): an additive 5-point rubric with a justification of up to 100
                words, averaged over 3 samples. The rubric is the general one, not written for mathematics.
   backward     Self-verification (2212.09561): every number in the question is masked in turn as X, the
@@ -32,7 +34,8 @@ import re
 
 from src.experiment_d.answer_matching import answers_match, normalize_answer
 
-VARIANTS = ("mc", "cot_binary", "cot_score", "critic", "judge5", "backward", "self_correct")
+VARIANTS = ("mc", "cot_binary", "cot_score", "critic", "critic_forced", "judge5", "backward", "self_correct")
+CRITICS = ("critic", "critic_forced")
 
 # Samples per solution (per condition for backward) and the longest generation, as in the papers where
 # stated; Mind the Gap uses 64 verdicts for the CoT variants, which is lowered here for cost.
@@ -41,6 +44,7 @@ DEFAULTS = {
     "cot_binary": {"n": 16, "max_new_tokens": 160},
     "cot_score": {"n": 16, "max_new_tokens": 160},
     "critic": {"n": 16, "max_new_tokens": 400},
+    "critic_forced": {"n": 16, "max_new_tokens": 400},
     "judge5": {"n": 3, "max_new_tokens": 200},
     "backward": {"n": 4, "max_new_tokens": 200},
     "self_correct": {"n": 1, "max_new_tokens": 300},
@@ -111,7 +115,18 @@ REVIEW = "Review your previous answer and find problems with your answer."
 IMPROVE = ("Based on the problems you found, improve your answer. Please reiterate your answer, with your final "
            "answer a single numerical number, in the form \\boxed{answer}.")
 
-_TEMPLATES = {"mc": _MC, "cot_binary": _COT_BINARY, "cot_score": _COT_SCORE, "critic": _CRITIC, "judge5": _JUDGE5}
+_TEMPLATES = {"mc": _MC, "cot_binary": _COT_BINARY, "cot_score": _COT_SCORE, "critic": _CRITIC,
+              "critic_forced": _CRITIC, "judge5": _JUDGE5}
+
+# critic_forced: the critic's prompt, with the start of its answer written for it, so that it has to go through
+# the steps before it can reach the closing line. Left to itself, Qwen3.5-0.8B mostly wrote the verdict line
+# alone (median response 5 words on 30 questions), which is not the design the paper describes.
+FORCED_PREFIX = {"critic_forced": "Let me check the solution step by step.\n\nStep 1:"}
+
+
+def answer_prefix(variant: str) -> str:
+    """Text placed at the start of the model's answer, after the chat template's generation prompt ('' for none)."""
+    return FORCED_PREFIX.get(variant, "")
 
 
 def verification_messages(variant: str, question: str, solution: str) -> list:
@@ -138,7 +153,7 @@ def parse_response(variant: str, response) -> object:
     if not response:
         return None
     text = _THINK.sub("", response)
-    if variant in ("cot_binary", "critic"):
+    if variant in ("cot_binary",) + CRITICS:
         found = (_BINARY if variant == "cot_binary" else _CRITIC_LINE).findall(text)
         return found[-1].lower() == "correct" if found else None
     if variant in ("cot_score", "judge5"):
@@ -159,7 +174,7 @@ def aggregate(variant: str, values: list, tau: float = CRITIC_THRESHOLD) -> dict
     """
     parsed = [float(v) for v in values if v is not None]
     out = {"n": len(values), "parsed": len(parsed), "score": sum(parsed) / len(parsed) if parsed else None}
-    if variant == "critic" and parsed:
+    if variant in CRITICS and parsed:
         rate = out["score"]
         out["decision"] = True if rate >= tau - 1e-9 else (False if 1 - rate >= tau - 1e-9 else None)
     return out
@@ -206,7 +221,7 @@ def select_traces(samples: list, extractor, skip_cutoff: bool = False, contested
 # ---------------------------------------------------------------- resuming
 
 RUN_SETTINGS = ("variant", "question_ids", "verdicts", "max_new_tokens", "temperature", "top_p", "top_k", "tau",
-                "max_conditions", "skip_cutoff", "contested_only", "max_per_answer", "dtype")
+                "max_conditions", "skip_cutoff", "contested_only", "max_per_answer", "answer_prefix", "dtype")
 
 
 def settings_mismatch(header: dict, settings: dict) -> list:

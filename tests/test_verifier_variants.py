@@ -142,4 +142,15 @@ assert settings_mismatch(old, dict(old)) == []
 assert settings_mismatch(old, {**old, "verdicts": 4, "question_ids": ["q1", "q2"]}) == ["question_ids", "verdicts"]
 assert settings_mismatch(old, {**old, "dtype": "torch.bfloat16"}) == ["dtype"]          # missing in the old header counts as different
 
+# The forced-reasoning critic: same prompt and parsing as the critic, plus a pre-filled start of the answer.
+from src.experiment_d.verifier_variants import CRITICS, answer_prefix
+assert "critic_forced" in VARIANTS and set(CRITICS) == {"critic", "critic_forced"}
+assert verification_messages("critic_forced", "q", "s") == verification_messages("critic", "q", "s")
+assert answer_prefix("critic") == "" and answer_prefix("mc") == ""
+assert answer_prefix("critic_forced").startswith("Let me check") and answer_prefix("critic_forced").endswith("Step 1:")
+assert parse_response("critic_forced", " The sum 3 + 4 = 7 is right.\nCRITIC RESULT: SOLUTION IS CORRECT") is True
+assert parse_response("critic_forced", " 12 / 4 is 3, not 4.\nCRITIC RESULT: SOLUTION IS INCORRECT") is False
+assert parse_response("critic_forced", " The total is fine and the steps") is None              # cut off before the verdict
+assert aggregate("critic_forced", [True] * 3 + [False])["decision"] is True                   # 0.75 >= 0.6, as the critic
+
 print("All verifier variant tests passed!")

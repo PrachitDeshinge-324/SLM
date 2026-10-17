@@ -50,6 +50,7 @@ from src.experiment_d.verifier_variants import (
     SAMPLING,
     VARIANTS,
     aggregate,
+    answer_prefix,
     backward_messages,
     select_traces,
     settings_mismatch,
@@ -181,8 +182,10 @@ def mc_rows(model, tokenizer, records: list, args) -> list:
 def sampled_rows(model, tokenizer, records: list, args) -> list:
     """cot_binary, cot_score, critic, judge5: `verdicts` sampled responses per solution, parsed and aggregated."""
     items = [(record, index, sample) for record in records for index, sample in solutions_of(record, args)]
+    # A forced-reasoning variant writes the start of the answer after the generation prompt; the stored
+    # response is the model's continuation of it.
     prompts = [build_prompt(tokenizer, verification_messages(args.variant, record["question"], sample["response"]))
-               for record, _, sample in items]
+               + answer_prefix(args.variant) for record, _, sample in items]
     grouped = generate(model, tokenizer, prompts, args)
     rows = []
     for (record, index, sample), responses in zip(items, grouped):
@@ -241,6 +244,7 @@ def self_correct_rows(model, tokenizer, records: list, args) -> list:
 
 
 RUNNERS = {"mc": mc_rows, "cot_binary": sampled_rows, "cot_score": sampled_rows, "critic": sampled_rows,
+           "critic_forced": sampled_rows,
            "judge5": sampled_rows, "backward": backward_rows, "self_correct": self_correct_rows}
 
 
@@ -252,8 +256,9 @@ def dry_run(args, records: list):
     sample = first["raw_samples"][solutions_of(first, args)[0][0] if solutions_of(first, args) else 0]
     solutions = sum(len(solutions_of(record, args)) for record in records)
     stored = sum(len(record["raw_samples"]) for record in records)
-    if args.variant in ("mc", "cot_binary", "cot_score", "critic", "judge5"):
-        prompt = build_prompt(tokenizer, verification_messages(args.variant, first["question"], sample["response"]))
+    if args.variant in ("mc", "cot_binary", "cot_score", "critic", "critic_forced", "judge5"):
+        prompt = (build_prompt(tokenizer, verification_messages(args.variant, first["question"], sample["response"]))
+                  + answer_prefix(args.variant))
         generations = 0 if args.variant == "mc" else solutions * args.verdicts
         note = "one forward pass each (no generation)" if args.variant == "mc" else f"{solutions} solutions x {args.verdicts} verdicts"
     elif args.variant == "backward":
@@ -304,7 +309,7 @@ def main():
               "question_set": args.question_set, "skip_cutoff": args.skip_cutoff,
               "contested_only": args.contested_only, "max_per_answer": args.max_per_answer, "verdicts": args.verdicts,
               "max_new_tokens": args.max_new_tokens, "temperature": args.temperature, "top_p": args.top_p,
-              "top_k": args.top_k, "tau": args.tau, "max_conditions": args.max_conditions, "dtype": str(model.dtype),
+              "top_k": args.top_k, "tau": args.tau, "max_conditions": args.max_conditions, "answer_prefix": answer_prefix(args.variant), "dtype": str(model.dtype),
               "device": str(model_device(model)), "torch_version": torch.__version__}
     done = set()
     if output.exists():
