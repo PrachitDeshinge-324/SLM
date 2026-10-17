@@ -46,10 +46,12 @@ from src.experiment_d.run_files import (
 from src.experiment_d.sampling import sample_responses
 from src.experiment_d.verifier_variants import (
     CRITIC_THRESHOLD,
+    CRITICS,
     DEFAULTS,
     SAMPLING,
     VARIANTS,
     aggregate,
+    aggregate_with_readout,
     answer_prefix,
     backward_messages,
     select_traces,
@@ -59,8 +61,11 @@ from src.experiment_d.verifier_variants import (
     mask_conditions,
     parse_backward,
     parse_response,
+    readout_text,
     self_correct_messages,
     two_way_probability,
+    verdict_cue,
+    verdict_token_ids,
     verification_messages,
 )
 
@@ -90,6 +95,11 @@ def parse_args():
     parser.add_argument("--verdicts", type=int, default=None, help="Samples per solution (per condition for backward); default per variant")
     parser.add_argument("--max_new_tokens", type=int, default=None)
     parser.add_argument("--batch_size", type=int, default=128, help="Generations per forward batch")
+    parser.add_argument("--readout_batch", type=int, default=16,
+                        help="critics: sequences per forward pass of the forced verdict readout (halved on out-of-memory)")
+    parser.add_argument("--fill_readouts", action="store_true",
+                        help="critics: no generation; add the forced verdict readout to an existing output file's "
+                             "critiques that have no verdict (rewrites the file)")
     parser.add_argument("--chunk_questions", type=int, default=4, help="Questions judged between writes to the output")
     parser.add_argument("--temperature", type=float, default=SAMPLING["temperature"])
     parser.add_argument("--top_p", type=float, default=SAMPLING["top_p"])
@@ -179,20 +189,99 @@ def mc_rows(model, tokenizer, records: list, args) -> list:
     return rows
 
 
+@torch.inference_mode()
+def verdict_readouts(model, tokenizer, texts: list, batch_size: int) -> list:
+    """
+    (P(correct), verdict mass) for each text, read from the next token after the critic's closing cue: one
+    forward pass, no generation. Left-padded batches sorted by length; the batch is halved on out-of-memory.
+    """
+    device = model_device(model)
+    correct, incorrect = verdict_token_ids(tokenizer)
+    order = sorted(range(len(texts)), key=lambda i: len(texts[i]))
+    out = [None] * len(texts)
+    side = tokenizer.padding_side
+    tokenizer.padding_side = "left"
+    try:
+        start = 0
+        while start < len(order):
+            group = order[start:start + batch_size]
+            try:
+                inputs = tokenizer([texts[i] for i in group], return_tensors="pt", padding=True,
+                                   add_special_tokens=False).to(device)
+                logits = model(**inputs, use_cache=False, logits_to_keep=1).logits[:, -1].float()
+            except torch.cuda.OutOfMemoryError:
+                if batch_size == 1:
+                    raise
+                torch.cuda.empty_cache()
+                batch_size = max(1, batch_size // 2)
+                print(f"    out of memory: readout batch -> {batch_size}", flush=True)
+                continue
+            logp = torch.log_softmax(logits, -1)
+            for row, i in enumerate(group):
+                lc, li = float(logp[row, correct]), float(logp[row, incorrect])
+                out[i] = (two_way_probability(lc, li), float(logp[row, correct].exp() + logp[row, incorrect].exp()))
+            start += len(group)
+    finally:
+        tokenizer.padding_side = side
+    return out
+
+
+def add_readouts(model, tokenizer, rows: list, prompts: list, args) -> None:
+    """For a critic: a forced verdict for each critique without one, and the score that counts them (in place)."""
+    jobs = [(r, k) for r, row in enumerate(rows) for k, value in enumerate(row["values"]) if value is None]
+    texts = [readout_text(prompts[r], rows[r]["responses"][k], args.variant) for r, k in jobs]
+    results = verdict_readouts(model, tokenizer, texts, args.readout_batch) if texts else []
+    for row in rows:
+        row["readouts"] = [None] * len(row["values"])
+        row["readout_mass"] = [None] * len(row["values"])
+    for (r, k), (p, mass) in zip(jobs, results):
+        rows[r]["readouts"][k], rows[r]["readout_mass"][k] = p, mass
+    for row in rows:
+        row.update(aggregate_with_readout(row["values"], row["readouts"], args.tau))
+
+
+def critic_prompt(tokenizer, record: dict, sample: dict, variant: str) -> str:
+    return build_prompt(tokenizer, verification_messages(variant, record["question"], sample["response"])) + answer_prefix(variant)
+
+
 def sampled_rows(model, tokenizer, records: list, args) -> list:
     """cot_binary, cot_score, critic, judge5: `verdicts` sampled responses per solution, parsed and aggregated."""
     items = [(record, index, sample) for record in records for index, sample in solutions_of(record, args)]
     # A forced-reasoning variant writes the start of the answer after the generation prompt; the stored
     # response is the model's continuation of it.
-    prompts = [build_prompt(tokenizer, verification_messages(args.variant, record["question"], sample["response"]))
-               + answer_prefix(args.variant) for record, _, sample in items]
+    prompts = [critic_prompt(tokenizer, record, sample, args.variant) for record, _, sample in items]
     grouped = generate(model, tokenizer, prompts, args)
     rows = []
     for (record, index, sample), responses in zip(items, grouped):
         values = [parse_response(args.variant, response) for response in responses]
         rows.append({**base_row(record, index, sample, args.variant), "responses": responses, "values": values,
                      **aggregate(args.variant, values, args.tau)})
+    if args.variant in CRITICS:
+        add_readouts(model, tokenizer, rows, prompts, args)
     return rows
+
+
+def fill_readouts(model, tokenizer, records: list, output: Path, args) -> None:
+    """Add the forced verdict readout to the critiques of an existing output file that lack it; rewrite the file."""
+    lines = [json.loads(line) for line in output.open() if line.strip()]
+    by_qid = {record["qid"]: record for record in records}
+    todo = [row for row in lines if "qid" in row and "readouts" not in row and row["qid"] in by_qid]
+    print(f"{output.name}: {len(todo)} solutions without a readout, "
+          f"{sum(v is None for row in todo for v in row['values'])} critiques without a verdict.")
+    start = time.time()
+    for first in range(0, len(todo), 64):
+        chunk = todo[first:first + 64]
+        prompts = [critic_prompt(tokenizer, by_qid[row["qid"]], by_qid[row["qid"]]["raw_samples"][row["trace_index"]], args.variant)
+                   for row in chunk]
+        add_readouts(model, tokenizer, chunk, prompts, args)
+        print(f"  {first + len(chunk)}/{len(todo)} solutions, {time.time() - start:.0f}s", flush=True)
+    for row in lines:
+        if row.get("type") == "run_config":
+            row["verdict_cue"] = verdict_cue(args.variant)
+    temporary = output.with_suffix(".tmp")
+    temporary.write_text("".join(json.dumps(row) + "\n" for row in lines))
+    temporary.replace(output)
+    print(f"Written to {output}")
 
 
 def backward_rows(model, tokenizer, records: list, args) -> list:
@@ -303,13 +392,18 @@ def main():
         return
 
     model, tokenizer = load_model_and_tokenizer(args.model, args.precision, dtype=None if args.dtype == "auto" else args.dtype)
+    if args.fill_readouts:
+        if args.variant not in CRITICS or not output.exists():
+            raise RuntimeError("--fill_readouts needs a critic variant and an existing output file")
+        fill_readouts(model, tokenizer, records, output, args)
+        return
     header = {"type": "run_config", "variant": args.variant, "generator_run": str(run_file), "model": args.model,
               "precision": args.precision, "dataset": args.dataset, "generator_n_samples": args.n_samples,
               "questions": len(records), "question_ids": [r["qid"] for r in records],
               "question_set": args.question_set, "skip_cutoff": args.skip_cutoff,
               "contested_only": args.contested_only, "max_per_answer": args.max_per_answer, "verdicts": args.verdicts,
               "max_new_tokens": args.max_new_tokens, "temperature": args.temperature, "top_p": args.top_p,
-              "top_k": args.top_k, "tau": args.tau, "max_conditions": args.max_conditions, "answer_prefix": answer_prefix(args.variant), "dtype": str(model.dtype),
+              "top_k": args.top_k, "tau": args.tau, "max_conditions": args.max_conditions, "answer_prefix": answer_prefix(args.variant), "verdict_cue": verdict_cue(args.variant), "dtype": str(model.dtype),
               "device": str(model_device(model)), "torch_version": torch.__version__}
     done = set()
     if output.exists():

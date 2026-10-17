@@ -153,4 +153,77 @@ assert parse_response("critic_forced", " 12 / 4 is 3, not 4.\nCRITIC RESULT: SOL
 assert parse_response("critic_forced", " The total is fine and the steps") is None              # cut off before the verdict
 assert aggregate("critic_forced", [True] * 3 + [False])["decision"] is True                   # 0.75 >= 0.6, as the critic
 
+# Forced verdict readout: an unfinished critique gets the closing cue and a P(correct) from the next token.
+from src.experiment_d.verifier_variants import (aggregate_with_readout, readout_text, verdict_cue,
+                                                verdict_token_ids)
+assert verdict_cue("critic_forced") == verdict_cue("critic") == "\n\nCRITIC RESULT: SOLUTION IS" and verdict_cue("mc") == ""
+assert readout_text("P", " step 1 is fine \n", "critic_forced") == "P step 1 is fine\n\nCRITIC RESULT: SOLUTION IS"
+out = aggregate_with_readout([True, None, False, None], [None, 0.9, None, 0.1])
+assert abs(out["forced_score"] - 0.5) < 1e-12 and out["forced_decision"] is None             # (1 + .9 + 0 + .1) / 4
+assert aggregate_with_readout([True, None], [None, 0.8])["forced_decision"] is True              # 0.9 >= 0.6
+assert aggregate_with_readout([None, None], [0.1, 0.2])["forced_decision"] is False              # 1 - 0.15 >= 0.6
+assert aggregate_with_readout([None], [None]) == {"forced_score": None, "forced_decision": None}
+
+
+class _WordTokenizer:
+    """First token = first letters, so " CORRECT" and " INCORRECT" differ, as with Qwen ('ĠCOR' / 'ĠINC')."""
+    def __call__(self, text, add_special_tokens=False):
+        return {"input_ids": [hash(text.strip()[:3]) % 1000, 1]}
+assert len(set(verdict_token_ids(_WordTokenizer()))) == 2
+
+
+class _SameTokenizer:
+    def __call__(self, text, add_special_tokens=False):
+        return {"input_ids": [7]}
+try:
+    verdict_token_ids(_SameTokenizer())
+    raise AssertionError("identical first tokens must be refused")
+except RuntimeError:
+    pass
+
+
+# The runner's batched readout (fake model, CPU): left padding, length sorting and the input order kept.
+import importlib.util
+import torch
+spec = importlib.util.spec_from_file_location("runner", Path(__file__).resolve().parents[1] / "scripts/run_verifier_variants.py")
+runner = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(runner)
+
+
+class _CharTokenizer:
+    """One id per character; a verdict word's first id is its first letter ('C' or 'I')."""
+    padding_side = "right"
+    pad_token_id = 0
+    def __call__(self, texts, return_tensors=None, padding=False, add_special_tokens=False):
+        if isinstance(texts, str):
+            return {"input_ids": [ord(texts.strip()[0]), 1]}
+        ids = [[ord(c) for c in t] for t in texts]
+        width = max(map(len, ids))
+        assert self.padding_side == "left"
+        rows = [[0] * (width - len(r)) + r for r in ids]
+        mask = [[0] * (width - len(r)) + [1] * len(r) for r in ids]
+        class _B(dict):
+            def to(self, device):
+                return self
+        return _B(input_ids=torch.tensor(rows), attention_mask=torch.tensor(mask))
+
+
+class _LastCharModel(torch.nn.Module):
+    """Next-token logits favour 'C' (correct) when the text ends in 'y', 'I' (incorrect) otherwise."""
+    def __init__(self):
+        super().__init__()
+        self.p = torch.nn.Parameter(torch.zeros(1))
+    def forward(self, input_ids, attention_mask=None, use_cache=False, logits_to_keep=1):
+        logits = torch.zeros(input_ids.shape[0], 1, 128)
+        yes = input_ids[:, -1] == ord("y")
+        logits[yes, 0, ord("C")] = 3.0
+        logits[~yes, 0, ord("I")] = 3.0
+        return type("Out", (), {"logits": logits})()
+
+
+texts = ["a long text ending y", "x", "medium n", "zy"]
+got = runner.verdict_readouts(_LastCharModel(), _CharTokenizer(), texts, batch_size=2)
+assert [p > 0.5 for p, _ in got] == [True, False, False, True]
+assert all(0 < mass <= 1 for _, mass in got)
+
 print("All verifier variant tests passed!")

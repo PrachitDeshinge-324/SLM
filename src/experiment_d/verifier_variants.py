@@ -180,6 +180,51 @@ def aggregate(variant: str, values: list, tau: float = CRITIC_THRESHOLD) -> dict
     return out
 
 
+# ---------------------------------------------------------------- forced verdict for critiques without one
+#
+# Under the token cap a critique often runs out before its closing line (Qwen3.5-0.8B, critic_forced, 400 tokens:
+# 55% of the critiques of wrong solutions, 24% of right ones). Dropping those verdicts throws away the critiques
+# of the solutions most likely to be wrong. Instead, the closing line is appended to the unfinished critique and
+# the verdict is read from the probabilities of its next token: a P(correct) in place of the missing verdict.
+# One forward pass per unfinished critique, no generation. Our addition, not in the paper.
+
+VERDICT_CUE = {variant: "\n\nCRITIC RESULT: SOLUTION IS" for variant in CRITICS}
+VERDICT_WORDS = (" CORRECT", " INCORRECT")
+
+
+def verdict_cue(variant: str) -> str:
+    """The text appended to an unfinished critique before its verdict is read ("" for variants without one)."""
+    return VERDICT_CUE.get(variant, "")
+
+
+def readout_text(prompt: str, response: str, variant: str) -> str:
+    """The sequence whose next token is the forced verdict: the prompt, the critique so far, the closing cue."""
+    return prompt + response.rstrip() + verdict_cue(variant)
+
+
+def verdict_token_ids(tokenizer) -> tuple:
+    """First token ids of the two verdict words as they follow the cue; they must differ."""
+    correct, incorrect = (tokenizer(word, add_special_tokens=False)["input_ids"][0] for word in VERDICT_WORDS)
+    if correct == incorrect:
+        raise RuntimeError(f"{VERDICT_WORDS} start with the same token; the forced verdict is undefined")
+    return correct, incorrect
+
+
+def aggregate_with_readout(values: list, readouts: list, tau: float = CRITIC_THRESHOLD) -> dict:
+    """
+    A critic's score with every verdict counted: a parsed verdict as 1 or 0, an unfinished critique as its
+    forced P(correct). forced_score is the mean over all verdicts; forced_decision as in aggregate (approved at
+    a score >= tau, rejected at 1 - score >= tau, else None). A verdict with neither (no readout) is left out.
+    """
+    filled = [float(v) if v is not None else r for v, r in zip(values, readouts)]
+    filled = [f for f in filled if f is not None]
+    if not filled:
+        return {"forced_score": None, "forced_decision": None}
+    score = sum(filled) / len(filled)
+    decision = True if score >= tau - 1e-9 else (False if 1 - score >= tau - 1e-9 else None)
+    return {"forced_score": score, "forced_decision": decision}
+
+
 def two_way_probability(logp_correct: float, logp_incorrect: float) -> float:
     """P(correct) among the two verdicts, from the log-probabilities of their first tokens."""
     gap = logp_incorrect - logp_correct
