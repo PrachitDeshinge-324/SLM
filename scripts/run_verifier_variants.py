@@ -76,6 +76,8 @@ def parse_args():
                         help="phase2: the questions the Phase 2 page scores for this model (default, so every variant is "
                              "compared on the same questions as the current verifier); first: the first N of the generator run")
     parser.add_argument("--questions", type=int, default=100, help="Judge at most this many questions of the set")
+    parser.add_argument("--dtype", type=str, choices=("auto", "float16", "bfloat16"), default="auto",
+                        help="Weight dtype. auto = bfloat16 where reported (also on a T4, which runs it slowly); the dtype is recorded in the output header")
     parser.add_argument("--dry_run", action="store_true", help="No model: load the tokenizer, print a prompt and count the generations")
     parser.add_argument("--verdicts", type=int, default=None, help="Samples per solution (per condition for backward); default per variant")
     parser.add_argument("--max_new_tokens", type=int, default=None)
@@ -281,7 +283,7 @@ def main():
         dry_run(args, records)
         return
 
-    model, tokenizer = load_model_and_tokenizer(args.model, args.precision)
+    model, tokenizer = load_model_and_tokenizer(args.model, args.precision, dtype=None if args.dtype == "auto" else args.dtype)
     done = set()
     if output.exists():
         with output.open() as handle:
