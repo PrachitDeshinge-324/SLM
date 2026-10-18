@@ -144,7 +144,7 @@ assert settings_mismatch(old, {**old, "dtype": "torch.bfloat16"}) == ["dtype"]  
 
 # The forced-reasoning critic: same prompt and parsing as the critic, plus a pre-filled start of the answer.
 from src.experiment_d.verifier_variants import CRITICS, answer_prefix
-assert "critic_forced" in VARIANTS and set(CRITICS) == {"critic", "critic_forced"}
+assert "critic_forced" in VARIANTS and set(CRITICS) == {"critic", "critic_forced", "critic_short"}
 assert verification_messages("critic_forced", "q", "s") == verification_messages("critic", "q", "s")
 assert answer_prefix("critic") == "" and answer_prefix("mc") == ""
 assert answer_prefix("critic_forced").startswith("Let me check") and answer_prefix("critic_forced").endswith("Step 1:")
@@ -225,5 +225,13 @@ texts = ["a long text ending y", "x", "medium n", "zy"]
 got = runner.verdict_readouts(_LastCharModel(), _CharTokenizer(), texts, batch_size=2)
 assert [p > 0.5 for p, _ in got] == [True, False, False, True]
 assert all(0 < mass <= 1 for _, mass in got)
+
+# The short critic: its own prompt (check once, no re-solving, under 120 words), a bare "Step 1:" start,
+# the critic's closing line and parser, and the forced verdict readout.
+assert "critic_short" in VARIANTS and "critic_short" in CRITICS
+short = verification_messages("critic_short", "Q?", "S.")[-1]["content"]
+assert "Do not solve the problem again" in short and "under 120 words" in short and "CRITIC RESULT: SOLUTION IS CORRECT" in short
+assert answer_prefix("critic_short") == "Step 1:" and verdict_cue("critic_short") == verdict_cue("critic_forced")
+assert parse_response("critic_short", " 3 + 4 = 7, right.\nCRITIC RESULT: SOLUTION IS INCORRECT") is False
 
 print("All verifier variant tests passed!")

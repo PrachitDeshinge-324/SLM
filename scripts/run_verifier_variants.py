@@ -333,7 +333,7 @@ def self_correct_rows(model, tokenizer, records: list, args) -> list:
 
 
 RUNNERS = {"mc": mc_rows, "cot_binary": sampled_rows, "cot_score": sampled_rows, "critic": sampled_rows,
-           "critic_forced": sampled_rows,
+           "critic_forced": sampled_rows, "critic_short": sampled_rows,
            "judge5": sampled_rows, "backward": backward_rows, "self_correct": self_correct_rows}
 
 
@@ -345,7 +345,7 @@ def dry_run(args, records: list):
     sample = first["raw_samples"][solutions_of(first, args)[0][0] if solutions_of(first, args) else 0]
     solutions = sum(len(solutions_of(record, args)) for record in records)
     stored = sum(len(record["raw_samples"]) for record in records)
-    if args.variant in ("mc", "cot_binary", "cot_score", "critic", "critic_forced", "judge5"):
+    if args.variant in ("mc", "cot_binary", "cot_score") + CRITICS + ("judge5",):
         prompt = (build_prompt(tokenizer, verification_messages(args.variant, first["question"], sample["response"]))
                   + answer_prefix(args.variant))
         generations = 0 if args.variant == "mc" else solutions * args.verdicts
@@ -429,6 +429,7 @@ def main():
     print(f"{args.variant}: {len(records)} questions, {len(records) - len(todo)} already done, {len(todo)} to do; "
           f"verdicts {args.verdicts}, max_new_tokens {args.max_new_tokens}.")
     start = time.time()
+    verdicts_total = verdicts_parsed = 0
     for first in range(0, len(todo), args.chunk_questions):
         chunk = todo[first:first + args.chunk_questions]
         rows = RUNNERS[args.variant](model, tokenizer, chunk, args)
@@ -438,8 +439,14 @@ def main():
                     handle.write(json.dumps(row) + "\n")
         elapsed = time.time() - start
         count = first + len(chunk)
+        reached = ""
+        if args.variant in CRITICS:
+            # Share of critiques that reached their closing line within max_new_tokens (the rest get the readout).
+            verdicts_total += sum(len(row["values"]) for row in rows)
+            verdicts_parsed += sum(v is not None for row in rows for v in row["values"])
+            reached = f", verdict reached {verdicts_parsed / max(1, verdicts_total):.0%}"
         print(f"  {count}/{len(todo)} questions, {elapsed / count:.1f}s per question, "
-              f"about {elapsed / count * (len(todo) - count) / 60:.0f} min left", flush=True)
+              f"about {elapsed / count * (len(todo) - count) / 60:.0f} min left{reached}", flush=True)
     print(f"Written to {output}")
 
 

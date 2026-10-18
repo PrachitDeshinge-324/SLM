@@ -18,6 +18,9 @@ generator prompt asks for) where a paper uses another phrase.
                incorrect-rate >= tau, otherwise discarded.
   critic_forced  The same, with the start of the answer pre-filled ("Let me check the solution step by step.
                Step 1:") so the model checks the steps before its verdict. Our addition, not in the paper.
+  critic_short The forced critic told to check each step once, in one short line, without solving the problem
+               again, in under 120 words. Our change: the forced critic ran out of tokens on 45-51% of its
+               critiques, mostly by re-reading and re-solving ("Wait", "re-read" in over half of them).
   judge5       Self-Rewarding LMs (2401.10020): an additive 5-point rubric with a justification of up to 100
                words, averaged over 3 samples. The rubric is the general one, not written for mathematics.
   backward     Self-verification (2212.09561): every number in the question is masked in turn as X, the
@@ -34,8 +37,9 @@ import re
 
 from src.experiment_d.answer_matching import answers_match, normalize_answer
 
-VARIANTS = ("mc", "cot_binary", "cot_score", "critic", "critic_forced", "judge5", "backward", "self_correct")
-CRITICS = ("critic", "critic_forced")
+VARIANTS = ("mc", "cot_binary", "cot_score", "critic", "critic_forced", "critic_short", "judge5", "backward",
+            "self_correct")
+CRITICS = ("critic", "critic_forced", "critic_short")
 
 # Samples per solution (per condition for backward) and the longest generation, as in the papers where
 # stated; Mind the Gap uses 64 verdicts for the CoT variants, which is lowered here for cost.
@@ -45,6 +49,7 @@ DEFAULTS = {
     "cot_score": {"n": 16, "max_new_tokens": 160},
     "critic": {"n": 16, "max_new_tokens": 400},
     "critic_forced": {"n": 16, "max_new_tokens": 400},
+    "critic_short": {"n": 16, "max_new_tokens": 400},
     "judge5": {"n": 3, "max_new_tokens": 200},
     "backward": {"n": 4, "max_new_tokens": 200},
     "self_correct": {"n": 1, "max_new_tokens": 300},
@@ -86,6 +91,15 @@ _CRITIC = (
     "'CRITIC RESULT: SOLUTION IS CORRECT' or 'CRITIC RESULT: SOLUTION IS INCORRECT'."
 )
 
+_CRITIC_SHORT = (
+    "You are a careful critic of math solutions.\n\n"
+    "Problem:\n{question}\n\nSolution:\n{solution}\n\n"
+    "Check the solution's steps in order, once each. For each step write one short line saying whether its "
+    "reasoning and arithmetic are right, and if not, what is wrong. Do not solve the problem again yourself and "
+    "do not re-read it. Keep the whole check under 120 words. Then finish with exactly one line: "
+    "'CRITIC RESULT: SOLUTION IS CORRECT' or 'CRITIC RESULT: SOLUTION IS INCORRECT'."
+)
+
 _JUDGE5 = (
     "Review the question and the response using the additive 5-point scoring system below. Points are "
     "added as each criterion is met.\n"
@@ -116,12 +130,13 @@ IMPROVE = ("Based on the problems you found, improve your answer. Please reitera
            "answer a single numerical number, in the form \\boxed{answer}.")
 
 _TEMPLATES = {"mc": _MC, "cot_binary": _COT_BINARY, "cot_score": _COT_SCORE, "critic": _CRITIC,
-              "critic_forced": _CRITIC, "judge5": _JUDGE5}
+              "critic_forced": _CRITIC, "critic_short": _CRITIC_SHORT, "judge5": _JUDGE5}
 
 # critic_forced: the critic's prompt, with the start of its answer written for it, so that it has to go through
 # the steps before it can reach the closing line. Left to itself, Qwen3.5-0.8B mostly wrote the verdict line
 # alone (median response 5 words on 30 questions), which is not the design the paper describes.
-FORCED_PREFIX = {"critic_forced": "Let me check the solution step by step.\n\nStep 1:"}
+FORCED_PREFIX = {"critic_forced": "Let me check the solution step by step.\n\nStep 1:",
+                 "critic_short": "Step 1:"}
 
 
 def answer_prefix(variant: str) -> str:
