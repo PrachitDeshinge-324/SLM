@@ -77,6 +77,13 @@ def verifier_variants_path(results_dir, model: str, precision: str, dataset: str
     return run.parent.parent.parent / "verifier_variants" / run.parent.name / f"{variant}_{run.name}"
 
 
+def signals_path(results_dir, model: str, precision: str, dataset: str, n_samples, experiment=None, round_index=None) -> Path:
+    """Every per-solution signal of one generator run in one file (see scripts/run_signals.py), beside the run."""
+    root = self_training_round_dir(results_dir, experiment, round_index) if experiment else Path(results_dir)
+    run = generator_run_path(root, model, precision, dataset, n_samples)
+    return run.parent.parent.parent / "signals" / run.parent.name / f"signals_{run.name}"
+
+
 def parse_run_name(file_name: str):
     """
     {'model', 'precision', 'dataset', 'n_samples'} from a run file name, or None if it is not one.
