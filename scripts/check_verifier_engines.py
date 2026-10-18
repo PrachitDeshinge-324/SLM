@@ -53,6 +53,10 @@ def parse_args():
     parser.add_argument("--max_new_tokens", type=int, default=256,
                         help="The stored run allowed 2048; a one-line verdict needs far fewer (cut-offs are reported)")
     parser.add_argument("--batch_size", type=int, default=16, help="Hugging Face batch size")
+    parser.add_argument("--disable_cudnn", action="store_true",
+                        help="Turn cuDNN off in the Hugging Face engine (its only use in Qwen3.5 is the short convolution of the "
+                             "linear-attention layers); a workaround when installing vLLM left two cuDNN versions "
+                             "(CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH). Recorded in the output")
     parser.add_argument("--gpu_memory_utilization", type=float, default=0.6)
     args = parser.parse_args()
     args.n_samples = parse_n_samples(args.n_samples)
@@ -83,6 +87,9 @@ def stored_traces(args) -> list:
 def run_hf(args, tokenizer_prompts: list) -> tuple:
     import torch
     from src.experiment_d.model_loading import load_model_and_tokenizer, model_device
+    if args.disable_cudnn:
+        torch.backends.cudnn.enabled = False
+    print(f"torch {torch.__version__}, cuDNN {torch.backends.cudnn.version()} ({'off' if args.disable_cudnn else 'on'})")
     model, tokenizer = load_model_and_tokenizer(args.model, args.precision, dtype=args.dtype)
     tokenizer.padding_side = "left"
     out = []
@@ -95,7 +102,7 @@ def run_hf(args, tokenizer_prompts: list) -> tuple:
         new = generated[:, inputs["input_ids"].shape[1]:]
         out += [{"text": t, "tokens": count_generated_tokens(row, tokenizer)}
                 for t, row in zip(tokenizer.batch_decode(new, skip_special_tokens=True), new)]
-    info = {"engine": "hf", "dtype": str(model.dtype)}
+    info = {"engine": "hf", "dtype": str(model.dtype), "cudnn": not args.disable_cudnn, "torch": torch.__version__}
     del model
     gc.collect()
     torch.cuda.empty_cache()
