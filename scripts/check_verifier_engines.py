@@ -89,7 +89,11 @@ def run_hf(args, tokenizer_prompts: list) -> tuple:
     from src.experiment_d.model_loading import load_model_and_tokenizer, model_device
     if args.disable_cudnn:
         torch.backends.cudnn.enabled = False
-    print(f"torch {torch.__version__}, cuDNN {torch.backends.cudnn.version()} ({'off' if args.disable_cudnn else 'on'})")
+    try:
+        cudnn_version = torch.backends.cudnn.version()
+    except RuntimeError:        # the library found at run time is not the one torch was built with
+        cudnn_version = "mismatched library"
+    print(f"torch {torch.__version__}, cuDNN {cudnn_version} ({'off' if args.disable_cudnn else 'on'})")
     model, tokenizer = load_model_and_tokenizer(args.model, args.precision, dtype=args.dtype)
     tokenizer.padding_side = "left"
     out = []
