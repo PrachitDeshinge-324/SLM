@@ -77,11 +77,27 @@ def verifier_variants_path(results_dir, model: str, precision: str, dataset: str
     return run.parent.parent.parent / "verifier_variants" / run.parent.name / f"{variant}_{run.name}"
 
 
-def signals_path(results_dir, model: str, precision: str, dataset: str, n_samples, experiment=None, round_index=None) -> Path:
-    """Every per-solution signal of one generator run in one file (see scripts/run_signals.py), beside the run."""
+def signals_path(results_dir, model: str, precision: str, dataset: str, n_samples, experiment=None, round_index=None,
+                 tag=None) -> Path:
+    """
+    Every per-solution signal of one generator run in one file (see scripts/run_signals.py), beside the run.
+    `tag` names the run's verifier settings (signals.signals_tag), so runs with other critics, token caps or
+    selections get their own files: signals_<tag>_<run name>. Without a tag: the untagged name the first runs
+    used, read only to move those files to their tagged names.
+    """
     root = self_training_round_dir(results_dir, experiment, round_index) if experiment else Path(results_dir)
     run = generator_run_path(root, model, precision, dataset, n_samples)
-    return run.parent.parent.parent / "signals" / run.parent.name / f"signals_{run.name}"
+    folder = run.parent.parent.parent / "signals" / run.parent.name
+    return folder / (f"signals_{tag}_{run.name}" if tag else f"signals_{run.name}")
+
+
+def signals_paths(results_dir, model: str, precision: str, dataset: str, n_samples, experiment=None, round_index=None) -> list:
+    """The tagged signals files of one generator run that exist, sorted by name."""
+    untagged = signals_path(results_dir, model, precision, dataset, n_samples, experiment, round_index)
+    run_name = untagged.name[len("signals_"):]
+    if not untagged.parent.exists():
+        return []
+    return sorted(p for p in untagged.parent.glob(f"signals_*_{run_name}") if p.name != untagged.name)
 
 
 def parse_run_name(file_name: str):

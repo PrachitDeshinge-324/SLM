@@ -16,7 +16,9 @@ Gate: after --gate_questions questions with critic verdicts, the run stops (exit
 Reference answers are not read here; they are used only afterwards, by the analysis.
 
 Input : the generator run (results/<dataset>/generator/... or a self-training round's)
-Output: results/<dataset>/signals/<model>/signals_<run name>.jsonl; interrupted runs resume by question.
+Output: results/<dataset>/signals/<model>/signals_<tag>_<run name>.jsonl, where the tag names the critics, verdicts,
+        token cap and selection (e.g. critic_forced_v4_t704_all), so different runs never share a file; interrupted
+        runs resume by question. A file from before tags is moved to its tagged name on the next run.
 """
 import argparse
 import hashlib
@@ -46,7 +48,7 @@ from src.experiment_d.run_files import (
     self_training_round_dir,
     signals_path,
 )
-from src.experiment_d.signals import gate_failures, verdict_rates, vote_support
+from src.experiment_d.signals import gate_failures, signals_tag, tag_of_header, verdict_rates, vote_support
 from src.experiment_d.verifier_variants import (
     CRITIC_THRESHOLD,
     CRITICS,
@@ -149,6 +151,24 @@ def score_chunk(model, tokenizer, chunk: list, args, critic_args: dict, mc_args,
     return [rows[key] for key in sorted(rows, key=lambda k: ([r["qid"] for r in chunk].index(k[0]), k[1]))]
 
 
+def move_untagged(untagged: Path) -> None:
+    """
+    A signals file written before names carried tags is moved to the tagged name its own header gives, so
+    that no run writes into or reads another run's file. Never overwrites: if the tagged file already exists,
+    the untagged one is left where it is and reported.
+    """
+    if not untagged.exists():
+        return
+    with untagged.open() as handle:
+        header = json.loads(handle.readline())
+    target = untagged.with_name(f"signals_{tag_of_header(header)}_{untagged.name[len('signals_'):]}")
+    if target.exists():
+        print(f"WARNING: {untagged.name} has no tag and {target.name} already exists; left both as they are.")
+        return
+    untagged.rename(target)
+    print(f"Moved the untagged {untagged.name} (critics {header.get('critics')}) to {target.name}.")
+
+
 def dry_run(args, records: list):
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
@@ -183,8 +203,14 @@ def main():
         records = records_in(records, questions)
     records = records[:args.questions]
     print(f"Question set '{args.question_set}': {len(records)} questions, first {records[0]['qid']}, last {records[-1]['qid']}.")
+    round_index = args.round if args.experiment else None
+    tag = signals_tag(args.critics, args.verdicts, args.max_new_tokens, args.all_solutions)
     output = signals_path(args.results_dir, args.model, args.precision, args.dataset, args.n_samples,
-                          args.experiment, args.round if args.experiment else None)
+                          args.experiment, round_index, tag=tag)
+    if not args.dry_run:
+        move_untagged(signals_path(args.results_dir, args.model, args.precision, args.dataset, args.n_samples,
+                                   args.experiment, round_index))
+    print(f"Output: {output}")
     if args.dry_run:
         dry_run(args, records)
         return

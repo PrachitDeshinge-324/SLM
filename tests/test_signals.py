@@ -77,3 +77,47 @@ assert rows[3]["mc"]["score"] == 0.30000000000000004 or abs(rows[3]["mc"]["score
 assert all(r["token"]["logp_mean"] == -0.5 for r in rows)
 
 print("All run_signals wiring tests passed!")
+
+
+# File names: each run's verifier settings in its own file; untagged files from before move to their tag.
+import json as _json
+import tempfile
+
+from src.experiment_d.run_files import signals_path, signals_paths
+from src.experiment_d.signals import signals_tag, tag_of_header
+
+assert signals_tag(["critic_forced"], 4, 704, True) == "critic_forced_v4_t704_all"
+assert signals_tag(["critic_short"], 4, 400, False) == "critic_short_v4_t400_pilot"
+assert signals_tag([], 4, 400, False) == "no_critic"
+assert tag_of_header({"critics": ["critic_forced"], "verdicts": 4, "max_new_tokens": 704, "skip_cutoff": False}) \
+    == "critic_forced_v4_t704_all"
+
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    untagged = signals_path(root, "Qwen/Qwen3.5-2B", "4bit", "gsm8k", 8)
+    forced = signals_path(root, "Qwen/Qwen3.5-2B", "4bit", "gsm8k", 8, tag="critic_forced_v4_t704_all")
+    short = signals_path(root, "Qwen/Qwen3.5-2B", "4bit", "gsm8k", 8, tag="critic_short_v4_t400_all")
+    assert untagged.name == "signals_Qwen_Qwen3.5-2B_4bit_gsm8k_n8.jsonl"
+    assert forced.name == "signals_critic_forced_v4_t704_all_Qwen_Qwen3.5-2B_4bit_gsm8k_n8.jsonl"
+    assert signals_paths(root, "Qwen/Qwen3.5-2B", "4bit", "gsm8k", 8) == []
+    untagged.parent.mkdir(parents=True)
+    header = {"type": "run_config", "model": "Qwen/Qwen3.5-2B", "precision": "4bit", "dataset": "gsm8k",
+              "generator_n_samples": 8, "critics": ["critic_forced"], "verdicts": 4, "max_new_tokens": 704,
+              "skip_cutoff": False, "question_ids": ["q1"]}
+    untagged.write_text(_json.dumps(header) + "\n")
+    short.write_text("{}\n")
+    run_signals.move_untagged(untagged)                       # the runner moves an untagged file to its own tag
+    assert not untagged.exists() and forced.exists()
+    assert signals_paths(root, "Qwen/Qwen3.5-2B", "4bit", "gsm8k", 8) == [forced, short]
+    untagged.write_text(_json.dumps(header) + "\n")          # a second untagged file for a taken name stays put
+    run_signals.move_untagged(untagged)
+    assert untagged.exists() and forced.read_text() == _json.dumps(header) + "\n"
+
+    spec_m = importlib.util.spec_from_file_location("migrate", ROOT / "scripts/migrate_signals_files.py")
+    migrate = importlib.util.module_from_spec(spec_m)
+    spec_m.loader.exec_module(migrate)
+    steps = migrate.plan(root)                                # the migration never targets an existing file
+    assert (untagged, None) in [(s[0], s[1]) for s in steps]           # its target is taken: left alone
+    assert all(target is None or not target.exists() for _, target, _ in steps)
+
+print("All signals file-name tests passed!")

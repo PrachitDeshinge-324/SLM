@@ -13,6 +13,22 @@ from collections import Counter
 from src.experiment_d.answer_matching import normalize_answer
 
 
+def signals_tag(critics: list, verdicts: int, max_new_tokens: int, all_solutions: bool) -> str:
+    """
+    The part of a signals file name that tells runs apart: the critics, verdicts per solution, token cap and
+    which solutions the critics judged, e.g. critic_forced_v4_t704_all. Without critics: no_critic.
+    """
+    if not critics:
+        return "no_critic"
+    return f"{'+'.join(critics)}_v{verdicts}_t{max_new_tokens}_{'all' if all_solutions else 'pilot'}"
+
+
+def tag_of_header(header: dict) -> str:
+    """The tag of an existing signals file, from its header (for files written before names carried tags)."""
+    return signals_tag(header.get("critics") or [], header.get("verdicts"), header.get("max_new_tokens"),
+                       not header.get("skip_cutoff", False))
+
+
 def vote_support(samples: list, extractor) -> list:
     """(answer key, share of all samples that give it) per sample; (None, None) for a cut-off or unanswered one."""
     keys = []
