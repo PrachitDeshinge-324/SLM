@@ -27,24 +27,67 @@ def end_token_id(model, tokenizer) -> int:
     return stop_ids[0]
 
 
-def build_training_example(tokenizer, dataset_name: str, question: str, trace: str, end_token: int, max_length: int):
+def answer_end_ids(model, tokenizer) -> list:
+    """
+    The tokens that end an answer, as the base model ends its own: the chat end-of-turn token, the newline
+    after it, then the token that stops generation (Qwen3.5: <|im_end|> \n <|endoftext|>). Where the
+    tokenizer's eos is itself the stop token, that one token.
+
+    The older end_token_id gave only the stop token, so the first adapters learned to write <|endoftext|>
+    straight after the answer, a token the base model ranks around 100th there (TOKEN_SIGNALS_PLAN section 12).
+    """
+    stop = end_token_id(model, tokenizer)
+    turn_end = tokenizer.eos_token_id
+    if turn_end is None or turn_end == stop:
+        return [stop]
+    return [turn_end] + tokenizer("\n", add_special_tokens=False)["input_ids"] + [stop]
+
+
+END_FORMATS = ("chat", "legacy")
+
+
+def answer_end(model, tokenizer, end_format: str = "chat"):
+    """The `end_token` argument of build_training_example: a list of ids for 'chat', one id for 'legacy'."""
+    if end_format not in END_FORMATS:
+        raise ValueError(f"end_format must be one of {END_FORMATS}, got {end_format!r}")
+    return answer_end_ids(model, tokenizer) if end_format == "chat" else end_token_id(model, tokenizer)
+
+
+def build_example(tokenizer, prompt: str, target: str, end_token, max_length: int):
+    """
+    {input_ids, labels} for one prompt and the text the model should write after it, or None when it does
+    not fit in max_length tokens. The loss is taken only on the target and its end, so the model also
+    learns to stop.
+
+    end_token: a list of ids (answer_end_ids) ends the target as the base model does. Stored generations
+    keep the newline that followed the hidden end-of-turn token, so one trailing newline is dropped first
+    and comes back from the ids. A single id is the legacy format: the target as stored, then that id.
+    """
+    if isinstance(end_token, int):
+        end_ids = [end_token]
+    else:
+        end_ids = list(end_token)
+        target = target[:-1] if target.endswith("\n") else target
+    # The chat template already writes BOS; do not let the tokenizer add a second one.
+    prompt_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
+    target_ids = tokenizer(target, add_special_tokens=False)["input_ids"] + end_ids
+    if len(prompt_ids) + len(target_ids) > max_length:
+        return None
+    return {
+        "input_ids": prompt_ids + target_ids,
+        "labels": [IGNORE_INDEX] * len(prompt_ids) + target_ids,
+    }
+
+
+def build_training_example(tokenizer, dataset_name: str, question: str, trace: str, end_token, max_length: int):
     """
     {input_ids, labels} for one solution, or None when it does not fit in max_length tokens.
 
-    The prompt is exactly the one generation sees. The loss is taken only on the solution and the
-    end token after it, so the model also learns to stop. A solution that does not fit is skipped
-    whole: cutting it would teach unfinished answers.
+    The prompt is exactly the one generation sees. A solution that does not fit is skipped whole:
+    cutting it would teach unfinished answers. end_token: see build_example.
     """
-    prompt = build_prompt(tokenizer, get_messages(dataset_name, question))
-    # The chat template already writes BOS; do not let the tokenizer add a second one.
-    prompt_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
-    answer_ids = tokenizer(trace, add_special_tokens=False)["input_ids"] + [end_token]
-    if len(prompt_ids) + len(answer_ids) > max_length:
-        return None
-    return {
-        "input_ids": prompt_ids + answer_ids,
-        "labels": [IGNORE_INDEX] * len(prompt_ids) + answer_ids,
-    }
+    return build_example(tokenizer, build_prompt(tokenizer, get_messages(dataset_name, question)), trace,
+                         end_token, max_length)
 
 
 def attach_lora(model, rank: int = 16, alpha: int = 32, dropout: float = 0.05, seed: int = 0):

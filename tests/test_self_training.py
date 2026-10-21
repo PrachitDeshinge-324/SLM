@@ -3,7 +3,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.experiment_d.benchmarks import load_benchmark, load_gsm8k_train_answers, question_key
-from src.experiment_d.lora_training import IGNORE_INDEX, build_training_example
+from src.experiment_d.lora_training import IGNORE_INDEX, answer_end_ids, build_training_example
 from src.experiment_d.prompts import GSM8K_1SHOT_USER
 from src.experiment_d.run_files import (
     adapter_dir,
@@ -12,7 +12,13 @@ from src.experiment_d.run_files import (
     self_training_round_dir,
 )
 from src.experiment_d.self_consistency import majority_vote, summarize_votes
-from src.experiment_d.self_training import assert_disjoint, select_pseudo_labels, shared_questions
+from src.experiment_d.self_training import (
+    assert_disjoint,
+    select_critic_labels,
+    select_critiques,
+    select_pseudo_labels,
+    shared_questions,
+)
 
 
 def _sample(response, cutoff=False):
@@ -186,6 +192,85 @@ def test_trained_run_cannot_resume_into_an_untrained_file():
         raise AssertionError("an adapter run was allowed to resume an untrained run file")
 
 
+def test_chat_end_format_ends_like_the_base_model():
+    class _Model:
+        class generation_config:
+            eos_token_id = [1]          # the stop token (<|endoftext|>)
+
+    class _ChatTokenizer(_FakeTokenizer):
+        eos_token_id = 2                # the end-of-turn token (<|im_end|>)
+
+    tokenizer = _ChatTokenizer()
+    end = answer_end_ids(_Model(), tokenizer)
+    assert end == [2, ord("\n"), 1]
+    # The newline stored after the hidden end-of-turn token is dropped, then written back after it.
+    example = build_training_example(tokenizer, "gsm8k_train", "Q", "ab\n", end_token=end, max_length=20)
+    assert example["input_ids"][3:] == [ord("a"), ord("b"), 2, ord("\n"), 1]
+    assert example["labels"][:3] == [IGNORE_INDEX] * 3
+    # The legacy single id keeps the stored text as it is.
+    legacy = build_training_example(tokenizer, "gsm8k_train", "Q", "ab\n", end_token=1, max_length=20)
+    assert legacy["input_ids"][3:] == [ord("a"), ord("b"), ord("\n"), 1]
+
+
+def test_critic_labels_equal_vote_labels_when_nothing_is_judged():
+    records = [
+        _record("six", ["x\n#### 5"] * 6 + [("cut", True)] * 2),            # 6 of 8 agree
+        _record("five", ["x\n#### 5"] * 5 + [("cut", True)] * 3),           # 5 of 8: below 0.75 of all samples
+    ]
+    vote = {(item["qid"], item["trace"]) for item in select_pseudo_labels(records, "gsm8k_train", 0.75)}
+    critic = {(item["qid"], item["trace"]) for item in select_critic_labels(records, {}, "gsm8k_train", 0.75)}
+    assert vote == critic == {("six", "x\n#### 5")}
+
+
+def test_critic_labels_recover_a_contested_question():
+    # 4 against 4: the vote keeps nothing. The critic approves both judged 5s and rejects both judged 9s.
+    record = _record("q", ["a\n#### 5", "b\n#### 5", "c\n#### 5", "d\n#### 5",
+                           "e\n#### 9", "f\n#### 9", "g\n#### 9", "h\n#### 9"])
+    assert select_pseudo_labels([record], "gsm8k_train", 0.75) == []
+    verdicts = {("q", 0): True, ("q", 1): True, ("q", 4): False, ("q", 5): False}
+    chosen = select_critic_labels([record], verdicts, "gsm8k_train", 0.75)
+    assert {item["label"] for item in chosen} == {"5"}
+    assert [item["trace"] for item in chosen] == ["a\n#### 5", "b\n#### 5", "c\n#### 5", "d\n#### 5"]
+    assert all(item["contested"] and item["agreement"] == 1.0 for item in chosen)
+    # A label solution the critic judged and rejected is not training text.
+    verdicts[("q", 1)] = False
+    traces = [item["trace"] for item in select_critic_labels([record], verdicts, "gsm8k_train", 0.75)]
+    assert traces == ["a\n#### 5", "c\n#### 5", "d\n#### 5"]
+
+
+def test_critic_labels_skip_ties_and_unapproved_labels():
+    record = _record("q", ["a\n#### 5", "b\n#### 5", "e\n#### 9", "f\n#### 9"])
+    # Both answers fully approved: a tie, never broken by sample order.
+    tie = {("q", 0): True, ("q", 1): True, ("q", 2): True, ("q", 3): True}
+    assert select_critic_labels([record], tie, "gsm8k_train", 0.75) == []
+    # Nothing approved: no label has the critic's support.
+    none = {("q", i): False for i in range(4)}
+    assert select_critic_labels([record], none, "gsm8k_train", 0.75) == []
+
+
+def test_critic_labels_never_read_reference_answers():
+    record = _record("q", ["a\n#### 5", "b\n#### 5", "e\n#### 9", "f\n#### 9"])
+    verdicts = {("q", 0): True, ("q", 1): True, ("q", 2): False, ("q", 3): False}
+    with_truth = _record("q", ["a\n#### 5", "b\n#### 5", "e\n#### 9", "f\n#### 9"], ground_truth="9", answer="9")
+    assert select_critic_labels([record], verdicts, "gsm8k_train") == select_critic_labels([with_truth], verdicts, "gsm8k_train")
+
+
+def test_critiques_agree_with_the_label():
+    record = _record("q", ["a\n#### 5", "b\n#### 5", "e\n#### 9", "f\n#### 9"])
+    rows = {
+        ("q", 0): {"responses": ["cut off", "ok. CRITIC RESULT: SOLUTION IS CORRECT"], "values": [None, True]},
+        ("q", 1): {"responses": ["bad. CRITIC RESULT: SOLUTION IS INCORRECT"], "values": [False]},
+        ("q", 2): {"responses": ["bad. CRITIC RESULT: SOLUTION IS INCORRECT"], "values": [False]},
+        ("q", 3): {"responses": ["ok. CRITIC RESULT: SOLUTION IS CORRECT"], "values": [True]},
+    }
+    chosen = select_critiques([record], rows, {"q": "5"}, "gsm8k_train")
+    # Solution 0 (label): its approving critique, not the cut-off one. Solution 1 (label): no approving one.
+    # Solution 2 (other answer): its rejecting critique. Solution 3 (other answer): no rejecting one.
+    assert [(item["solution_index"], item["verdict"]) for item in chosen] == [(0, True), (2, False)]
+    assert chosen[0]["critique"].endswith("SOLUTION IS CORRECT")
+    assert select_critiques([record], rows, {}, "gsm8k_train") == []
+
+
 if __name__ == "__main__":
     test_majority_vote_matches_summarize_votes()
     test_threshold_is_share_of_all_samples()
@@ -197,4 +282,10 @@ if __name__ == "__main__":
     test_training_example_scores_only_the_solution()
     test_adapter_training_on_a_tiny_model()
     test_trained_run_cannot_resume_into_an_untrained_file()
+    test_chat_end_format_ends_like_the_base_model()
+    test_critic_labels_equal_vote_labels_when_nothing_is_judged()
+    test_critic_labels_recover_a_contested_question()
+    test_critic_labels_skip_ties_and_unapproved_labels()
+    test_critic_labels_never_read_reference_answers()
+    test_critiques_agree_with_the_label()
     print("All self-training tests passed!")
