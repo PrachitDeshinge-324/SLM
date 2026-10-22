@@ -70,6 +70,9 @@ LOG_NAME = "training_log.json"
 LEGACY_SETTINGS = {"end_format": "legacy", "labels": "vote", "pool_experiment": None, "critic": "critic_forced",
                    "signals_tag": None, "critiques": False, "critique_max_length": 1536,
                    "gradient_checkpointing": False, "chunked_loss": False}
+# Settings that change memory only, never the trained adapter (tests/test_self_training.py checks the losses
+# match step for step): an adapter trained with or without them counts as the same run.
+MEMORY_ONLY = ("gradient_checkpointing", "chunked_loss")
 
 
 def parse_args():
@@ -170,8 +173,8 @@ def main():
 
     if log_file.exists():
         previous = {**LEGACY_SETTINGS, **json.loads(log_file.read_text())["settings"]}
-        if previous != settings:
-            changed = sorted(key for key in settings if previous.get(key) != settings[key])
+        changed = sorted(key for key in settings if key not in MEMORY_ONLY and previous.get(key) != settings[key])
+        if changed:
             raise RuntimeError(f"{output_dir} holds an adapter trained with other settings ({', '.join(changed)}). Use a new --experiment.")
         print(f"Round {args.round} adapter already trained at {output_dir}; nothing to do.")
         return
