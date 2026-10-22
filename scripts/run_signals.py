@@ -41,6 +41,7 @@ from src.experiment_d.model_loading import PRECISIONS, load_model_and_tokenizer,
 from src.experiment_d.prompts import build_prompt, get_messages
 from src.experiment_d.question_sets import phase2_questions, records_in
 from src.experiment_d.run_files import (
+    adapter_fingerprint,
     generator_run_path,
     parse_n_samples,
     read_question_records,
@@ -48,7 +49,7 @@ from src.experiment_d.run_files import (
     self_training_round_dir,
     signals_path,
 )
-from src.experiment_d.signals import gate_failures, signals_tag, tag_of_header, verdict_rates, vote_support
+from src.experiment_d.signals import gate_failures, signals_tag, tag_of_header, verdict_rates, vote_support, with_judge
 from src.experiment_d.verifier_variants import (
     CRITIC_THRESHOLD,
     CRITICS,
@@ -60,7 +61,7 @@ from src.experiment_d.verifier_variants import (
 
 # A resumed run must have been started with the same settings.
 SETTINGS = ("question_ids", "critics", "verdicts", "max_new_tokens", "temperature", "top_p", "top_k", "tau",
-            "skip_cutoff", "contested_only", "max_per_answer", "mc", "token_signals", "dtype")
+            "skip_cutoff", "contested_only", "max_per_answer", "mc", "token_signals", "dtype", "adapter_sha256")
 
 
 def parse_args():
@@ -94,6 +95,9 @@ def parse_args():
     parser.add_argument("--top_p", type=float, default=SAMPLING["top_p"])
     parser.add_argument("--top_k", type=int, default=SAMPLING["top_k"])
     parser.add_argument("--tau", type=float, default=CRITIC_THRESHOLD)
+    parser.add_argument("--adapter", type=str, default=None,
+                        help="LoRA adapter to apply to the judging model (e.g. a self-training arm's), to measure how "
+                             "training changed its critic; the file name gets _by_<experiment>_r<round>")
     parser.add_argument("--dry_run", action="store_true", help="No model: print the counts and the first critic prompt")
     args = parser.parse_args()
     args.n_samples = parse_n_samples(args.n_samples)
@@ -204,7 +208,7 @@ def main():
     records = records[:args.questions]
     print(f"Question set '{args.question_set}': {len(records)} questions, first {records[0]['qid']}, last {records[-1]['qid']}.")
     round_index = args.round if args.experiment else None
-    tag = signals_tag(args.critics, args.verdicts, args.max_new_tokens, args.all_solutions)
+    tag = with_judge(signals_tag(args.critics, args.verdicts, args.max_new_tokens, args.all_solutions), args.adapter)
     output = signals_path(args.results_dir, args.model, args.precision, args.dataset, args.n_samples,
                           args.experiment, round_index, tag=tag)
     if not args.dry_run:
@@ -215,7 +219,8 @@ def main():
         dry_run(args, records)
         return
 
-    model, tokenizer = load_model_and_tokenizer(args.model, args.precision, dtype=None if args.dtype == "auto" else args.dtype)
+    model, tokenizer = load_model_and_tokenizer(args.model, args.precision, adapter_path=args.adapter,
+                                                dtype=None if args.dtype == "auto" else args.dtype)
     token_setup = None
     if not args.no_token_signals:
         probe = hashlib.sha256(build_prompt(tokenizer, get_messages(args.dataset, "PROBE QUESTION")).encode("utf-8")).hexdigest()
@@ -237,7 +242,8 @@ def main():
               "verdict_cue": {c: verdict_cue(c) for c in args.critics}, "dtype": str(model.dtype),
               "device": str(model_device(model)), "torch_version": torch.__version__,
               "generator_sampling": token_setup[0] if token_setup else None,
-              "end_token": tokenizer.convert_ids_to_tokens(tokenizer.eos_token_id)}
+              "end_token": tokenizer.convert_ids_to_tokens(tokenizer.eos_token_id),
+              "adapter": args.adapter, "adapter_sha256": adapter_fingerprint(args.adapter) if args.adapter else None}
 
     done_rows = []
     if output.exists():
@@ -246,7 +252,8 @@ def main():
                 continue
             row = json.loads(line)
             if row.get("type") == "run_config":
-                changed = [k for k in SETTINGS if row.get(k, "<missing>") != header[k]]
+                # Files from before adapters could judge have no adapter key: they were judged by the base model.
+                changed = [k for k in SETTINGS if row.get(k, None if k == "adapter_sha256" else "<missing>") != header[k]]
                 if changed:
                     raise RuntimeError(f"{output} holds a run with other settings ({', '.join(changed)}). "
                                        "Delete it or use another --results_dir.")

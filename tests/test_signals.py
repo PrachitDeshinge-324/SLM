@@ -121,3 +121,15 @@ with tempfile.TemporaryDirectory() as tmp:
     assert all(target is None or not target.exists() for _, target, _ in steps)
 
 print("All signals file-name tests passed!")
+
+# A critic run by the model with an adapter is named after that adapter, so it never shares the base model's file.
+from src.experiment_d.signals import adapter_label, with_judge
+
+arm = "/content/drive/MyDrive/results/self_training/q2b_4bit_critic_p500_critic_reason/round1/adapters/Qwen_Qwen3.5-2B_4bit"
+assert adapter_label(arm) == "q2b_4bit_critic_p500_critic_reason_r1"
+assert adapter_label("some/folder/my adapter.v2") == "my_adapter_v2"
+assert with_judge("critic_forced_v2_t704_pilot", None) == "critic_forced_v2_t704_pilot"
+assert with_judge("critic_forced_v2_t704_pilot", arm) == "critic_forced_v2_t704_pilot_by_q2b_4bit_critic_p500_critic_reason_r1"
+assert tag_of_header({"critics": ["critic_forced"], "verdicts": 2, "max_new_tokens": 704, "skip_cutoff": True,
+                      "adapter": arm}) == "critic_forced_v2_t704_pilot_by_q2b_4bit_critic_p500_critic_reason_r1"
+print("All signals adapter-name tests passed!")
