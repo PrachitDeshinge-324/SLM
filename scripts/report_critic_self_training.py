@@ -129,8 +129,14 @@ def test_section(args) -> list:
                                       args.precision, args.dataset, args.n_samples)
             if path.exists():
                 runs[name] = score_run(path, args.dataset, args.threshold)
+    # A run that has not answered every round 0 question yet is listed, not compared.
+    incomplete = {name: len(scored) for name, scored in runs.items()
+                  if name != "round 0" and not set(runs["round 0"]) <= set(scored)}
+    runs = {name: scored for name, scored in runs.items() if name not in incomplete}
     qids = sorted(set.intersection(*(set(scored) for scored in runs.values())))
-    lines = [f"Test: {len(qids)} questions answered by every run.", "",
+    lines = [f"Test: {len(qids)} questions answered by every run."]
+    lines += [f"Left out, not finished: {name} ({n}/{len(runs['round 0'])} questions)" for name, n in incomplete.items()]
+    lines += ["",
              "run | single sample | cut off | right when finished | voted | trained examples (solutions + critiques)"]
     for name, scored in runs.items():
         single, cutoff = column(scored, qids, "single"), column(scored, qids, "cutoff")
