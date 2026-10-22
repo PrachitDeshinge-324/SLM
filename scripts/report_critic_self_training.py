@@ -27,7 +27,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from report_self_training import column, paired_difference, score_run  # noqa: E402
 
+from src.experiment_d.answer_extraction import get_extractor
 from src.experiment_d.answer_matching import answers_match
+from src.experiment_d.self_consistency import majority_vote
 from src.experiment_d.benchmarks import load_gsm8k_train_answers
 from src.experiment_d.run_files import (
     adapter_dir,
@@ -87,6 +89,9 @@ def label_section(args) -> list:
     vote = {item["qid"]: item["label"] for item in vote_items}
     critic = {item["qid"]: item["label"] for item in critic_items}
     contested = {item["qid"] for item in critic_items if item["contested"]}
+    extractor = get_extractor(args.pool_dataset)
+    plurality = {r["qid"]: majority_vote([None if s.get("cutoff", False) else extractor(s["response"])
+                                          for s in r["raw_samples"]])[0] for r in records}
     critiques = select_critiques(records, cells, critic, args.pool_dataset)
 
     lines = [f"Pool: {len(records)} questions ({pool_file.name}); critic run: {len(cells)} judged solutions.",
@@ -96,7 +101,8 @@ def label_section(args) -> list:
              f"critic + vote | {len(critic)} ({len(contested)} contested) | {accuracy(critic, answers)} | {len(critic_items)}",
              "", "Where the rules differ:",
              f"  labelled by critic only: {len(set(critic) - set(vote))} | right "
-             f"{accuracy({q: critic[q] for q in set(critic) - set(vote)}, answers)}",
+             f"{accuracy({q: critic[q] for q in set(critic) - set(vote)}, answers)} | the plain vote's top answer there "
+             f"right {accuracy({q: plurality[q] for q in set(critic) - set(vote) if plurality.get(q)}, answers)}",
              f"  labelled by vote only (dropped by the critic): {len(set(vote) - set(critic))} | right "
              f"{accuracy({q: vote[q] for q in set(vote) - set(critic)}, answers)}",
              f"  labelled by both, different label: "
