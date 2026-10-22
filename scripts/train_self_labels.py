@@ -69,7 +69,7 @@ LOG_NAME = "training_log.json"
 # What a training log written before these settings existed was trained with.
 LEGACY_SETTINGS = {"end_format": "legacy", "labels": "vote", "pool_experiment": None, "critic": "critic_forced",
                    "signals_tag": None, "critiques": False, "critique_max_length": 1536,
-                   "gradient_checkpointing": False}
+                   "gradient_checkpointing": False, "chunked_loss": False}
 
 
 def parse_args():
@@ -106,6 +106,8 @@ def parse_args():
                         help="Also train on the critic's critiques that agree with the labels (critic prompt -> critique)")
     parser.add_argument("--gradient_checkpointing", action="store_true",
                         help="Recompute activations in the backward pass: much less memory, about a third slower, same gradients")
+    parser.add_argument("--chunked_loss", action="store_true",
+                        help="Apply the output head to a few hundred answer tokens at a time: far less memory, same loss")
     parser.add_argument("--critique_max_length", type=int, default=1536,
                         help="Longest critic prompt + critique in tokens; longer ones are skipped")
 
@@ -231,7 +233,7 @@ def main():
 
     losses = train_lora(model, tokenizer, examples, steps=args.train_steps, batch_size=args.train_batch_size,
                         micro_batch_size=args.micro_batch_size, learning_rate=args.learning_rate,
-                        seed=args.train_seed, compute_dtype=compute_dtype)
+                        seed=args.train_seed, compute_dtype=compute_dtype, chunked_loss=args.chunked_loss)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(str(output_dir))

@@ -117,6 +117,39 @@ def enable_gradient_checkpointing(model):
     return model
 
 
+LOSS_CHUNK_TOKENS = 256
+
+
+def _chunk_loss(head, hidden, targets):
+    """Summed next-token loss of a chunk, in float32; the head runs in the surrounding autocast dtype."""
+    return F.cross_entropy(head(hidden).float(), targets, reduction="sum")
+
+
+def chunked_answer_loss(model, input_ids, attention_mask, labels, chunk_tokens: int = LOSS_CHUNK_TOKENS):
+    """
+    The summed next-token loss on the answer tokens, without ever holding the logits of the whole sequence.
+
+    The model returns its final hidden states (and logits for one position only); the output head is then
+    applied to the answer positions a chunk at a time, and each chunk is recomputed in the backward pass
+    instead of keeping its logits. With a vocabulary of about 248k tokens those logits (and their float32
+    copy and gradients) are the largest tensors in training; the loss and gradients are the same.
+    """
+    from torch.utils.checkpoint import checkpoint
+
+    out = model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False,
+                output_hidden_states=True, logits_to_keep=1)
+    targets = labels[:, 1:]
+    scored = targets != IGNORE_INDEX
+    hidden = out.hidden_states[-1][:, :-1][scored]
+    targets = targets[scored]
+    head = model.get_output_embeddings()
+    total = hidden.new_zeros((), dtype=torch.float32)
+    for start in range(0, hidden.shape[0], chunk_tokens):
+        total = total + checkpoint(_chunk_loss, head, hidden[start:start + chunk_tokens],
+                                   targets[start:start + chunk_tokens], use_reentrant=False)
+    return total
+
+
 def _collate(examples: list, pad_token_id: int, device):
     longest = max(len(example["input_ids"]) for example in examples)
     input_ids = torch.full((len(examples), longest), pad_token_id, dtype=torch.long)
@@ -131,7 +164,8 @@ def _collate(examples: list, pad_token_id: int, device):
 
 
 def train_lora(model, tokenizer, examples: list, steps: int, batch_size: int = 8, micro_batch_size: int = 2,
-               learning_rate: float = 1e-4, seed: int = 0, compute_dtype=None, log_every: int = 10) -> list:
+               learning_rate: float = 1e-4, seed: int = 0, compute_dtype=None, log_every: int = 10,
+               chunked_loss: bool = False) -> list:
     """
     Run `steps` AdamW updates of the adapter and return the loss of every step.
 
@@ -140,6 +174,7 @@ def train_lora(model, tokenizer, examples: list, steps: int, batch_size: int = 8
     solutions at a time and the gradients are summed: the vocabulary is large, and the logits of a
     whole batch would not fit on a small GPU.
     compute_dtype: the base model's float dtype; on CUDA the forward pass runs under autocast in it.
+    chunked_loss: compute the loss with chunked_answer_loss (much less memory, same loss).
     """
     device = model_device(model)
     parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
@@ -165,12 +200,16 @@ def train_lora(model, tokenizer, examples: list, steps: int, batch_size: int = 8
             for start in range(0, len(batch), micro_batch_size):
                 chunk = [examples[i] for i in batch[start:start + micro_batch_size]]
                 input_ids, attention_mask, labels = _collate(chunk, tokenizer.pad_token_id, device)
-                with torch.autocast(device_type=device.type, dtype=compute_dtype, enabled=use_autocast):
-                    logits = model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False).logits
-                # Next-token loss on the solution tokens only, in float32 whatever the base precision.
-                targets = labels[:, 1:]
-                scored = targets != IGNORE_INDEX
-                loss = F.cross_entropy(logits[:, :-1][scored].float(), targets[scored], reduction="sum") / answer_tokens
+                if chunked_loss:
+                    with torch.autocast(device_type=device.type, dtype=compute_dtype, enabled=use_autocast):
+                        loss = chunked_answer_loss(model, input_ids, attention_mask, labels, LOSS_CHUNK_TOKENS) / answer_tokens
+                else:
+                    with torch.autocast(device_type=device.type, dtype=compute_dtype, enabled=use_autocast):
+                        logits = model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False).logits
+                    # Next-token loss on the solution tokens only, in float32 whatever the base precision.
+                    targets = labels[:, 1:]
+                    scored = targets != IGNORE_INDEX
+                    loss = F.cross_entropy(logits[:, :-1][scored].float(), targets[scored], reduction="sum") / answer_tokens
                 if not torch.isfinite(loss):
                     raise FloatingPointError(f"Training loss is {loss.item()} at step {step + 1}; stopping without saving an adapter.")
                 scaler.scale(loss).backward()

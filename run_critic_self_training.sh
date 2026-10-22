@@ -18,12 +18,14 @@
 #   bash run_critic_self_training.sh --model Qwen/Qwen3.5-2B --precision 4bit --base q2b_4bit_critic_p500 \
 #        [--pool_limit 500] [--eval_limit 100] [--verdicts 2] [--critic_tokens 704] [--arms "vote critic critic_reason"] \
 #        [--batch_size 64] [--train_steps 200] [--threshold 0.75] [--stop_after_labels] [--results_dir DIR]
-#        [--micro_batch_size 2] [--gradient_checkpointing]
+#        [--micro_batch_size 2] [--gradient_checkpointing] [--chunked_loss]
 #
 # --batch_size is the generation batch (sequences at once). Training memory is set by --micro_batch_size
 # (solutions per forward pass; the update is always 8 solutions) and --gradient_checkpointing. For 16-bit
-# on a 16 GB GPU (T4) first try --gradient_checkpointing alone: it gives exactly the same training. If that
-# still runs out of memory, add --micro_batch_size 1 (same update in expectation; LoRA dropout draws other masks).
+# on a 16 GB GPU (T4) use --gradient_checkpointing --chunked_loss: both give the same training (checkpointing
+# keeps no activations, the chunked loss never holds the logits of a whole sequence over the ~248k vocabulary).
+# If that still runs out of memory, add --micro_batch_size 1 (same update in expectation; LoRA dropout draws
+# other masks).
 set -e
 
 MODEL="Qwen/Qwen3.5-2B"
@@ -36,6 +38,7 @@ BATCH_SIZE=64
 TRAIN_STEPS=200
 MICRO_BATCH_SIZE=2
 CHECKPOINTING=()
+CHUNKED=()
 THRESHOLD=0.75
 VERDICTS=2
 CRITIC="critic_forced"
@@ -60,6 +63,7 @@ while [[ "$#" -gt 0 ]]; do
         --train_steps) TRAIN_STEPS="$2"; shift ;;
         --micro_batch_size) MICRO_BATCH_SIZE="$2"; shift ;;
         --gradient_checkpointing) CHECKPOINTING=(--gradient_checkpointing) ;;
+        --chunked_loss) CHUNKED=(--chunked_loss) ;;
         --threshold) THRESHOLD="$2"; shift ;;
         --verdicts) VERDICTS="$2"; shift ;;
         --critic_tokens) CRITIC_TOKENS="$2"; shift ;;
@@ -75,6 +79,8 @@ done
 if [ -z "${BASE}" ]; then echo "--base is required"; exit 1; fi
 TAG="${CRITIC}_v${VERDICTS}_t${CRITIC_TOKENS}_pilot"
 export PYTHONPATH=.
+# Fewer out-of-memory failures from fragmentation (memory reserved but unusable); changes no result.
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 banner() { echo "======================================================"; echo " $1"; echo "======================================================"; }
 
@@ -131,7 +137,7 @@ for ARM in ${ARMS}; do
     --dataset "${POOL_DATASET}" --eval_dataset "${EVAL_DATASET}" --n_samples "${N_SAMPLES}" \
     --experiment "${BASE}_${ARM}" --pool_experiment "${BASE}" --round 1 --threshold "${THRESHOLD}" \
     --train_steps "${TRAIN_STEPS}" --micro_batch_size "${MICRO_BATCH_SIZE}" --end_format chat \
-    "${CHECKPOINTING[@]}" "${arm_args[@]}"
+    "${CHECKPOINTING[@]}" "${CHUNKED[@]}" "${arm_args[@]}"
   generate "${BASE}_${ARM}" 1 "${EVAL_DATASET}" "${EVAL_LIMIT}"
 done
 
