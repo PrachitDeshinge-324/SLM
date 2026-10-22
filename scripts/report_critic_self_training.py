@@ -10,7 +10,9 @@ Section 1, labels (round 0 pool): for each rule, how many questions it labels, h
   here: nothing that selects labels or trains sees this report. Also: the questions the critic adds to the
   vote's and the ones it drops, with their accuracy.
 Section 2, test: each arm's round 1 against round 0 on the same test questions, re-scored from the raw samples,
-  with paired 95% intervals over questions; and each critic arm against the vote arm.
+  with paired 95% intervals over questions; and each critic arm against the vote arm. Arms trained again with
+  another seed (<base>_<arm>_s<k>) are rows of their own; the difference between two seeds of one arm is the
+  training-noise floor. The intervals resample questions only, so they do not include that noise.
 
 --labels_only prints section 1 alone (it needs only round 0 and the critic run, not the trained arms).
 Output: printed, and saved to results/self_training/<base>/report_critic_<model>_<precision>.txt
@@ -118,11 +120,15 @@ def test_section(args) -> list:
     round0 = generator_run_path(self_training_round_dir(args.results_dir, args.base, 0), args.model, args.precision,
                                 args.dataset, args.n_samples)
     runs = {"round 0": score_run(round0, args.dataset, args.threshold)}
+    root = self_training_round_dir(args.results_dir, args.base, 0).parent.parent
     for arm in ARMS:
-        path = generator_run_path(self_training_round_dir(args.results_dir, f"{args.base}_{arm}", 1), args.model,
-                                  args.precision, args.dataset, args.n_samples)
-        if path.exists():
-            runs[arm] = score_run(path, args.dataset, args.threshold)
+        seeds = sorted((int(d.name.rsplit("_s", 1)[1]) for d in root.glob(f"{args.base}_{arm}_s*")
+                        if d.name.rsplit("_s", 1)[1].isdigit()))
+        for name in [arm] + [f"{arm}_s{k}" for k in seeds]:
+            path = generator_run_path(self_training_round_dir(args.results_dir, f"{args.base}_{name}", 1), args.model,
+                                      args.precision, args.dataset, args.n_samples)
+            if path.exists():
+                runs[name] = score_run(path, args.dataset, args.threshold)
     qids = sorted(set.intersection(*(set(scored) for scored in runs.values())))
     lines = [f"Test: {len(qids)} questions answered by every run.", "",
              "run | single sample | cut off | right when finished | voted | trained examples (solutions + critiques)"]
@@ -138,7 +144,12 @@ def test_section(args) -> list:
         lines.append(f"{name} | {single.mean():.3f} | {cutoff.mean():.3f} | {finished:.3f} | "
                      f"{column(scored, qids, 'voted').mean():.3f} | {trained}")
     lines += ["", "difference in points [95%] | single sample | voted | cut off"]
-    pairs = [(arm, "round 0") for arm in ARMS if arm in runs] + [(arm, "vote") for arm in ARMS[1:] if arm in runs and "vote" in runs]
+    trained = [name for name in runs if name != "round 0"]
+    pairs = [(name, "round 0") for name in trained]
+    # every critic run against the vote arm of seed 0; every seed k > 0 against seed 0 of its own arm
+    pairs += [(name, "vote") for name in trained if not name.startswith("vote") and "vote" in runs]
+    pairs += [(name, name.rsplit("_s", 1)[0]) for name in trained
+              if "_s" in name and name.rsplit("_s", 1)[1].isdigit() and name.rsplit("_s", 1)[0] in runs]
     for after, before in pairs:
         lines.append(f"{after} - {before} | " + " | ".join(
             paired_difference(column(runs[after], qids, key), column(runs[before], qids, key))

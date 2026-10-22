@@ -18,7 +18,11 @@
 #   bash run_critic_self_training.sh --model Qwen/Qwen3.5-2B --precision 4bit --base q2b_4bit_critic_p500 \
 #        [--pool_limit 500] [--eval_limit 100] [--verdicts 2] [--critic_tokens 704] [--arms "vote critic critic_reason"] \
 #        [--batch_size 64] [--train_steps 200] [--threshold 0.75] [--stop_after_labels] [--results_dir DIR]
-#        [--micro_batch_size 2] [--gradient_checkpointing] [--chunked_loss]
+#        [--micro_batch_size 2] [--gradient_checkpointing] [--chunked_loss] [--train_seed 0]
+#
+# --train_seed k > 0 trains the arms again with another seed (adapter init, batch order, dropout) under
+# experiment <base>_<arm>_s<k>, sharing round 0 and the critic run; the report shows each seed as its own row.
+# Two seeds of the same arm measure training noise, the floor any difference between arms must clear.
 #
 # --batch_size is the generation batch (sequences at once). Training memory is set by --micro_batch_size
 # (solutions per forward pass; the update is always 8 solutions) and --gradient_checkpointing. For 16-bit
@@ -37,6 +41,7 @@ N_SAMPLES=8
 BATCH_SIZE=64
 TRAIN_STEPS=200
 MICRO_BATCH_SIZE=2
+TRAIN_SEED=0
 CHECKPOINTING=()
 CHUNKED=()
 THRESHOLD=0.75
@@ -62,6 +67,7 @@ while [[ "$#" -gt 0 ]]; do
         --batch_size) BATCH_SIZE="$2"; shift ;;
         --train_steps) TRAIN_STEPS="$2"; shift ;;
         --micro_batch_size) MICRO_BATCH_SIZE="$2"; shift ;;
+        --train_seed) TRAIN_SEED="$2"; shift ;;
         --gradient_checkpointing) CHECKPOINTING=(--gradient_checkpointing) ;;
         --chunked_loss) CHUNKED=(--chunked_loss) ;;
         --threshold) THRESHOLD="$2"; shift ;;
@@ -124,8 +130,10 @@ banner "Labels on the pool (reference answers read for this report only)"
 report --labels_only
 if [ "${STOP_AFTER_LABELS}" = 1 ]; then echo "Stopped after the label report (--stop_after_labels)."; exit 0; fi
 
+SEED_SUFFIX=""
+if [ "${TRAIN_SEED}" != 0 ]; then SEED_SUFFIX="_s${TRAIN_SEED}"; fi
 for ARM in ${ARMS}; do
-  banner "Arm ${ARM}: train on round 0's pool, answer the test questions"
+  banner "Arm ${ARM}${SEED_SUFFIX}: train on round 0's pool, answer the test questions"
   arm_args=()
   case "${ARM}" in
     vote) ;;
@@ -135,10 +143,10 @@ for ARM in ${ARMS}; do
   esac
   python scripts/train_self_labels.py --results_dir "${RESULTS_DIR}" --model "${MODEL}" --precision "${PRECISION}" \
     --dataset "${POOL_DATASET}" --eval_dataset "${EVAL_DATASET}" --n_samples "${N_SAMPLES}" \
-    --experiment "${BASE}_${ARM}" --pool_experiment "${BASE}" --round 1 --threshold "${THRESHOLD}" \
+    --experiment "${BASE}_${ARM}${SEED_SUFFIX}" --pool_experiment "${BASE}" --round 1 --threshold "${THRESHOLD}" \
     --train_steps "${TRAIN_STEPS}" --micro_batch_size "${MICRO_BATCH_SIZE}" --end_format chat \
-    "${CHECKPOINTING[@]}" "${CHUNKED[@]}" "${arm_args[@]}"
-  generate "${BASE}_${ARM}" 1 "${EVAL_DATASET}" "${EVAL_LIMIT}"
+    --train_seed "${TRAIN_SEED}" "${CHECKPOINTING[@]}" "${CHUNKED[@]}" "${arm_args[@]}"
+  generate "${BASE}_${ARM}${SEED_SUFFIX}" 1 "${EVAL_DATASET}" "${EVAL_LIMIT}"
 done
 
 banner "Report"
