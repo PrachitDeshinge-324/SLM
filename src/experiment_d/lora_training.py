@@ -106,6 +106,17 @@ def attach_lora(model, rank: int = 16, alpha: int = 32, dropout: float = 0.05, s
     return model, sorted(model.peft_config["default"].target_modules)
 
 
+def enable_gradient_checkpointing(model):
+    """
+    Recompute each layer's activations in the backward pass instead of keeping them: much less memory for
+    about a third more time, and the same gradients (non-reentrant checkpointing restores the dropout RNG).
+    Call after attach_lora; train_lora already runs the forward pass with use_cache=False.
+    """
+    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+    model.enable_input_require_grads()      # the frozen embeddings give no grad, which checkpointing needs
+    return model
+
+
 def _collate(examples: list, pad_token_id: int, device):
     longest = max(len(example["input_ids"]) for example in examples)
     input_ids = torch.full((len(examples), longest), pad_token_id, dtype=torch.long)

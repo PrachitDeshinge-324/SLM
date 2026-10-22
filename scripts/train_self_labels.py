@@ -36,7 +36,15 @@ load_dotenv()
 import torch
 
 from src.experiment_d.benchmarks import load_benchmark
-from src.experiment_d.lora_training import END_FORMATS, answer_end, attach_lora, build_example, build_training_example, train_lora
+from src.experiment_d.lora_training import (
+    END_FORMATS,
+    answer_end,
+    attach_lora,
+    build_example,
+    build_training_example,
+    enable_gradient_checkpointing,
+    train_lora,
+)
 from src.experiment_d.model_loading import PRECISIONS, load_model_and_tokenizer
 from src.experiment_d.run_files import (
     adapter_dir,
@@ -60,7 +68,8 @@ from src.experiment_d.verifier_variants import CRITICS, answer_prefix, verificat
 LOG_NAME = "training_log.json"
 # What a training log written before these settings existed was trained with.
 LEGACY_SETTINGS = {"end_format": "legacy", "labels": "vote", "pool_experiment": None, "critic": "critic_forced",
-                   "signals_tag": None, "critiques": False, "critique_max_length": 1536}
+                   "signals_tag": None, "critiques": False, "critique_max_length": 1536,
+                   "gradient_checkpointing": False}
 
 
 def parse_args():
@@ -76,7 +85,7 @@ def parse_args():
     parser.add_argument("--threshold", type=float, default=0.75, help="Share of all samples that must agree for a question to be labelled")
     parser.add_argument("--train_steps", type=int, default=200, help="Optimizer updates (fixed, so every run gets the same number)")
     parser.add_argument("--train_batch_size", type=int, default=8, help="Solutions per update")
-    parser.add_argument("--micro_batch_size", type=int, default=2, help="Solutions per forward pass (memory only; does not change the update)")
+    parser.add_argument("--micro_batch_size", type=int, default=2, help="Solutions per forward pass (memory; same update in expectation, but LoRA dropout draws other masks)")
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--lora_rank", type=int, default=16)
     parser.add_argument("--lora_alpha", type=int, default=32)
@@ -95,6 +104,8 @@ def parse_args():
                         help="Tag of the pool's signals file, e.g. critic_forced_v2_t704_pilot (for --labels critic / --critiques)")
     parser.add_argument("--critiques", action="store_true",
                         help="Also train on the critic's critiques that agree with the labels (critic prompt -> critique)")
+    parser.add_argument("--gradient_checkpointing", action="store_true",
+                        help="Recompute activations in the backward pass: much less memory, about a third slower, same gradients")
     parser.add_argument("--critique_max_length", type=int, default=1536,
                         help="Longest critic prompt + critique in tokens; longer ones are skipped")
 
@@ -212,6 +223,8 @@ def main():
               f"({skipped_critiques} critiques longer than {args.critique_max_length} tokens skipped).")
 
     model, target_modules = attach_lora(model, args.lora_rank, args.lora_alpha, args.lora_dropout, seed=args.train_seed)
+    if args.gradient_checkpointing:
+        enable_gradient_checkpointing(model)
     trainable = sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
     print(f"Training {len(examples)} examples for {args.train_steps} steps on the {args.precision} base "
           f"({trainable:,} adapter parameters, {compute_dtype}).")
@@ -248,6 +261,7 @@ def main():
         "end_token": tokenizer.convert_ids_to_tokens(end if isinstance(end, int) else list(end)),
         "losses": losses,
         "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        "peak_gpu_memory_gb": round(torch.cuda.max_memory_allocated() / 2**30, 2) if torch.cuda.is_available() else None,
         "torch_version": torch.__version__,
         "transformers_version": __import__("transformers").__version__,
         "peft_version": __import__("peft").__version__,

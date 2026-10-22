@@ -18,6 +18,12 @@
 #   bash run_critic_self_training.sh --model Qwen/Qwen3.5-2B --precision 4bit --base q2b_4bit_critic_p500 \
 #        [--pool_limit 500] [--eval_limit 100] [--verdicts 2] [--critic_tokens 704] [--arms "vote critic critic_reason"] \
 #        [--batch_size 64] [--train_steps 200] [--threshold 0.75] [--stop_after_labels] [--results_dir DIR]
+#        [--micro_batch_size 2] [--gradient_checkpointing]
+#
+# --batch_size is the generation batch (sequences at once). Training memory is set by --micro_batch_size
+# (solutions per forward pass; the update is always 8 solutions) and --gradient_checkpointing. For 16-bit
+# on a 16 GB GPU (T4) first try --gradient_checkpointing alone: it gives exactly the same training. If that
+# still runs out of memory, add --micro_batch_size 1 (same update in expectation; LoRA dropout draws other masks).
 set -e
 
 MODEL="Qwen/Qwen3.5-2B"
@@ -28,6 +34,8 @@ EVAL_LIMIT=100
 N_SAMPLES=8
 BATCH_SIZE=64
 TRAIN_STEPS=200
+MICRO_BATCH_SIZE=2
+CHECKPOINTING=()
 THRESHOLD=0.75
 VERDICTS=2
 CRITIC="critic_forced"
@@ -50,6 +58,8 @@ while [[ "$#" -gt 0 ]]; do
         --n_samples) N_SAMPLES="$2"; shift ;;
         --batch_size) BATCH_SIZE="$2"; shift ;;
         --train_steps) TRAIN_STEPS="$2"; shift ;;
+        --micro_batch_size) MICRO_BATCH_SIZE="$2"; shift ;;
+        --gradient_checkpointing) CHECKPOINTING=(--gradient_checkpointing) ;;
         --threshold) THRESHOLD="$2"; shift ;;
         --verdicts) VERDICTS="$2"; shift ;;
         --critic_tokens) CRITIC_TOKENS="$2"; shift ;;
@@ -120,7 +130,8 @@ for ARM in ${ARMS}; do
   python scripts/train_self_labels.py --results_dir "${RESULTS_DIR}" --model "${MODEL}" --precision "${PRECISION}" \
     --dataset "${POOL_DATASET}" --eval_dataset "${EVAL_DATASET}" --n_samples "${N_SAMPLES}" \
     --experiment "${BASE}_${ARM}" --pool_experiment "${BASE}" --round 1 --threshold "${THRESHOLD}" \
-    --train_steps "${TRAIN_STEPS}" --end_format chat "${arm_args[@]}"
+    --train_steps "${TRAIN_STEPS}" --micro_batch_size "${MICRO_BATCH_SIZE}" --end_format chat \
+    "${CHECKPOINTING[@]}" "${arm_args[@]}"
   generate "${BASE}_${ARM}" 1 "${EVAL_DATASET}" "${EVAL_LIMIT}"
 done
 

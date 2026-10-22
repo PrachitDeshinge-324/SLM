@@ -271,6 +271,40 @@ def test_critiques_agree_with_the_label():
     assert select_critiques([record], rows, {}, "gsm8k_train") == []
 
 
+def test_memory_options_do_not_change_training():
+    """
+    Gradient checkpointing saves memory only: the same losses step for step, dropout included. A smaller
+    micro-batch gives the same losses without dropout; with dropout it draws different masks (same update in
+    expectation, not bit for bit).
+    """
+    import torch
+    from transformers import LlamaConfig, LlamaForCausalLM
+
+    from src.experiment_d.lora_training import attach_lora, enable_gradient_checkpointing, train_lora
+
+    tokenizer = _FakeTokenizer()
+    tokenizer.pad_token_id = 1
+    examples = [build_training_example(tokenizer, "gsm8k_train", question, trace, end_token=0, max_length=64)
+                for question, trace in (("Q1", "one two"), ("Q2", "three four"), ("Q3", "five six"), ("Q4", "seven"))]
+
+    def run(checkpointing: bool, micro_batch_size: int, dropout: float = 0.1) -> list:
+        torch.manual_seed(0)
+        base = LlamaForCausalLM(LlamaConfig(vocab_size=128, hidden_size=32, intermediate_size=64,
+                                            num_hidden_layers=2, num_attention_heads=2))
+        model, _ = attach_lora(base, rank=4, alpha=8, dropout=dropout)
+        if checkpointing:
+            enable_gradient_checkpointing(model)
+        return train_lora(model, tokenizer, examples, steps=6, batch_size=4, micro_batch_size=micro_batch_size,
+                          learning_rate=1e-2, log_every=1000)
+
+    def same(a: list, b: list) -> bool:
+        return all(abs(x - y) < 1e-4 for x, y in zip(a, b))
+
+    assert same(run(True, 2), run(False, 2))
+    assert same(run(False, 1, dropout=0.0), run(False, 2, dropout=0.0))
+    assert same(run(True, 1, dropout=0.0), run(False, 2, dropout=0.0))
+
+
 if __name__ == "__main__":
     test_majority_vote_matches_summarize_votes()
     test_threshold_is_share_of_all_samples()
@@ -288,4 +322,5 @@ if __name__ == "__main__":
     test_critic_labels_skip_ties_and_unapproved_labels()
     test_critic_labels_never_read_reference_answers()
     test_critiques_agree_with_the_label()
+    test_memory_options_do_not_change_training()
     print("All self-training tests passed!")
