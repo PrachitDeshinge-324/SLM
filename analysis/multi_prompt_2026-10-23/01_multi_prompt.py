@@ -11,6 +11,8 @@ first 16 samples of the default prompt, so every answer compared here is indepen
 Compared at the same budget of 8 answers:
   one prompt   the 8 default answers
   mixed        2 default answers + 2 from each of the 3 variants (averaged over 200 random draws per question)
+  mixed, no check   2 default + 3 plan + 3 example2: the check prompt runs past the token limit far more often,
+                    so this mix tells prompt diversity apart from the cost of one long prompt
 Per class and overall: accuracy of one answer per prompt, the vote (ties split), and how often the right answer
 is among the 8 (pass@8); mixed minus one prompt with a 95% interval from resampling questions.
 Reference answers are read only to score.
@@ -38,6 +40,9 @@ MODEL = "Qwen/Qwen3.5-0.8B"
 VARIANTS = ("plan", "check", "example2")
 CLASSES = ("preserved", "random", "systematic", "helped", "both fail")
 DRAWS = 200
+# name -> answers per prompt in a mix of 8 ('default' draws from its 8 held-out answers)
+MIXES = {"mixed": {"default": 2, "plan": 2, "check": 2, "example2": 2},
+         "mixed, no check": {"default": 2, "plan": 3, "example2": 3}}
 
 
 def load(path, extractor) -> dict:
@@ -84,31 +89,35 @@ def main():
             f"{100 * np.mean([k is None for q in qids for k, _ in default[q]]):.1f} | "
             + " | ".join(f"{v} {100 * cut[v]:.1f}" for v in VARIANTS))
 
-        one_vote, one_pass, mix_vote, mix_pass = {}, {}, {}, {}
-        for q in qids:
-            one_vote[q] = types.summary(default[q])[1]
-            one_pass[q] = float(any(ok for _, ok in default[q]))
-            votes, passes = [], []
-            for _ in range(DRAWS):
-                pick = [default[q][i] for i in rng.choice(8, 2, replace=False)]
-                for v in VARIANTS:
-                    pick += [runs[v][q][i] for i in rng.choice(len(runs[v][q]), 2, replace=False)]
-                votes.append(types.summary(pick)[1])
-                passes.append(any(ok for _, ok in pick))
-            mix_vote[q], mix_pass[q] = float(np.mean(votes)), float(np.mean(passes))
+        one_vote = {q: types.summary(default[q])[1] for q in qids}
+        one_pass = {q: float(any(ok for _, ok in default[q])) for q in qids}
+        sources = {"default": default, **runs}
+        for mix_name, counts in MIXES.items():
+            mix_vote, mix_pass = {}, {}
+            for q in qids:
+                votes, passes = [], []
+                for _ in range(DRAWS):
+                    pick = []
+                    for prompt, k in counts.items():
+                        pool = sources[prompt][q]
+                        pick += [pool[i] for i in rng.choice(len(pool), k, replace=False)]
+                    votes.append(types.summary(pick)[1])
+                    passes.append(any(ok for _, ok in pick))
+                mix_vote[q], mix_pass[q] = float(np.mean(votes)), float(np.mean(passes))
 
-        say("\nclass | n | vote, one prompt | vote, mixed prompts | mixed - one [95%] | pass@8 one | pass@8 mixed")
-        for c in CLASSES + ("all",):
-            qs = qids if c == "all" else [q for q in qids if classes[q] == c]
-            if not qs:
-                continue
-            a = np.array([mix_vote[q] for q in qs])
-            b = np.array([one_vote[q] for q in qs])
-            d = a - b
-            low, high = bootstrap_interval(lambda index: d[index].mean(), len(d))
-            say(f"{c} | {len(qs)} | {100 * b.mean():.1f} | {100 * a.mean():.1f} | {100 * d.mean():+.1f} "
-                f"[{100 * low:+.1f}, {100 * high:+.1f}] | {100 * np.mean([one_pass[q] for q in qs]):.1f} | "
-                f"{100 * np.mean([mix_pass[q] for q in qs]):.1f}")
+            say(f"\n{mix_name} ({', '.join(f'{k} {p}' for p, k in counts.items())}) against one prompt (8 default)")
+            say("class | n | vote, one prompt | vote, mix | mix - one [95%] | pass@8 one | pass@8 mix")
+            for c in CLASSES + ("all",):
+                qs = qids if c == "all" else [q for q in qids if classes[q] == c]
+                if not qs:
+                    continue
+                a = np.array([mix_vote[q] for q in qs])
+                b = np.array([one_vote[q] for q in qs])
+                d = a - b
+                low, high = bootstrap_interval(lambda index: d[index].mean(), len(d))
+                say(f"{c} | {len(qs)} | {100 * b.mean():.1f} | {100 * a.mean():.1f} | {100 * d.mean():+.1f} "
+                    f"[{100 * low:+.1f}, {100 * high:+.1f}] | {100 * np.mean([one_pass[q] for q in qs]):.1f} | "
+                    f"{100 * np.mean([mix_pass[q] for q in qs]):.1f}")
 
     out = HERE / "outputs"
     out.mkdir(exist_ok=True)
