@@ -18,6 +18,8 @@ import re
 from pathlib import Path
 
 SELF_TRAINING_DIR = "self_training"
+# Runs of the multi-prompt test: results/prompt_variants/<variant>/<normal layout>.
+PROMPT_VARIANTS_DIR = "prompt_variants"
 
 RUN_NAME_PATTERN = re.compile(
     r"^(?:verifier_output_|verifier_)?(?P<model>.+)_(?P<precision>16bit|8bit|4bit)_(?P<dataset>.+)_n(?P<n_samples>\d+)\.jsonl$"
@@ -128,9 +130,17 @@ def adapter_dir(results_dir, experiment: str, round_index, model: str, precision
     return self_training_round_dir(results_dir, experiment, round_index) / "adapters" / f"{safe_name(model)}_{precision}"
 
 
+def prompt_variant_dir(results_dir, variant: str) -> Path:
+    """Results root of the runs answered with one GSM8K prompt variant (multi-prompt test)."""
+    return Path(results_dir) / PROMPT_VARIANTS_DIR / variant
+
+
 def is_self_training_file(path) -> bool:
-    """Self-training rounds reuse the run names of the main runs, so the main reports leave them out."""
-    return SELF_TRAINING_DIR in Path(path).parts
+    """
+    Self-training rounds and prompt-variant runs reuse the run names of the main runs, so the main reports
+    leave them out.
+    """
+    return SELF_TRAINING_DIR in Path(path).parts or PROMPT_VARIANTS_DIR in Path(path).parts
 
 
 def adapter_fingerprint(path) -> str:

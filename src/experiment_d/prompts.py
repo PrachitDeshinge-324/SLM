@@ -37,6 +37,59 @@ def get_gsm8k_messages(question: str) -> list[dict]:
     ]
 
 
+# ─── GSM8K prompt variants (multi-prompt test) ────────────────────────────────
+# Each variant changes how the model is asked to work, never the answer format (#### <number>), so the same
+# extractor scores every variant. 'default' is the prompt above, unchanged, so its runs stay comparable with
+# every earlier run. 'example2' uses GSM8K train question 3000 as its worked example: outside the first 500
+# train questions the self-training pools use; a pool that reaches it must leave it out, as it does Natalia's.
+
+GSM8K_EXAMPLE2_USER = "A pole is 20 meters long. It got cut in a way that left it 30% shorter. How long is the pole?"
+
+GSM8K_PROMPT_VARIANTS = {
+    "default": (GSM8K_SYSTEM, GSM8K_1SHOT_USER, GSM8K_1SHOT_ASSISTANT),
+    "plan": (
+        "You are a helpful math tutor. First list the quantities the problem gives and what it asks for. "
+        "Then solve the problem step by step and end with the final answer in the format: #### <number>.",
+        GSM8K_1SHOT_USER,
+        "Given: 48 clips sold in April; in May, half as many as in April.\n"
+        "Asked: the total number of clips sold in April and May.\n"
+        "In May, she sold 48 / 2 = 24 clips.\n"
+        "Altogether, she sold 48 + 24 = 72 clips.\n"
+        "#### 72",
+    ),
+    "check": (
+        "You are a helpful math tutor. Solve the problem step by step, then check your result by working "
+        "backwards from it, and end with the final answer in the format: #### <number>.",
+        GSM8K_1SHOT_USER,
+        "Natalia sold 48 clips in April.\n"
+        "In May, she sold half as many clips, which is 48 / 2 = 24 clips.\n"
+        "Altogether, she sold 48 + 24 = 72 clips.\n"
+        "Check: 72 - 48 = 24 clips in May, and 24 is half of 48. The result is consistent.\n"
+        "#### 72",
+    ),
+    "example2": (
+        GSM8K_SYSTEM,
+        GSM8K_EXAMPLE2_USER,
+        "The part that was cut away is 30/100 * 20 = 6 meters long.\n"
+        "So the pole is now 20 - 6 = 14 meters long.\n"
+        "#### 14",
+    ),
+}
+
+
+def get_gsm8k_variant_messages(question: str, variant: str = "default") -> list[dict]:
+    """The 1-shot GSM8K prompt in one of GSM8K_PROMPT_VARIANTS ('default' is get_gsm8k_messages)."""
+    if variant not in GSM8K_PROMPT_VARIANTS:
+        raise ValueError(f"Unknown GSM8K prompt variant {variant!r}; known: {sorted(GSM8K_PROMPT_VARIANTS)}")
+    system, example_user, example_assistant = GSM8K_PROMPT_VARIANTS[variant]
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": example_user},
+        {"role": "assistant", "content": example_assistant},
+        {"role": "user", "content": question},
+    ]
+
+
 # ─── CommonsenseQA ────────────────────────────────────────────────────────────
 
 CQA_SYSTEM = (
@@ -145,10 +198,12 @@ def get_generic_messages(question: str, choices: list = None) -> list[dict]:
             {"role": "user", "content": question},
         ]
 
-def get_messages(dataset_name: str, question: str, choices: list = None):
+def get_messages(dataset_name: str, question: str, choices: list = None, variant: str = "default"):
     name = dataset_name.lower()
+    if variant != "default" and not name.startswith("gsm8k"):
+        raise ValueError(f"Prompt variants exist for GSM8K only, not {dataset_name!r}")
     if name.startswith("gsm8k") or "svamp" in name:
-        return get_gsm8k_messages(question)
+        return get_gsm8k_messages(question) if variant == "default" else get_gsm8k_variant_messages(question, variant)
     elif name == "cqa":
         return get_cqa_messages(question, choices)
     elif name == "math500":

@@ -58,8 +58,52 @@ def test_boxed_in_gsm8k():
     assert extract_gsm8k_answer("#### 5\n\\boxed{7}") == "5"  # official marker still wins
 
 
+def test_prompt_variants():
+    from src.experiment_d.answer_matching import answers_match
+    from src.experiment_d.prompts import GSM8K_PROMPT_VARIANTS, get_gsm8k_messages, get_gsm8k_variant_messages
+    from src.experiment_d.run_files import is_self_training_file, prompt_variant_dir
+
+    # The default variant is the unchanged prompt, so its runs stay comparable with every earlier run.
+    assert get_messages("gsm8k", "Q") == get_gsm8k_messages("Q") == get_messages("gsm8k", "Q", variant="default")
+    assert get_gsm8k_variant_messages("Q", "default") == get_gsm8k_messages("Q")
+    # Every variant ends its worked example with a '#### <number>' line the extractor reads, and asks the real question last.
+    for name in GSM8K_PROMPT_VARIANTS:
+        messages = get_messages("gsm8k", "What is 2 + 2?", variant=name)
+        assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
+        assert messages[-1]["content"] == "What is 2 + 2?"
+        assert "#### <number>" in messages[0]["content"]
+        expected = "14" if name == "example2" else "72"
+        assert answers_match(extract_gsm8k_answer(messages[2]["content"]), expected), name
+    assert len({str(get_messages("gsm8k", "Q", variant=v)) for v in GSM8K_PROMPT_VARIANTS}) == len(GSM8K_PROMPT_VARIANTS)
+    for bad in (lambda: get_messages("gsm8k", "Q", variant="nope"), lambda: get_messages("cqa", "Q", [], variant="plan")):
+        try:
+            bad()
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("an unknown variant or a variant outside GSM8K was accepted")
+    # Variant runs live in their own tree, which the main reports skip.
+    path = prompt_variant_dir("results", "plan") / "gsm8k" / "generator" / "m" / "m_4bit_gsm8k_n4.jsonl"
+    assert is_self_training_file(path) and not is_self_training_file("results/gsm8k/generator/m/m_4bit_gsm8k_n8.jsonl")
+
+
+def test_variant_resume_check():
+    from scripts.generate_answers import check_resume_is_valid
+
+    old = {"type": "run_config", "model": "m", "precision": "4bit", "batch_size": 64}   # written before variants existed
+    check_resume_is_valid("f", old, {"q1"}, {"model": "m", "precision": "4bit", "prompt_variant": "default"}, 64)
+    try:
+        check_resume_is_valid("f", old, {"q1"}, {"model": "m", "precision": "4bit", "prompt_variant": "plan"}, 64)
+    except RuntimeError as error:
+        assert "prompt_variant" in str(error)
+    else:
+        raise AssertionError("a variant run was allowed to resume a default-prompt run file")
+
+
 if __name__ == "__main__":
     test_verifier_parser()
     test_boxed_in_gsm8k()
     test_prompts_render_uniformly()
+    test_prompt_variants()
+    test_variant_resume_check()
     print("All prompt tests passed!")
