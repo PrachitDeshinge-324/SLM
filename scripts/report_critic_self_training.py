@@ -1,5 +1,5 @@
 """
-Report on critic self-training: one shared round 0, then one round of training per arm.
+Report on critic self-training: one shared round 0, then one or more rounds of training per arm.
 
   arm vote           labels from the majority vote (the earlier self-training rule)
   arm critic         labels from critic + vote (self_training.select_critic_labels)
@@ -13,6 +13,10 @@ Section 2, test: each arm's round 1 against round 0 on the same test questions, 
   with paired 95% intervals over questions; and each critic arm against the vote arm. Arms trained again with
   another seed (<base>_<arm>_s<k>) are rows of their own; the difference between two seeds of one arm is the
   training-noise floor. The intervals resample questions only, so they do not include that noise.
+  Later rounds (run_critic_self_training.sh --rounds N) are rows '<arm> r<k>', compared with round 0, with the
+  arm's previous round, and (critic arms) with the vote arm of the same round.
+Section 3, labels: for every trained run, the labels it learned from and how many are right; after round 1 they
+  are re-made from the arm's own previous round, so this shows label drift.
 
 --labels_only prints section 1 alone (it needs only round 0 and the critic run, not the trained arms).
 Output: printed, and saved to results/self_training/<base>/report_critic_<model>_<precision>.txt
@@ -42,6 +46,7 @@ from src.experiment_d.run_files import (
     signals_path,
 )
 from src.experiment_d.self_training import select_critic_labels, select_critiques, select_pseudo_labels
+from src.experiment_d.signals import with_judge
 
 ARMS = ("vote", "critic", "critic_reason")
 
@@ -116,19 +121,38 @@ def label_section(args) -> list:
     return lines
 
 
+def run_name(arm_seed: str, round_index: int) -> str:
+    """Row name of a trained run: '<arm>[_s<k>]' for round 1 (the names of the one-round reports), else '... r<round>'."""
+    return arm_seed if round_index == 1 else f"{arm_seed} r{round_index}"
+
+
+def trained_runs(args) -> list:
+    """(arm[_s<k>], round) of every trained run whose test answers exist, rounds counted up from 1 until one is missing."""
+    root = self_training_round_dir(args.results_dir, args.base, 0).parent.parent
+    out = []
+    for arm in ARMS:
+        seeds = sorted((int(d.name.rsplit("_s", 1)[1]) for d in root.glob(f"{args.base}_{arm}_s*")
+                        if d.name.rsplit("_s", 1)[1].isdigit()))
+        for arm_seed in [arm] + [f"{arm}_s{k}" for k in seeds]:
+            round_index = 1
+            while generator_run_path(self_training_round_dir(args.results_dir, f"{args.base}_{arm_seed}", round_index),
+                                     args.model, args.precision, args.dataset, args.n_samples).exists():
+                out.append((arm_seed, round_index))
+                round_index += 1
+    return out
+
+
 def test_section(args) -> list:
     round0 = generator_run_path(self_training_round_dir(args.results_dir, args.base, 0), args.model, args.precision,
                                 args.dataset, args.n_samples)
     runs = {"round 0": score_run(round0, args.dataset, args.threshold)}
-    root = self_training_round_dir(args.results_dir, args.base, 0).parent.parent
-    for arm in ARMS:
-        seeds = sorted((int(d.name.rsplit("_s", 1)[1]) for d in root.glob(f"{args.base}_{arm}_s*")
-                        if d.name.rsplit("_s", 1)[1].isdigit()))
-        for name in [arm] + [f"{arm}_s{k}" for k in seeds]:
-            path = generator_run_path(self_training_round_dir(args.results_dir, f"{args.base}_{name}", 1), args.model,
-                                      args.precision, args.dataset, args.n_samples)
-            if path.exists():
-                runs[name] = score_run(path, args.dataset, args.threshold)
+    where = {}
+    for arm_seed, round_index in trained_runs(args):
+        name = run_name(arm_seed, round_index)
+        where[name] = (arm_seed, round_index)
+        path = generator_run_path(self_training_round_dir(args.results_dir, f"{args.base}_{arm_seed}", round_index),
+                                  args.model, args.precision, args.dataset, args.n_samples)
+        runs[name] = score_run(path, args.dataset, args.threshold)
     # A run that has not answered every round 0 question yet is listed, not compared.
     incomplete = {name: len(scored) for name, scored in runs.items()
                   if name != "round 0" and not set(runs["round 0"]) <= set(scored)}
@@ -143,7 +167,9 @@ def test_section(args) -> list:
         finished = single.sum() / (1 - cutoff).sum() if (1 - cutoff).sum() else float("nan")
         trained = "-"
         if name != "round 0":
-            log = adapter_dir(args.results_dir, f"{args.base}_{name}", 1, args.model, args.precision) / "training_log.json"
+            arm_seed, round_index = where[name]
+            log = adapter_dir(args.results_dir, f"{args.base}_{arm_seed}", round_index, args.model,
+                              args.precision) / "training_log.json"
             if log.exists():
                 data = json.loads(log.read_text())
                 trained = f"{data['trained_solutions']} + {data.get('trained_critiques', 0)}"
@@ -152,14 +178,62 @@ def test_section(args) -> list:
     lines += ["", "difference in points [95%] | single sample | voted | cut off"]
     trained = [name for name in runs if name != "round 0"]
     pairs = [(name, "round 0") for name in trained]
-    # every critic run against the vote arm of seed 0; every seed k > 0 against seed 0 of its own arm
-    pairs += [(name, "vote") for name in trained if not name.startswith("vote") and "vote" in runs]
-    pairs += [(name, name.rsplit("_s", 1)[0]) for name in trained
-              if "_s" in name and name.rsplit("_s", 1)[1].isdigit() and name.rsplit("_s", 1)[0] in runs]
+    for name in trained:
+        arm_seed, round_index = where[name]
+        arm = arm_seed.rsplit("_s", 1)[0] if "_s" in arm_seed and arm_seed.rsplit("_s", 1)[1].isdigit() else arm_seed
+        # a later round against the arm's previous round; a critic run against the vote arm (seed 0) of the same
+        # round; a seed k > 0 against seed 0 of its own arm in the same round
+        candidates = [run_name(arm_seed, round_index - 1) if round_index > 1 else None,
+                      run_name("vote", round_index) if arm != "vote" else None,
+                      run_name(arm, round_index) if arm != arm_seed else None]
+        pairs += [(name, before) for before in candidates if before in runs]
     for after, before in pairs:
         lines.append(f"{after} - {before} | " + " | ".join(
             paired_difference(column(runs[after], qids, key), column(runs[before], qids, key))
             for key in ("single", "voted", "cutoff")))
+    return lines
+
+
+def pool_critic_file(args, experiment: str, round_index: int):
+    """The critic run over a round's pool: judged by that round's model (--round_critic self), else by the untrained one."""
+    tags = [args.signals_tag]
+    if round_index > 0:
+        tags.insert(0, with_judge(args.signals_tag, adapter_dir(args.results_dir, experiment, round_index, args.model,
+                                                                 args.precision)))
+    for tag in tags:
+        path = signals_path(args.results_dir, args.model, args.precision, args.pool_dataset, args.n_samples,
+                            experiment, round_index, tag=tag)
+        if path.exists():
+            return path
+    return None
+
+
+def round_labels_section(args) -> list:
+    """The labels every trained run learned from, re-made each round from the previous round's pool (drift)."""
+    answers = load_gsm8k_train_answers()
+    lines = ["run | learned from | rule | labelled questions | labels right | training solutions"]
+    for arm_seed, round_index in trained_runs(args):
+        experiment = args.base if round_index == 1 else f"{args.base}_{arm_seed}"
+        pool_file = generator_run_path(self_training_round_dir(args.results_dir, experiment, round_index - 1),
+                                       args.model, args.precision, args.pool_dataset, args.n_samples)
+        if not pool_file.exists():
+            continue
+        records = read_question_records(pool_file)
+        source = "round 0 (shared)" if round_index == 1 else f"its round {round_index - 1}"
+        if arm_seed.startswith("vote"):
+            rule, items = "vote", select_pseudo_labels(records, args.pool_dataset, args.threshold)
+        else:
+            critic_file = pool_critic_file(args, experiment, round_index - 1)
+            if critic_file is None:
+                lines.append(f"{run_name(arm_seed, round_index)} | {source} | critic + vote | no critic run found")
+                continue
+            cells = critic_cells(critic_file, args.critic)
+            rule = "critic + vote" + (" (judged by that round's model)" if "_by_" in critic_file.name else "")
+            items = select_critic_labels(records, {k: c.get("forced_decision") is True for k, c in cells.items()},
+                                         args.pool_dataset, args.threshold)
+        labels = {item["qid"]: item["label"] for item in items}
+        lines.append(f"{run_name(arm_seed, round_index)} | {source} | {rule} | {len(labels)} | "
+                     f"{accuracy(labels, answers)} | {len(items)}")
     return lines
 
 
@@ -168,7 +242,9 @@ def main():
     lines = [f"Critic self-training: {args.model} {args.precision}, base {args.base}, critic run {args.signals_tag}", ""]
     lines += ["=== 1. Labels on the round 0 pool"] + label_section(args)
     if not args.labels_only:
-        lines += ["=== 2. Test answers after one round"] + test_section(args)
+        lines += ["=== 2. Test answers after each round"] + test_section(args)
+        lines += ["", "=== 3. Labels each run learned from (reference answers read for this report only)"]
+        lines += round_labels_section(args)
     text = "\n".join(lines)
     print(text)
     if not args.labels_only:
