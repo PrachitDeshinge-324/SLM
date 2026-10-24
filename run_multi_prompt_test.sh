@@ -18,7 +18,8 @@ N_SAMPLES=4
 LIMIT=0
 BATCH_SIZE=64
 VARIANTS="plan check example2"
-MAX_NEW_TOKENS=512          # the token limit of the main GSM8K runs these are compared with
+MAX_NEW_TOKENS=512          # default token limit
+REPETITION_PENALTY="1.1"    # default 1.1 prevents Qwen from getting stuck in loops
 RESULTS_DIR="/content/drive/MyDrive/results"
 
 while [[ "$#" -gt 0 ]]; do
@@ -29,6 +30,8 @@ while [[ "$#" -gt 0 ]]; do
         --limit) LIMIT="$2"; shift ;;
         --batch_size) BATCH_SIZE="$2"; shift ;;
         --variants) VARIANTS="$2"; shift ;;
+        --max_new_tokens) MAX_NEW_TOKENS="$2"; shift ;;
+        --repetition_penalty) REPETITION_PENALTY="$2"; shift ;;
         --results_dir|--output_dir) RESULTS_DIR="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -40,13 +43,14 @@ export PYTHONPATH=.
 SEED=1000
 for VARIANT in ${VARIANTS}; do
   SEED=$((SEED + 1))
+  TOKENS="${MAX_NEW_TOKENS}"
   echo "======================================================"
-  echo " ${MODEL} ${PRECISION}: GSM8K test with the '${VARIANT}' prompt, ${N_SAMPLES} samples per question"
+  echo " ${MODEL} ${PRECISION}: GSM8K test with the '${VARIANT}' prompt, ${N_SAMPLES} samples per question (max_tokens=${TOKENS}, rep_penalty=${REPETITION_PENALTY})"
   echo "======================================================"
   ROOT=$(python -c "import sys; from src.experiment_d.run_files import prompt_variant_dir; print(prompt_variant_dir(sys.argv[1], sys.argv[2]))" "${RESULTS_DIR}" "${VARIANT}")
   python scripts/generate_answers.py --model "${MODEL}" --precision "${PRECISION}" --dataset gsm8k \
-    --n_samples "${N_SAMPLES}" --batch_size "${BATCH_SIZE}" --limit "${LIMIT}" --max_new_tokens "${MAX_NEW_TOKENS}" \
-    --repetition_penalty 1.0 --seed "${SEED}" --prompt_variant "${VARIANT}" --results_dir "${ROOT}"
+    --n_samples "${N_SAMPLES}" --batch_size "${BATCH_SIZE}" --limit "${LIMIT}" --max_new_tokens "${TOKENS}" \
+    --repetition_penalty "${REPETITION_PENALTY}" --seed "${SEED}" --prompt_variant "${VARIANT}" --results_dir "${ROOT}"
 done
 
 echo "======================================================"

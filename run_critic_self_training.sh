@@ -104,6 +104,16 @@ export PYTHONPATH=.
 # Fewer out-of-memory failures from fragmentation (memory reserved but unusable); changes no result.
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
+# 16-bit LoRA on 2B+ models requires gradient checkpointing and chunked loss to stay within 24GB VRAM
+if [ "${PRECISION}" = "16bit" ]; then
+  if [ ${#CHECKPOINTING[@]} -eq 0 ]; then
+    CHECKPOINTING=(--gradient_checkpointing)
+  fi
+  if [ ${#CHUNKED[@]} -eq 0 ]; then
+    CHUNKED=(--chunked_loss)
+  fi
+fi
+
 if [ -z "${PYTHON:-}" ]; then
   if command -v python >/dev/null 2>&1; then
     PYTHON="python"
