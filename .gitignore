@@ -64,6 +64,7 @@ results/*.jpg
 *.png
 *.jpeg
 *.ipynb
+!notebooks/critic_self_training_2b_4bit.ipynb
 
 # Whitelist web presentation directory and its assets
 !.nojekyll
@@ -75,7 +76,8 @@ web/**/.DS_Store
 web/audit.html
 
 # Exclude specific directories
-notebooks/
+notebooks/*
+!notebooks/critic_self_training_2b_4bit.ipynb
 Docs/
 archive/
 results/
