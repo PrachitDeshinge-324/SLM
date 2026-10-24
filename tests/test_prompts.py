@@ -60,19 +60,28 @@ def test_boxed_in_gsm8k():
 
 def test_prompt_variants():
     from src.experiment_d.answer_matching import answers_match
-    from src.experiment_d.prompts import GSM8K_PROMPT_VARIANTS, get_gsm8k_messages, get_gsm8k_variant_messages
+    from src.experiment_d.program_execution import execute_response
+    from src.experiment_d.prompts import (EXECUTION_SCORED_VARIANTS, GSM8K_PROMPT_VARIANTS, get_gsm8k_messages,
+                                          get_gsm8k_variant_messages)
     from src.experiment_d.run_files import is_self_training_file, prompt_variant_dir
 
     # The default variant is the unchanged prompt, so its runs stay comparable with every earlier run.
     assert get_messages("gsm8k", "Q") == get_gsm8k_messages("Q") == get_messages("gsm8k", "Q", variant="default")
     assert get_gsm8k_variant_messages("Q", "default") == get_gsm8k_messages("Q")
-    # Every variant ends its worked example with a '#### <number>' line the extractor reads, and asks the real question last.
+    # Every variant ends its worked example with a '#### <number>' line the extractor reads (or, for the
+    # execution-scored ones, with a program that returns the answer), and asks the real question last.
+    assert EXECUTION_SCORED_VARIANTS <= set(GSM8K_PROMPT_VARIANTS)
     for name in GSM8K_PROMPT_VARIANTS:
         messages = get_messages("gsm8k", "What is 2 + 2?", variant=name)
         assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
         assert messages[-1]["content"] == "What is 2 + 2?"
-        assert "#### <number>" in messages[0]["content"]
         expected = "14" if name == "example2" else "72"
+        if name in EXECUTION_SCORED_VARIANTS:
+            assert "####" not in messages[0]["content"] + messages[2]["content"]
+            result = execute_response(messages[2]["content"])
+            assert result["status"] == "ok" and answers_match(result["answer"], expected), (name, result)
+            continue
+        assert "#### <number>" in messages[0]["content"]
         assert answers_match(extract_gsm8k_answer(messages[2]["content"]), expected), name
     assert len({str(get_messages("gsm8k", "Q", variant=v)) for v in GSM8K_PROMPT_VARIANTS}) == len(GSM8K_PROMPT_VARIANTS)
     for bad in (lambda: get_messages("gsm8k", "Q", variant="nope"), lambda: get_messages("cqa", "Q", [], variant="plan")):

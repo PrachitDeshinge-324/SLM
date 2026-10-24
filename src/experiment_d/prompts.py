@@ -39,7 +39,7 @@ def get_gsm8k_messages(question: str) -> list[dict]:
 
 # ─── GSM8K prompt variants (multi-prompt test) ────────────────────────────────
 # Each variant changes how the model is asked to work, never the answer format (#### <number>), so the same
-# extractor scores every variant. 'default' is the prompt above, unchanged, so its runs stay comparable with
+# extractor scores every variant, except the ones in EXECUTION_SCORED_VARIANTS (below the dict). 'default' is the prompt above, unchanged, so its runs stay comparable with
 # every earlier run. 'example2' uses GSM8K train question 3000 as its worked example: outside the first 500
 # train questions the self-training pools use; a pool that reaches it must leave it out, as it does Natalia's.
 
@@ -74,7 +74,27 @@ GSM8K_PROMPT_VARIANTS = {
         "So the pole is now 20 - 6 = 14 meters long.\n"
         "#### 14",
     ),
+    # Program-of-thought (test B1, Docs/research_notes/CS329A_SELF_IMPROVEMENT_IDEAS.md): the model writes a
+    # Python solve() and never states a number; the answer is whatever the program returns when run
+    # (program_execution.py). The only variant outside the '#### <number>' rule, see EXECUTION_SCORED_VARIANTS.
+    "program": (
+        "You are a helpful math tutor who writes Python. Solve the problem by writing a Python function solve() "
+        "that computes the answer step by step, with one clearly named variable per quantity, and returns the "
+        "final number. Reply with only the code in one ```python block.",
+        GSM8K_1SHOT_USER,
+        "```python\n"
+        "def solve():\n"
+        "    clips_april = 48\n"
+        "    clips_may = clips_april / 2\n"
+        "    total_clips = clips_april + clips_may\n"
+        "    return total_clips\n"
+        "```",
+    ),
 }
+
+# Variants whose answer comes from running the response, not from a '#### <number>' line: the stored
+# `extracted` field of their run files is meaningless and only program_execution.execute_response scores them.
+EXECUTION_SCORED_VARIANTS = frozenset({"program"})
 
 
 def get_gsm8k_variant_messages(question: str, variant: str = "default") -> list[dict]:
