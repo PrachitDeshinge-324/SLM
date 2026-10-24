@@ -1,5 +1,12 @@
 # Research dossier: literature review (section 3)
 
+| | |
+|---|---|
+| **Purpose** | Paper-by-paper critical review (dossier section 3): design, findings, weak points. |
+| **Audience** | Anyone citing or comparing against the literature. |
+| **Scope and caveats** | Built partly from summaries, not full reads; each paper is tagged F/S/A for how it was read. Check numbers before quoting. |
+| **Related** | RESEARCH_DOSSIER.md, Docs/research_notes/SETUP_COMPARISON.md |
+
 *Companion to [RESEARCH_DOSSIER.md](RESEARCH_DOSSIER.md). This is section 3 of Part B, moved here unchanged so the main dossier stays shorter. Section numbers (3.1 to 3.5) and the [Lit] / [Lit-sum] labels are the same as in the dossier, and "section 2", "section 4" and "section 6" below refer to the dossier. The synthesis that draws on these papers is dossier section 4. A browsable version with more papers is `web/previous_works.html`.*
 
 ## 3. Literature: critical review

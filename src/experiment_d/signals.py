@@ -8,7 +8,9 @@ Reference answers are never read here.
 
 Pure functions: nothing here loads a model or reads a file.
 """
+import re
 from collections import Counter
+from pathlib import Path
 
 from src.experiment_d.answer_matching import normalize_answer
 
@@ -23,10 +25,30 @@ def signals_tag(critics: list, verdicts: int, max_new_tokens: int, all_solutions
     return f"{'+'.join(critics)}_v{verdicts}_t{max_new_tokens}_{'all' if all_solutions else 'pilot'}"
 
 
+def adapter_label(adapter_path) -> str:
+    """
+    A short name for the adapter that judged: the self-training experiment it was trained in
+    (.../self_training/<experiment>/round<k>/adapters/<model>_<precision> -> <experiment>_r<k>), else the
+    folder name. Only letters, digits, '-' and '_' are kept, so it is safe in a file name.
+    """
+    parts = Path(adapter_path).parts
+    if len(parts) >= 4 and parts[-2] == "adapters" and re.fullmatch(r"round\d+", parts[-3]):
+        label = f"{parts[-4]}_r{parts[-3][len('round'):]}"
+    else:
+        label = parts[-1] if parts else "adapter"
+    return re.sub(r"[^A-Za-z0-9_-]", "_", label)
+
+
+def with_judge(tag: str, adapter_path=None) -> str:
+    """The tag of a run whose critics were the model with an adapter: <tag>_by_<adapter label>; else the tag."""
+    return f"{tag}_by_{adapter_label(adapter_path)}" if adapter_path else tag
+
+
 def tag_of_header(header: dict) -> str:
     """The tag of an existing signals file, from its header (for files written before names carried tags)."""
-    return signals_tag(header.get("critics") or [], header.get("verdicts"), header.get("max_new_tokens"),
-                       not header.get("skip_cutoff", False))
+    tag = signals_tag(header.get("critics") or [], header.get("verdicts"), header.get("max_new_tokens"),
+                      not header.get("skip_cutoff", False))
+    return with_judge(tag, header.get("adapter"))
 
 
 def vote_support(samples: list, extractor) -> list:

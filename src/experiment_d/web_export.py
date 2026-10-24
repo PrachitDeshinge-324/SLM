@@ -485,13 +485,17 @@ def test_summary(scores: dict, qids: list) -> dict:
     """Mean of each per-question number over `qids`; accuracy among finished answers is pooled."""
     finished_per_question = _column(scores, qids, "finished")
     finished = finished_per_question.sum()
+    confident, voted = _column(scores, qids, "confident"), _column(scores, qids, "voted")
     return {
         "unfinished_questions": int((finished_per_question == 0).sum()),
         "single": _column(scores, qids, "single").mean(),
         "cutoff": _column(scores, qids, "cutoff").mean(),
         "finished_accuracy": _column(scores, qids, "right").sum() / finished if finished else None,
-        "voted": _column(scores, qids, "voted").mean(),
-        "confident": _column(scores, qids, "confident").mean(),
+        "voted": voted.mean(),
+        "confident": confident.mean(),
+        # the label rule applied to test questions: how often a confident vote is right, and how often wrong
+        "confident_accuracy": voted[confident == 1].mean() if confident.any() else None,
+        "confident_wrong": int(((confident == 1) & (voted == 0)).sum()),
         "distinct": _column(scores, qids, "distinct").mean(),
         "tokens": _column(scores, qids, "tokens").mean(),
     }

@@ -1,5 +1,12 @@
 # Experiment D: does quantization break self-improvement in small language models?
 
+| | |
+|---|---|
+| **Purpose** | What the repository contains, how to run each pipeline stage, and where every file lives. |
+| **Audience** | Anyone running or modifying code. |
+| **Scope and caveats** | Layout, commands, naming history. Not findings (see STATUS.md, RESEARCH_DOSSIER.md). |
+| **Related** | STATUS.md, CLAUDE.md |
+
 A small model answers each question several times, the answers are put to a vote, and the model is asked to judge its own solutions. This is done at 16-bit, 8-bit and 4-bit weight precision to see what quantization does to those self-judgment signals.
 
 **Current status, issue register and next steps: [STATUS.md](STATUS.md).** Findings, decisions and open questions: [RESEARCH_DOSSIER.md](RESEARCH_DOSSIER.md). Paper-by-paper literature review: [RESEARCH_DOSSIER_PAPERS.md](RESEARCH_DOSSIER_PAPERS.md).

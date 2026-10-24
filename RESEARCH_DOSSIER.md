@@ -1,5 +1,12 @@
 # Does Compressing a Small AI Model Break Its Ability to Learn From Itself?
 
+| | |
+|---|---|
+| **Purpose** | The technical record of phases 1-2 (generator and verifier under quantization): every number, mistake found, decision and reproduction command. |
+| **Audience** | Researchers checking or building on the evidence; Part A is readable without statistics. |
+| **Scope and caveats** | Last full revision 9 Oct 2026. Does not cover self-training (phase 3) or the literature-prompt re-checks (phase 4); those are in Docs/research_notes/. |
+| **Related** | STATUS.md, RESEARCH_DOSSIER_PAPERS.md |
+
 *Experiment D research dossier. Living document, last full revision 9 Oct 2026. Code map: `README.md`.*
 
 **How this document is organised.** Part A is written for anyone: an abstract, an introduction, the findings in plain words, and what happens next. No statistics background is needed. Part B is the full technical record for readers who want to check or build on the work: every number, every paper read, every mistake found, and the exact commands to reproduce it. Each Part A statement points to the Part B section that backs it up.

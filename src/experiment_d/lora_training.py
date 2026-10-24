@@ -27,24 +27,67 @@ def end_token_id(model, tokenizer) -> int:
     return stop_ids[0]
 
 
-def build_training_example(tokenizer, dataset_name: str, question: str, trace: str, end_token: int, max_length: int):
+def answer_end_ids(model, tokenizer) -> list:
+    """
+    The tokens that end an answer, as the base model ends its own: the chat end-of-turn token, the newline
+    after it, then the token that stops generation (Qwen3.5: <|im_end|> \n <|endoftext|>). Where the
+    tokenizer's eos is itself the stop token, that one token.
+
+    The older end_token_id gave only the stop token, so the first adapters learned to write <|endoftext|>
+    straight after the answer, a token the base model ranks around 100th there (TOKEN_SIGNALS_PLAN section 12).
+    """
+    stop = end_token_id(model, tokenizer)
+    turn_end = tokenizer.eos_token_id
+    if turn_end is None or turn_end == stop:
+        return [stop]
+    return [turn_end] + tokenizer("\n", add_special_tokens=False)["input_ids"] + [stop]
+
+
+END_FORMATS = ("chat", "legacy")
+
+
+def answer_end(model, tokenizer, end_format: str = "chat"):
+    """The `end_token` argument of build_training_example: a list of ids for 'chat', one id for 'legacy'."""
+    if end_format not in END_FORMATS:
+        raise ValueError(f"end_format must be one of {END_FORMATS}, got {end_format!r}")
+    return answer_end_ids(model, tokenizer) if end_format == "chat" else end_token_id(model, tokenizer)
+
+
+def build_example(tokenizer, prompt: str, target: str, end_token, max_length: int):
+    """
+    {input_ids, labels} for one prompt and the text the model should write after it, or None when it does
+    not fit in max_length tokens. The loss is taken only on the target and its end, so the model also
+    learns to stop.
+
+    end_token: a list of ids (answer_end_ids) ends the target as the base model does. Stored generations
+    keep the newline that followed the hidden end-of-turn token, so one trailing newline is dropped first
+    and comes back from the ids. A single id is the legacy format: the target as stored, then that id.
+    """
+    if isinstance(end_token, int):
+        end_ids = [end_token]
+    else:
+        end_ids = list(end_token)
+        target = target[:-1] if target.endswith("\n") else target
+    # The chat template already writes BOS; do not let the tokenizer add a second one.
+    prompt_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
+    target_ids = tokenizer(target, add_special_tokens=False)["input_ids"] + end_ids
+    if len(prompt_ids) + len(target_ids) > max_length:
+        return None
+    return {
+        "input_ids": prompt_ids + target_ids,
+        "labels": [IGNORE_INDEX] * len(prompt_ids) + target_ids,
+    }
+
+
+def build_training_example(tokenizer, dataset_name: str, question: str, trace: str, end_token, max_length: int):
     """
     {input_ids, labels} for one solution, or None when it does not fit in max_length tokens.
 
-    The prompt is exactly the one generation sees. The loss is taken only on the solution and the
-    end token after it, so the model also learns to stop. A solution that does not fit is skipped
-    whole: cutting it would teach unfinished answers.
+    The prompt is exactly the one generation sees. A solution that does not fit is skipped whole:
+    cutting it would teach unfinished answers. end_token: see build_example.
     """
-    prompt = build_prompt(tokenizer, get_messages(dataset_name, question))
-    # The chat template already writes BOS; do not let the tokenizer add a second one.
-    prompt_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
-    answer_ids = tokenizer(trace, add_special_tokens=False)["input_ids"] + [end_token]
-    if len(prompt_ids) + len(answer_ids) > max_length:
-        return None
-    return {
-        "input_ids": prompt_ids + answer_ids,
-        "labels": [IGNORE_INDEX] * len(prompt_ids) + answer_ids,
-    }
+    return build_example(tokenizer, build_prompt(tokenizer, get_messages(dataset_name, question)), trace,
+                         end_token, max_length)
 
 
 def attach_lora(model, rank: int = 16, alpha: int = 32, dropout: float = 0.05, seed: int = 0):
@@ -63,6 +106,50 @@ def attach_lora(model, rank: int = 16, alpha: int = 32, dropout: float = 0.05, s
     return model, sorted(model.peft_config["default"].target_modules)
 
 
+def enable_gradient_checkpointing(model):
+    """
+    Recompute each layer's activations in the backward pass instead of keeping them: much less memory for
+    about a third more time, and the same gradients (non-reentrant checkpointing restores the dropout RNG).
+    Call after attach_lora; train_lora already runs the forward pass with use_cache=False.
+    """
+    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+    model.enable_input_require_grads()      # the frozen embeddings give no grad, which checkpointing needs
+    return model
+
+
+LOSS_CHUNK_TOKENS = 256
+
+
+def _chunk_loss(head, hidden, targets):
+    """Summed next-token loss of a chunk, in float32; the head runs in the surrounding autocast dtype."""
+    return F.cross_entropy(head(hidden).float(), targets, reduction="sum")
+
+
+def chunked_answer_loss(model, input_ids, attention_mask, labels, chunk_tokens: int = LOSS_CHUNK_TOKENS):
+    """
+    The summed next-token loss on the answer tokens, without ever holding the logits of the whole sequence.
+
+    The model returns its final hidden states (and logits for one position only); the output head is then
+    applied to the answer positions a chunk at a time, and each chunk is recomputed in the backward pass
+    instead of keeping its logits. With a vocabulary of about 248k tokens those logits (and their float32
+    copy and gradients) are the largest tensors in training; the loss and gradients are the same.
+    """
+    from torch.utils.checkpoint import checkpoint
+
+    out = model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False,
+                output_hidden_states=True, logits_to_keep=1)
+    targets = labels[:, 1:]
+    scored = targets != IGNORE_INDEX
+    hidden = out.hidden_states[-1][:, :-1][scored]
+    targets = targets[scored]
+    head = model.get_output_embeddings()
+    total = hidden.new_zeros((), dtype=torch.float32)
+    for start in range(0, hidden.shape[0], chunk_tokens):
+        total = total + checkpoint(_chunk_loss, head, hidden[start:start + chunk_tokens],
+                                   targets[start:start + chunk_tokens], use_reentrant=False)
+    return total
+
+
 def _collate(examples: list, pad_token_id: int, device):
     longest = max(len(example["input_ids"]) for example in examples)
     input_ids = torch.full((len(examples), longest), pad_token_id, dtype=torch.long)
@@ -77,7 +164,8 @@ def _collate(examples: list, pad_token_id: int, device):
 
 
 def train_lora(model, tokenizer, examples: list, steps: int, batch_size: int = 8, micro_batch_size: int = 2,
-               learning_rate: float = 1e-4, seed: int = 0, compute_dtype=None, log_every: int = 10) -> list:
+               learning_rate: float = 1e-4, seed: int = 0, compute_dtype=None, log_every: int = 10,
+               chunked_loss: bool = False) -> list:
     """
     Run `steps` AdamW updates of the adapter and return the loss of every step.
 
@@ -86,6 +174,7 @@ def train_lora(model, tokenizer, examples: list, steps: int, batch_size: int = 8
     solutions at a time and the gradients are summed: the vocabulary is large, and the logits of a
     whole batch would not fit on a small GPU.
     compute_dtype: the base model's float dtype; on CUDA the forward pass runs under autocast in it.
+    chunked_loss: compute the loss with chunked_answer_loss (much less memory, same loss).
     """
     device = model_device(model)
     parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
@@ -111,12 +200,16 @@ def train_lora(model, tokenizer, examples: list, steps: int, batch_size: int = 8
             for start in range(0, len(batch), micro_batch_size):
                 chunk = [examples[i] for i in batch[start:start + micro_batch_size]]
                 input_ids, attention_mask, labels = _collate(chunk, tokenizer.pad_token_id, device)
-                with torch.autocast(device_type=device.type, dtype=compute_dtype, enabled=use_autocast):
-                    logits = model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False).logits
-                # Next-token loss on the solution tokens only, in float32 whatever the base precision.
-                targets = labels[:, 1:]
-                scored = targets != IGNORE_INDEX
-                loss = F.cross_entropy(logits[:, :-1][scored].float(), targets[scored], reduction="sum") / answer_tokens
+                if chunked_loss:
+                    with torch.autocast(device_type=device.type, dtype=compute_dtype, enabled=use_autocast):
+                        loss = chunked_answer_loss(model, input_ids, attention_mask, labels, LOSS_CHUNK_TOKENS) / answer_tokens
+                else:
+                    with torch.autocast(device_type=device.type, dtype=compute_dtype, enabled=use_autocast):
+                        logits = model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False).logits
+                    # Next-token loss on the solution tokens only, in float32 whatever the base precision.
+                    targets = labels[:, 1:]
+                    scored = targets != IGNORE_INDEX
+                    loss = F.cross_entropy(logits[:, :-1][scored].float(), targets[scored], reduction="sum") / answer_tokens
                 if not torch.isfinite(loss):
                     raise FloatingPointError(f"Training loss is {loss.item()} at step {step + 1}; stopping without saving an adapter.")
                 scaler.scale(loss).backward()

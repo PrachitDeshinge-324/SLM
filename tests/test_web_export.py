@@ -311,6 +311,9 @@ def test_self_training_experiment_rounds_labels_and_progress():
         assert r0["change"] is None and r0["unfinished_questions"] == 1
         assert abs(r0["single"] - 0.375) < 1e-9 and abs(r1["single"] - 0.625) < 1e-9
         assert r0["voted"] == 0.5 and r1["voted"] == 0.75
+        # t2 is confidently wrong in both rounds; t1 becomes confident and right in round 1
+        assert (r0["confident_accuracy"], r0["confident_wrong"]) == (0.5, 1)
+        assert abs(r1["confident_accuracy"] - 2 / 3) < 1e-4 and r1["confident_wrong"] == 1
         assert r1["gpu"] == "Tesla T4" and r1["batches"] == [128] and r1["adapter"] is True
         change = r1["change"]
         assert abs(change["single"]["mean"] - 0.25) < 1e-9 and abs(change["cutoff"]["mean"] + 0.25) < 1e-9

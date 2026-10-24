@@ -286,9 +286,23 @@ def main():
     dataset_names = ["gsm8k", "cqa"] if args.dataset == "both" else [name.strip() for name in args.dataset.split(",")]
     datasets_to_run = [(name, load_benchmark(name)) for name in dataset_names]
 
+    # Pre-check if all datasets are already complete before loading the model
+    remaining_datasets = []
+    for dataset_name, questions in datasets_to_run:
+        target_len = args.limit if args.limit > 0 else len(questions)
+        output_file = str(generator_run_path(args.results_dir, args.model, args.precision, dataset_name, args.n_samples))
+        _, processed_ids = read_existing_run(output_file)
+        if len(processed_ids) < target_len:
+            remaining_datasets.append((dataset_name, questions))
+        else:
+            print(f"Starting {dataset_name}. Found {len(processed_ids)} already processed items. Generation complete; skipping model loading.")
+
+    if not remaining_datasets:
+        return
+
     model, tokenizer = load_model_and_tokenizer(args.model, args.precision, adapter_path=args.adapter)
 
-    for dataset_name, questions in datasets_to_run:
+    for dataset_name, questions in remaining_datasets:
         run_dataset(args, dataset_name, questions, model, tokenizer)
 
 

@@ -1,6 +1,32 @@
 # Project status, issue register and next steps
 
+| | |
+|---|---|
+| **Purpose** | Current state of the project: what works, what fails, open issues, next steps, and which document is authoritative for what. |
+| **Audience** | Anyone new to the project, or returning to it. |
+| **Scope and caveats** | Summary only; evidence lives in the documents listed in section 7. |
+| **Related** | README.md, RESEARCH_DOSSIER.md, Docs/research_notes/ |
+
 *Single entry point for "where are we". Written 17 Oct 2026 from the repository, `results/` and the documents listed in section 7; it adds no new measurements. Tags: **[Data]** a number in `results/` or a saved analysis output; **[Lit]** from a paper as summarised in our review documents (not re-checked here); **[Impl]** a fact about our code; **[Int]** interpretation; **[Hyp]** untested. Small cells (100-200 questions, one seed) cannot carry broad claims. Course-paper numbers come from the 100-question analysis (`analysis/paper_100q_2026-10-13/`), not from the full-set dossier tables.*
+
+## The story in one page
+
+**What we did.** We asked whether shrinking a small language model to 8 or 4-bit weights breaks its ability to check and improve its own answers. We ran six models on GSM8K (some also on MATH-500 and SVAMP), 8 samples per question, at 16, 8 and 4-bit. We measured three things: how often the samples agree (self-consistency), whether the model can judge its own solutions (self-verification), and whether training on its own majority votes helps (self-training, Qwen3.5-0.8B only).
+
+**What we found** (details and tags in sections 2 and 5).
+1. *Quantization hurts the single answer, not the vote's trustworthiness.* At 4-bit, accuracy per sample and the number of confident labels fall in all 10 model-dataset cells; when samples do agree, they are as often right as before. Majority voting hides about 1.4 points of the damage. 8-bit is indistinguishable from noise. [Data]
+2. *The drop in agreement estimates the drop in accuracy without labels* (0.85 points error on held-out models). [Data]
+3. *The model's own verifier adds almost nothing.* The one-line verifier is near chance on four of six models and adds nothing on top of the vote. [Data]
+4. *Self-training depends on precision.* Training on votes helped the 4-bit model (+6.4 points per sample, one seed, 200 questions) but not the 16-bit one, where the gain was only "finishing more often". [Data; mechanism is a hypothesis]
+
+**Flaws, in order of importance.**
+- Our first results were wrong: the saved CSVs of 4 Oct came from stale scoring code and some cells compared different prompts. They were re-scored and must not be quoted. [Confirmed]
+- The self-training evidence is one seed on 200 questions, and the loop corrupts its own labels over rounds. [Confirmed]
+- The DPO run produced runaway generation and we do not know why. [Unresolved]
+- Every adapter was trained with the wrong end token (`<|endoftext|>` instead of `<|im_end|>`); the effect is unmeasured, so the self-training results may be partly an artifact. [Fact confirmed, effect unknown]
+- All claims rest on one quantizer, a 512-token cap and one prompt style; accuracy-under-quantization itself is already published. [Known limits]
+
+**What we are doing now.** The mentor paused self-training on 16 Oct. We are re-checking the generator and verifier with prompts from the literature to see whether the weak verifier result was our prompt's fault: a critic-style verifier (runs partial), token-level confidence signals (data collected, not analysed), and a paper-by-paper comparison with a view to reproducing the Sharpening paper. Next steps with success criteria are in section 6.
 
 ## 1. The problem
 

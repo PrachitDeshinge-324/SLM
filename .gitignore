@@ -54,6 +54,7 @@ results/*.jpg
 # IDE settings
 .vscode/
 .idea/
+.claude/
 *.html
 *.pdf
 *.jsonl
@@ -80,10 +81,9 @@ archive/
 results/
 # Keep the code map and the research record tracked (the 3 Oct audit they replace is in archive/)
 !/README.md
-!/RESEARCH_DOSSIER.md
-!/RESEARCH_DOSSIER_PAPERS.md
 !/STATUS.md
 
 # Regenerable analysis cache
 analysis/**/cache.pkl
 LLM_Course_Project_Paper_Template/*
+analysis/*

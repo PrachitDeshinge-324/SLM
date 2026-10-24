@@ -63,7 +63,9 @@
         var td = el('td', 'num');
         if (!interval) { td.textContent = '–'; td.className += ' muted'; return td; }
         var fmt = o.format || points;
-        td.textContent = fmt(interval.mean) + ' [' + fmt(interval.lo) + ', ' + fmt(interval.hi) + ']';
+        /* the interval sits on its own small line under the mean, which keeps change columns narrow */
+        td.textContent = fmt(interval.mean);
+        td.appendChild(el('span', 'ci', '[' + fmt(interval.lo) + ', ' + fmt(interval.hi) + ']'));
         var s = side(interval);
         if (s !== 0) {
             var better = (o.goodWhen === 'down') ? s < 0 : s > 0;
@@ -83,7 +85,15 @@
     function headRow(columns) {
         var tr = el('tr');
         columns.forEach(function (c) {
-            var th = el('th', c.num ? 'num' : null, c.label);
+            /* the label wraps inside a narrow box so a long heading does not widen a column of short numbers;
+               its last word and the arrow stay together on one line */
+            var th = el('th', c.num ? 'num' : null);
+            var box = el('span', 'th-label');
+            var words = String(c.label).split(' ');
+            var tail = el('span', 'th-tail', words.pop());
+            if (words.length) box.appendChild(document.createTextNode(words.join(' ') + ' '));
+            box.appendChild(tail);
+            th.appendChild(box);
             var hint = null;
             if (c.better) {
                 /* a column's `better` is 'up' (higher is better) or 'down' (lower is better); none means neither */
@@ -92,7 +102,7 @@
                 var mark = el('span', 'better-mark', up ? '↑' : '↓');
                 mark.setAttribute('role', 'img');
                 mark.setAttribute('aria-label', hint.slice(0, -1).toLowerCase());
-                th.appendChild(mark);
+                tail.appendChild(mark);
             }
             if (c.title || hint) th.title = [c.title, hint].filter(Boolean).join(' ');
             tr.appendChild(th);
@@ -119,7 +129,7 @@
 
     /* the table sits inside the same scrolling wrapper the shell gives hand-written tables */
     function wrapped(t) {
-        var w = el('div', 'table-wrap');
+        var w = el('div', 'table-wrap table-scroll');
         w.appendChild(t);
         return w;
     }
