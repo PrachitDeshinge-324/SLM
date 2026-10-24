@@ -30,7 +30,7 @@ from transformers import set_seed as hf_set_seed
 from src.experiment_d.answer_extraction import get_extractor
 from src.experiment_d.benchmarks import load_benchmark
 from src.experiment_d.model_loading import PRECISIONS, load_model_and_tokenizer, model_device
-from src.experiment_d.prompts import build_prompt, get_messages
+from src.experiment_d.prompts import GSM8K_PROMPT_VARIANTS, build_prompt, get_messages
 from src.experiment_d.run_files import adapter_fingerprint, generator_run_path
 from src.experiment_d.sampling import sample_responses
 from src.experiment_d.self_consistency import summarize_votes
@@ -41,11 +41,13 @@ SCIENTIFIC_SETTINGS = [
     "model", "precision", "dataset", "n_samples",
     "temperature", "top_k", "top_p", "seed",
     "repetition_penalty", "dataset_fingerprint", "max_new_tokens", "prompt_sha256",
-    "adapter_sha256",
+    "adapter_sha256", "prompt_variant",
 ]
 # Absent from headers written before the setting existed, where the absence has a known meaning
 # (no adapter = the untrained model). These are compared even when the old header lacks them.
 SETTINGS_ABSENT_MEANS_NONE = {"adapter_sha256"}
+# Absent from older headers, where the absence means the default prompt.
+SETTING_DEFAULTS = {"prompt_variant": "default"}
 
 
 def parse_args():
@@ -64,6 +66,8 @@ def parse_args():
     parser.add_argument("--results_dir", "--output_dir", dest="results_dir", type=str, default="results", help="Root directory of the run files")
     parser.add_argument("--max_new_tokens", type=int, default=2048, help="Max new tokens (default 2048, adjust if needed)")
     parser.add_argument("--adapter", type=str, default=None, help="Folder of a LoRA adapter to apply on top of the model (self-training rounds)")
+    parser.add_argument("--prompt_variant", type=str, choices=sorted(GSM8K_PROMPT_VARIANTS), default="default",
+                        help="GSM8K only: which prompt to answer with (multi-prompt test); write each variant to its own --results_dir")
 
     args = parser.parse_args()
     if args.n_samples < 1 or args.batch_size < 1:
@@ -127,6 +131,7 @@ def build_run_config(args, dataset_name: str, questions: list, model, tokenizer)
         "repetition_penalty": args.repetition_penalty,
         "adapter": args.adapter,
         "adapter_sha256": adapter_fingerprint(args.adapter) if args.adapter else None,
+        "prompt_variant": args.prompt_variant,
         # True for an unlabelled pool: the run file then holds no reference answers.
         "answers_hidden": any(item['ground_truth'] is None for item in questions),
 
@@ -134,7 +139,7 @@ def build_run_config(args, dataset_name: str, questions: list, model, tokenizer)
         "dataset_fingerprint": dataset_fingerprint(questions),
         "model_revision": getattr(model.config, "_commit_hash", None),
         "prompt_sha256": hashlib.sha256(build_prompt(
-            tokenizer, get_messages(dataset_name, "PROBE QUESTION", probe_choices)
+            tokenizer, get_messages(dataset_name, "PROBE QUESTION", probe_choices, args.prompt_variant)
         ).encode("utf-8")).hexdigest(),
         "model_dtype": str(getattr(model, "dtype", None)),
         "device": str(model_device(model)),
@@ -150,8 +155,9 @@ def check_resume_is_valid(output_file, existing_config, processed_ids, run_confi
         raise RuntimeError(f"Cannot safely resume {output_file}: existing records have no run_config header. Move the file or start a fresh output directory.")
     if existing_config is not None:
         mismatches = [key for key in SCIENTIFIC_SETTINGS
-                      if key in run_config and (key in existing_config or key in SETTINGS_ABSENT_MEANS_NONE)
-                      and existing_config.get(key) != run_config.get(key)]
+                      if key in run_config and (key in existing_config or key in SETTINGS_ABSENT_MEANS_NONE
+                                                or key in SETTING_DEFAULTS)
+                      and existing_config.get(key, SETTING_DEFAULTS.get(key)) != run_config.get(key)]
         if mismatches:
             raise RuntimeError(f"Cannot resume {output_file}: run settings differ for {', '.join(mismatches)}. Use a fresh output directory.")
         if existing_config.get("batch_size") != batch_size:
@@ -254,7 +260,7 @@ def run_dataset(args, dataset_name: str, questions: list, model, tokenizer):
             seed_everything(question_seed(args.seed, chunk[0]['qid']))
 
             prompts = [
-                build_prompt(tokenizer, get_messages(dataset_name, item['question'], item.get('choices')))
+                build_prompt(tokenizer, get_messages(dataset_name, item['question'], item.get('choices'), args.prompt_variant))
                 for item in chunk
             ]
             grouped_responses, tps, latency, grouped_lengths, used_batch_size = sample_with_oom_backoff(
