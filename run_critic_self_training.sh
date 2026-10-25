@@ -56,6 +56,7 @@ THRESHOLD=0.75
 VERDICTS=2
 CRITIC="critic_forced"
 CRITIC_TOKENS=704
+CHUNK_QUESTIONS=32
 MIN_VERDICT_RATE=0.85
 ARMS="vote critic critic_reason"
 STOP_AFTER_LABELS=0
@@ -83,6 +84,7 @@ while [[ "$#" -gt 0 ]]; do
         --threshold) THRESHOLD="$2"; shift ;;
         --verdicts) VERDICTS="$2"; shift ;;
         --critic_tokens) CRITIC_TOKENS="$2"; shift ;;
+        --chunk_questions) CHUNK_QUESTIONS="$2"; shift ;;
         --min_verdict_rate) MIN_VERDICT_RATE="$2"; shift ;;
         --arms) ARMS="$2"; shift ;;
         --stop_after_labels) STOP_AFTER_LABELS=1 ;;
@@ -187,11 +189,12 @@ critic_over_pool() {
   round_dir=$(round_dir_of "${exp}" "${rnd}")
   local sig_file="${round_dir}/${POOL_DATASET}/signals/${SAFE_MODEL}/signals_${ctag}_${SAFE_MODEL}_${PRECISION}_${POOL_DATASET}_n${N_SAMPLES}.jsonl"
 
-  # Fast cache check: if signals file exists and has >= POOL_LIMIT records
+  # Fast cache check: if signals file exists and has >= (POOL_LIMIT * N_SAMPLES) records
   if [ -f "${sig_file}" ]; then
     local lines
     lines=$(wc -l < "${sig_file}" 2>/dev/null || echo 0)
-    if [ "${lines}" -gt "${POOL_LIMIT}" ] && [ "${POOL_LIMIT}" -gt 0 ]; then
+    local expected=$(( POOL_LIMIT * N_SAMPLES ))
+    if [ "${lines}" -gt "${expected}" ] && [ "${POOL_LIMIT}" -gt 0 ]; then
       echo "  [Cached] Critic run (${ctag}) already complete over ${POOL_LIMIT} questions; skipping."
       return
     fi
@@ -203,7 +206,7 @@ critic_over_pool() {
     --dataset "${POOL_DATASET}" --n_samples "${N_SAMPLES}" --experiment "${exp}" --round "${rnd}" \
     --question_set first --questions "${POOL_LIMIT}" --critics "${CRITIC}" --verdicts "${VERDICTS}" \
     --max_new_tokens "${CRITIC_TOKENS}" --no_mc --no_token_signals --min_verdict_rate "${MIN_VERDICT_RATE}" \
-    --batch_size "${BATCH_SIZE}" "${judge_args[@]}"
+    --chunk_questions "${CHUNK_QUESTIONS}" --batch_size "${BATCH_SIZE}" "${judge_args[@]}"
 }
 
 train_round_adapter() {

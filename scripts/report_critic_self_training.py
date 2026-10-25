@@ -91,7 +91,7 @@ def label_section(args) -> list:
     records = read_question_records(pool_file)
     cells = critic_cells(signals_path(args.results_dir, args.model, args.precision, args.pool_dataset, args.n_samples,
                                       args.base, 0, tag=args.signals_tag), args.critic)
-    answers = load_gsm8k_train_answers()
+    answers = load_gsm8k_train_answers() if args.pool_dataset == "gsm8k_train" else {}
     vote_items = select_pseudo_labels(records, args.pool_dataset, args.threshold)
     critic_items = select_critic_labels(records, {k: c.get("forced_decision") is True for k, c in cells.items()},
                                         args.pool_dataset, args.threshold)
@@ -212,7 +212,7 @@ def pool_critic_file(args, experiment: str, round_index: int):
 
 def round_labels_section(args) -> list:
     """The labels every trained run learned from, re-made each round from the previous round's pool (drift)."""
-    answers = load_gsm8k_train_answers()
+    answers = load_gsm8k_train_answers() if args.pool_dataset == "gsm8k_train" else {}
     lines = ["run | learned from | rule | labelled questions | labels right | training solutions"]
     for arm_seed, round_index in trained_runs(args):
         experiment = args.base if round_index == 1 else f"{args.base}_{arm_seed}"
@@ -280,9 +280,12 @@ def print_eval_summary(args, experiment: str, round_index: int):
         p_single = column(prev_scored, prev_qids, "single").mean()
         p_voted = column(prev_scored, prev_qids, "voted").mean()
         p_cutoff = column(prev_scored, prev_qids, "cutoff").mean()
-        delta_prev_single = (single - p_single) * 100
-        delta_prev_voted = (voted - p_voted) * 100
-        delta_prev_cutoff = (cutoff - p_cutoff) * 100
+        p_curr_single = column(curr_scored, prev_qids, "single").mean()
+        p_curr_voted = column(curr_scored, prev_qids, "voted").mean()
+        p_curr_cutoff = column(curr_scored, prev_qids, "cutoff").mean()
+        delta_prev_single = (p_curr_single - p_single) * 100
+        delta_prev_voted = (p_curr_voted - p_voted) * 100
+        delta_prev_cutoff = (p_curr_cutoff - p_cutoff) * 100
 
     arm_name = experiment[len(args.base) + 1:] if experiment.startswith(f"{args.base}_") else experiment
 

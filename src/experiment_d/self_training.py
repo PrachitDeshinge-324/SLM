@@ -180,10 +180,12 @@ def select_critic_labels(records: list, verdicts: dict, dataset_name: str, thres
         if contested and not any(judged.get(i) for i, key in enumerate(keys) if key == label_key):
             continue
         label = next(extractor(s["response"]) for s, key in zip(samples, keys) if key == label_key)
-        seen = set()
+        seen, rejected_traces = set(), set()
         for index, (sample, key) in enumerate(zip(samples, keys)):
             trace = sample["response"]
-            if key != label_key or trace in seen or (index in judged and not judged[index]):
+            if index in judged and not judged[index]:
+                rejected_traces.add(trace)
+            if key != label_key or trace in seen or trace in rejected_traces:
                 continue
             seen.add(trace)
             selected.append({"qid": qid, "question": record["question"], "label": label,
@@ -216,7 +218,7 @@ def select_critiques(records: list, critic_rows: dict, labels: dict, dataset_nam
                 continue
             wanted = key == label_key
             for response, value in zip(cell.get("responses") or [], cell.get("values") or []):
-                if value is wanted and response:
+                if value is not None and value == wanted and response:
                     chosen.append({"qid": qid, "question": record["question"], "solution_index": index,
                                    "solution": record["raw_samples"][index]["response"],
                                    "critique": response, "verdict": wanted})

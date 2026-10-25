@@ -236,6 +236,11 @@ def test_critic_labels_recover_a_contested_question():
     verdicts[("q", 1)] = False
     traces = [item["trace"] for item in select_critic_labels([record], verdicts, "gsm8k_train", 0.75)]
     assert traces == ["a\n#### 5", "c\n#### 5", "d\n#### 5"]
+    # Duplicate of a rejected solution in unjudged samples must not leak into training text.
+    record_with_dup = _record("q", ["a\n#### 5", "b\n#### 5", "b\n#### 5", "d\n#### 5",
+                                    "e\n#### 9", "f\n#### 9", "g\n#### 9", "h\n#### 9"])
+    traces_dup = [item["trace"] for item in select_critic_labels([record_with_dup], verdicts, "gsm8k_train", 0.75)]
+    assert "b\n#### 5" not in traces_dup and traces_dup == ["a\n#### 5", "d\n#### 5"]
 
 
 def test_critic_labels_skip_ties_and_unapproved_labels():

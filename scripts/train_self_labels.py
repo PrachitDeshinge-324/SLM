@@ -194,6 +194,7 @@ def main():
     else:
         selected = select_pseudo_labels(records, args.dataset, args.threshold)
     labelled = sorted({item["qid"] for item in selected})
+    contested = []
     if args.labels == "critic":
         contested = sorted({item["qid"] for item in selected if item.get("contested")})
         print(f"Labelled by critic + vote (share >= {args.threshold}): {len(labelled)} questions "

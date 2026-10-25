@@ -23,6 +23,12 @@ two = "```python\ndef solve():\n    return 1\n```\nbetter:\n```python\ndef solve
 assert execute_response(two)["answer"] == "2"
 assert execute_response("Sure.\ndef solve():\n    a = 3\n    return a * 4")["answer"] == "12"      # unfenced
 assert execute_response("1. code:\n    def solve():\n        return 5\n")["answer"] == "5"          # indented
+script = "```python\neggs = 16\nleft = eggs - 3 - 4\n\n# earnings\nreturn left * 2\n```"                  # no def, top-level return
+assert execute_response(script)["answer"] == "18"
+assert execute_response("```python\nx = 3\nprint('step', x)\nprint(x * 2)\n```")["answer"] == "6"     # last print is the answer
+assert execute_response("```python\nfor i in range(2):\n    print(i)\n```")["status"] == "no_code"      # only an indented print
+assert extract_program("```python\nx = 3\n```") is None                                               # neither return nor print
+assert execute_response("```python\ndef helper():\n    return 1\n```")["status"] == "no_code"           # a nested return is not top-level
 
 # numbers come back in the prose extractor's spelling
 assert format_number(18.0) == "18" and format_number(17.9999999) == "18" and format_number(18.5) == "18.5"

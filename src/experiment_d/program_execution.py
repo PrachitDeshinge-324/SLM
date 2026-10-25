@@ -28,6 +28,8 @@ RESULT_MARK = "__PROGRAM_RESULT__"
 
 _FENCE = re.compile(r"```(?:python|py)?[ \t]*\n(.*?)```", re.S)
 _DEF_SOLVE = re.compile(r"^[ \t]*def solve\s*\(", re.M)
+_TOP_RETURN = re.compile(r"^return\b", re.M)
+_TOP_PRINT = re.compile(r"^print\((.*)\)[ \t]*$", re.M)
 
 # Runs inside the subprocess: limits, guarded builtins, then solve(); prints one marked JSON line.
 _RUNNER = r'''
@@ -91,14 +93,26 @@ report(status="ok", value=value if isinstance(value, float) else str(value))
 
 def extract_program(text: str):
     """The code to run: the last fenced block that defines solve(), else everything from 'def solve' on
-    (an unfenced or cut-off answer), dedented. None when the response defines no solve()."""
-    blocks = [block for block in _FENCE.findall(text) if _DEF_SOLVE.search(block)]
+    (an unfenced or cut-off answer), dedented. A fenced block that skips the function (a script form
+    Qwen3.5-2B 4-bit writes for about 13% of answers) is wrapped in solve() when it ends in a top-level
+    `return`, or in a top-level print(x), which then becomes `return x`. None when the response has none."""
+    fenced = _FENCE.findall(text)
+    blocks = [block for block in fenced if _DEF_SOLVE.search(block)]
     if blocks:
         return textwrap.dedent(blocks[-1])
     match = _DEF_SOLVE.search(text)
-    if match is None:
-        return None
-    return textwrap.dedent(text[match.start():].split("```")[0])
+    if match is not None:
+        return textwrap.dedent(text[match.start():].split("```")[0])
+    scripts = [textwrap.dedent(block) for block in fenced if _TOP_RETURN.search(textwrap.dedent(block))]
+    if not scripts:  # a script that ends by printing its result: the last top-level print(x) becomes return x
+        for block in map(textwrap.dedent, fenced):
+            prints = list(_TOP_PRINT.finditer(block))
+            if prints:
+                last = prints[-1]
+                scripts.append(block[:last.start()] + "return " + last.group(1) + block[last.end():])
+    if scripts:
+        return "def solve():\n" + textwrap.indent(scripts[-1], "    ")
+    return None
 
 
 def format_number(value) -> str:
