@@ -144,7 +144,14 @@ def load_critic(args, pool_file, records):
     path = signals_path(args.results_dir, args.model, args.precision, args.dataset, args.n_samples,
                         args.pool_experiment or args.experiment, args.round - 1, tag=args.signals_tag)
     if not path.exists():
-        raise FileNotFoundError(f"No critic run over the pool at {path}. Run scripts/run_signals.py on it first.")
+        import re
+        sanitized_tag = re.sub(r"[^A-Za-z0-9_-]", "_", args.signals_tag) if args.signals_tag else args.signals_tag
+        alt_path = signals_path(args.results_dir, args.model, args.precision, args.dataset, args.n_samples,
+                                args.pool_experiment or args.experiment, args.round - 1, tag=sanitized_tag)
+        if alt_path.exists():
+            path = alt_path
+        else:
+            raise FileNotFoundError(f"No critic run over the pool at {path}. Run scripts/run_signals.py on it first.")
     header, cells, seen = {}, {}, set()
     for line in path.open():
         if not line.strip():

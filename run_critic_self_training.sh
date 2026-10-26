@@ -150,7 +150,9 @@ critic_tag() {
   if [ "$rnd" -eq 0 ] || [ "${ROUND_CRITIC}" = "base" ]; then
     echo "${TAG}"
   else
-    echo "${TAG}_by_${exp}_r${rnd}"
+    local safe_exp
+    safe_exp="$(echo "${exp}" | sed 's/[^A-Za-z0-9_-]/_/g')"
+    echo "${TAG}_by_${safe_exp}_r${rnd}"
   fi
 }
 
