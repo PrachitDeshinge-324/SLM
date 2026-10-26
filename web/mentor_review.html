@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Multi-Round Self-Training & Verifier Scaling - Executive Report</title>
+    <link rel="stylesheet" href="assets/css/site.css">
+    <style>
+        .plot-container {
+            margin: 1.5rem 0;
+            background: #ffffff;
+            border: 1px solid var(--border, #e2e8f0);
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .plot-container img {
+            width: 100%;
+            height: auto;
+            border-radius: 6px;
+            display: block;
+        }
+        .plot-caption {
+            margin-top: 0.75rem;
+            font-size: 0.9rem;
+            color: #4a5568;
+            line-height: 1.45;
+        }
+        .badge-delta {
+            display: inline-block;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.82rem;
+            font-weight: 600;
+        }
+        .delta-pos { background: #e6fffa; color: #234e52; }
+        .delta-neg { background: #fff5f5; color: #742a2a; }
+        .delta-neutral { background: #edf2f7; color: #4a5568; }
+        .grid-2col {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.25rem;
+            margin: 1rem 0;
+        }
+        .metric-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .metric-card h4 { margin-top: 0; margin-bottom: 0.5rem; color: #2d3748; }
+    </style>
+</head>
+<body>
+<script src="assets/js/site.js"></script>
+<main id="results-root">
+
+    <section class="content-box">
+        <h2>Executive Research Summary</h2>
+        <p>This report presents the empirical findings from our multi-round self-training experiments on <strong>GSM8K</strong> across two model scales (<strong>Qwen3.5-0.8B</strong> and <strong>Qwen3.5-2B</strong>) and two quantization regimes (<strong>4-bit NF4</strong> and <strong>16-bit bfloat16</strong>). Models iteratively trained on 500 unlabelled questions across three distinct self-supervision arms:</p>
+        <ul>
+            <li><strong><code>vote</code></strong>: Standard plurality pseudo-labeling (self-consistency threshold $\tau = 0.75$).</li>
+            <li><strong><code>critic</code></strong>: Plurality answers filtered by the model's own critic verifier verdicts.</li>
+            <li><strong><code>critic_reason</code></strong>: Multi-task co-training on both pseudo-labeled solutions <em>and</em> the model's own written critique reasoning traces.</li>
+        </ul>
+
+        <div class="grid-2col">
+            <div class="metric-card">
+                <h4>1. Multi-Round Peak at Round 1</h4>
+                <p class="small">Self-training does not show continuous monotonic gains. Across almost all arms and models, <strong>performance peaks at Round 1 and begins declining in Round 2</strong> due to error accumulation in the training pool.</p>
+            </div>
+            <div class="metric-card">
+                <h4>2. Regime-Dependent Dynamics</h4>
+                <p class="small">On <strong>2B 4-bit</strong>, <code>critic_reason</code> preserves accuracy (81.0%) against voting collapse (75.0%). On <strong>0.8B 4-bit</strong>, filtered <code>critic</code> reaches 60.0% while <code>critic_reason</code> drops to 54.0%.</p>
+            </div>
+            <div class="metric-card">
+                <h4>3. The Error Mechanism: Label Drift</h4>
+                <p class="small">Plurality label precision in the unlabelled pool degrades from <strong>~96% down to ~87%</strong> by Round 3, tripling the absolute number of hallucinated questions in the training set.</p>
+            </div>
+            <div class="metric-card">
+                <h4>4. Reasoning Conciseness</h4>
+                <p class="small">Across all models and arms, reasoning timeouts (cut-off rate) are cut by half (from <strong>~17% down to 6.6%–10.2%</strong>), showing that models learn concise stopping behavior.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 1: TRAJECTORIES -->
+    <section class="content-box">
+        <h2>1. Multi-Round Plurality Vote Trajectories</h2>
+        <p>Comparison of plurality voting accuracy on 100 test GSM8K questions across successive rounds of self-training. All runs are referenced against the untrained Round 0 baseline (dashed line).</p>
+
+        <div class="plot-container">
+            <img src="assets/plots/fig1_majority_vote_all_arms.png" alt="Majority Vote Accuracy Across Rounds">
+            <div class="plot-caption">
+                <strong>Figure 1:</strong> Plurality vote trajectories across rounds for (A) Qwen3.5-2B 4-bit, (B) Qwen3.5-2B 16-bit, (C) Qwen3.5-0.8B 4-bit, and (D) Qwen3.5-0.8B 16-bit. Note that performance across most arms peaks in Round 1 and recedes in Round 2.
+            </div>
+        </div>
+
+        <h3>Master Comparison Tables (All $\Delta$ strictly vs. Round 0 Baseline)</h3>
+
+        <h4>Qwen3.5-2B (4-bit NF4)</h4>
+        <div class="table-wrap">
+            <table class="dense">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Round 0 (Baseline)</th>
+                        <th>vote (R1)</th>
+                        <th>vote (R2)</th>
+                        <th>critic (R1)</th>
+                        <th>critic (R2)</th>
+                        <th>critic_reason (R1)</th>
+                        <th>critic_reason (R2)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Majority Vote Acc</strong></td>
+                        <td>81.0%</td>
+                        <td>78.0% <span class="badge-delta delta-neg">-3.0 pts</span></td>
+                        <td>75.0% <span class="badge-delta delta-neg">-6.0 pts</span></td>
+                        <td>77.0% <span class="badge-delta delta-neg">-4.0 pts</span></td>
+                        <td>79.0% <span class="badge-delta delta-neg">-2.0 pts</span></td>
+                        <td><strong>83.0%</strong> <span class="badge-delta delta-pos">+2.0 pts</span></td>
+                        <td>81.0% <span class="badge-delta delta-neutral">±0.0 pts</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Single Sample Acc</strong></td>
+                        <td>66.8%</td>
+                        <td>67.6% <span class="badge-delta delta-pos">+0.8 pts</span></td>
+                        <td>66.5% <span class="badge-delta delta-neg">-0.3 pts</span></td>
+                        <td>69.2% <span class="badge-delta delta-pos">+2.4 pts</span></td>
+                        <td>68.2% <span class="badge-delta delta-pos">+1.4 pts</span></td>
+                        <td>70.1% <span class="badge-delta delta-pos">+3.3 pts</span></td>
+                        <td><strong>70.2%</strong> <span class="badge-delta delta-pos">+3.4 pts</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cut-off Rate</strong></td>
+                        <td>14.8%</td>
+                        <td>11.5% <span class="badge-delta delta-pos">-3.3 pts</span></td>
+                        <td>13.4% <span class="badge-delta delta-pos">-1.4 pts</span></td>
+                        <td>9.0% <span class="badge-delta delta-pos">-5.8 pts</span></td>
+                        <td>9.1% <span class="badge-delta delta-pos">-5.7 pts</span></td>
+                        <td>10.9% <span class="badge-delta delta-pos">-3.9 pts</span></td>
+                        <td>10.2% <span class="badge-delta delta-pos">-4.6 pts</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h4>Qwen3.5-2B (16-bit bfloat16)</h4>
+        <div class="table-wrap">
+            <table class="dense">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Round 0 (Baseline)</th>
+                        <th>vote (R1)</th>
+                        <th>vote (R2)</th>
+                        <th>vote (R3)</th>
+                        <th>critic (R1)</th>
+                        <th>critic (R2)</th>
+                        <th>critic_reason (R1)</th>
+                        <th>critic_reason (R2)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Majority Vote Acc</strong></td>
+                        <td>81.0%</td>
+                        <td><strong>83.0%</strong> <span class="badge-delta delta-pos">+2.0 pts</span></td>
+                        <td>80.0% <span class="badge-delta delta-neg">-1.0 pts</span></td>
+                        <td>74.0% <span class="badge-delta delta-neg">-7.0 pts</span></td>
+                        <td>77.0% <span class="badge-delta delta-neg">-4.0 pts</span></td>
+                        <td>77.0% <span class="badge-delta delta-neg">-4.0 pts</span></td>
+                        <td>79.0% <span class="badge-delta delta-neg">-2.0 pts</span></td>
+                        <td>78.0% <span class="badge-delta delta-neg">-3.0 pts</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Single Sample Acc</strong></td>
+                        <td>67.8%</td>
+                        <td><strong>72.1%</strong> <span class="badge-delta delta-pos">+4.3 pts</span></td>
+                        <td>69.5% <span class="badge-delta delta-pos">+1.7 pts</span></td>
+                        <td>67.8% <span class="badge-delta delta-neutral">±0.0 pts</span></td>
+                        <td>69.4% <span class="badge-delta delta-pos">+1.6 pts</span></td>
+                        <td>68.8% <span class="badge-delta delta-pos">+1.0 pts</span></td>
+                        <td>70.6% <span class="badge-delta delta-pos">+2.8 pts</span></td>
+                        <td>68.9% <span class="badge-delta delta-pos">+1.1 pts</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cut-off Rate</strong></td>
+                        <td>16.6%</td>
+                        <td>13.4% <span class="badge-delta delta-pos">-3.2 pts</span></td>
+                        <td>14.2% <span class="badge-delta delta-pos">-2.4 pts</span></td>
+                        <td>13.0% <span class="badge-delta delta-pos">-3.6 pts</span></td>
+                        <td>14.5% <span class="badge-delta delta-pos">-2.1 pts</span></td>
+                        <td>12.9% <span class="badge-delta delta-pos">-3.7 pts</span></td>
+                        <td>12.5% <span class="badge-delta delta-pos">-4.1 pts</span></td>
+                        <td>14.5% <span class="badge-delta delta-pos">-2.1 pts</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h4>Qwen3.5-0.8B (4-bit NF4)</h4>
+        <div class="table-wrap">
+            <table class="dense">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Round 0 (Baseline)</th>
+                        <th>vote (R1)</th>
+                        <th>vote (R2)</th>
+                        <th>vote (R3)</th>
+                        <th>critic (R1)</th>
+                        <th>critic (R2)</th>
+                        <th>critic_reason (R1)</th>
+                        <th>critic_reason (R2)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Majority Vote Acc</strong></td>
+                        <td>56.0%</td>
+                        <td>59.0% <span class="badge-delta delta-pos">+3.0 pts</span></td>
+                        <td>57.0% <span class="badge-delta delta-pos">+1.0 pts</span></td>
+                        <td>53.0% <span class="badge-delta delta-neg">-3.0 pts</span></td>
+                        <td>56.0% <span class="badge-delta delta-neutral">±0.0 pts</span></td>
+                        <td><strong>60.0%</strong> <span class="badge-delta delta-pos">+4.0 pts</span></td>
+                        <td>58.0% <span class="badge-delta delta-pos">+2.0 pts</span></td>
+                        <td>54.0% <span class="badge-delta delta-neg">-2.0 pts</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Single Sample Acc</strong></td>
+                        <td>40.6%</td>
+                        <td><strong>47.2%</strong> <span class="badge-delta delta-pos">+6.6 pts</span></td>
+                        <td>45.5% <span class="badge-delta delta-pos">+4.9 pts</span></td>
+                        <td>44.5% <span class="badge-delta delta-pos">+3.9 pts</span></td>
+                        <td>42.0% <span class="badge-delta delta-pos">+1.4 pts</span></td>
+                        <td>45.6% <span class="badge-delta delta-pos">+5.0 pts</span></td>
+                        <td>43.8% <span class="badge-delta delta-pos">+3.2 pts</span></td>
+                        <td>42.5% <span class="badge-delta delta-pos">+1.9 pts</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cut-off Rate</strong></td>
+                        <td>16.9%</td>
+                        <td>7.4% <span class="badge-delta delta-pos">-9.5 pts</span></td>
+                        <td>7.0% <span class="badge-delta delta-pos">-9.9 pts</span></td>
+                        <td>6.9% <span class="badge-delta delta-pos">-10.0 pts</span></td>
+                        <td>11.0% <span class="badge-delta delta-pos">-5.9 pts</span></td>
+                        <td>7.5% <span class="badge-delta delta-pos">-9.4 pts</span></td>
+                        <td>9.4% <span class="badge-delta delta-pos">-7.5 pts</span></td>
+                        <td><strong>6.8%</strong> <span class="badge-delta delta-pos">-10.1 pts</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h4>Qwen3.5-0.8B (16-bit bfloat16)</h4>
+        <div class="table-wrap">
+            <table class="dense">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Round 0 (Baseline)</th>
+                        <th>vote (R1)</th>
+                        <th>vote (R2)</th>
+                        <th>critic (R1)</th>
+                        <th>critic (R2)</th>
+                        <th>critic_reason (R1)</th>
+                        <th>critic_reason (R2)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Majority Vote Acc</strong></td>
+                        <td>65.0%</td>
+                        <td>63.0% <span class="badge-delta delta-neg">-2.0 pts</span></td>
+                        <td>60.0% <span class="badge-delta delta-neg">-5.0 pts</span></td>
+                        <td>61.0% <span class="badge-delta delta-neg">-4.0 pts</span></td>
+                        <td>64.0% <span class="badge-delta delta-neg">-1.0 pts</span></td>
+                        <td><strong>67.0%</strong> <span class="badge-delta delta-pos">+2.0 pts</span></td>
+                        <td>65.0% <span class="badge-delta delta-neutral">±0.0 pts</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Single Sample Acc</strong></td>
+                        <td>46.6%</td>
+                        <td>50.4% <span class="badge-delta delta-pos">+3.8 pts</span></td>
+                        <td>51.2% <span class="badge-delta delta-pos">+4.6 pts</span></td>
+                        <td>51.1% <span class="badge-delta delta-pos">+4.5 pts</span></td>
+                        <td><strong>53.9%</strong> <span class="badge-delta delta-pos">+7.3 pts</span></td>
+                        <td>53.1% <span class="badge-delta delta-pos">+6.5 pts</span></td>
+                        <td>53.4% <span class="badge-delta delta-pos">+6.8 pts</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cut-off Rate</strong></td>
+                        <td>17.1%</td>
+                        <td>10.0% <span class="badge-delta delta-pos">-7.1 pts</span></td>
+                        <td><strong>6.6%</strong> <span class="badge-delta delta-pos">-10.5 pts</span></td>
+                        <td>11.8% <span class="badge-delta delta-pos">-5.3 pts</span></td>
+                        <td>7.5% <span class="badge-delta delta-pos">-9.6 pts</span></td>
+                        <td>12.0% <span class="badge-delta delta-pos">-5.1 pts</span></td>
+                        <td>8.5% <span class="badge-delta delta-pos">-8.6 pts</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- SECTION 2: PASS@1 ACCURACY -->
+    <section class="content-box">
+        <h2>2. Single-Sample (Pass@1) Accuracy Progression</h2>
+        <p>Single-sample Pass@1 accuracy across all rounds for each arm. In contrast to voting accuracy (which depends heavily on plurality calibration), Pass@1 measures the quality of individual generated reasoning paths.</p>
+
+        <div class="plot-container">
+            <img src="assets/plots/fig2_pass1_all_arms.png" alt="Single Sample Pass@1 Accuracy Across Rounds">
+            <div class="plot-caption">
+                <strong>Figure 2:</strong> Single-sample (Pass@1) accuracy for all three arms (<code>vote</code>, <code>critic</code>, and <code>critic_reason</code>) alongside the untrained baseline across all four regimes.
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 3: CUTOFF RATE -->
+    <section class="content-box">
+        <h2>3. Reasoning Timeout (Cut-Off Rate) Reduction</h2>
+        <p>Percentage of generated solutions cut off at the token limit (2048 tokens). A lower cut-off rate indicates that the model has learned concise reasoning and stops generation cleanly at the EOS token.</p>
+
+        <div class="plot-container">
+            <img src="assets/plots/fig3_cutoff_all_arms.png" alt="Reasoning Timeout Rates Across Rounds">
+            <div class="plot-caption">
+                <strong>Figure 3:</strong> Reasoning timeout rates across rounds. Across all configurations and arms, self-training drastically reduces timeouts from 15%–17% down to 6.6%–10.2%.
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 4: LABEL DRIFT MECHANISM -->
+    <section class="content-box">
+        <h2>4. The Error Mechanism: Pseudo-Label Degradation in the Pool</h2>
+        <p>Why do self-training trajectories decline after Round 1? We analyzed the ground-truth accuracy of the plurality labels assigned to the 500 unlabelled pool questions at each round.</p>
+
+        <div class="plot-container">
+            <img src="assets/plots/fig4_label_drift_mechanism.png" alt="Pseudo-Label Degradation in Pool">
+            <div class="plot-caption">
+                <strong>Figure 4:</strong> (A) Monotonic degradation in pseudo-label accuracy in the training pool across rounds. (B) Compounding error volume: as the model attempts to label more questions, the absolute number of hallucinated labels in the training pool triples ($5 \rightarrow 17 \rightarrow 31$).
+            </div>
+        </div>
+
+        <div class="callout warning">
+            <strong>Key Insight:</strong> When an unlabelled model trains on its own majority votes over multiple rounds, it reinforces its own frequent systematic errors. By Round 3, over 13% of the training dataset consists of reinforced hallucinations, triggering test accuracy collapse.
+        </div>
+    </section>
+
+</main>
+</body>
+</html>

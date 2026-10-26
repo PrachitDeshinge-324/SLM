@@ -96,6 +96,11 @@
           summary: 'Label supply and accuracy by precision, the vote against the verifier, and SFT and DPO self-training at 16-bit and 4-bit.',
           scripts: ['assets/data/results.js', 'assets/js/results.js', 'assets/js/labels-training.js'] },
 
+        { id: 'mentor', file: 'mentor_review.html', nav: 'Multi-Round Evaluation', group: 'results', libs: ['mathjax'], toc: true,
+          title: 'Multi-Round Self-Training & Verifier Scaling',
+          subtitle: 'Empirical results across Qwen3.5-0.8B and 2B: majority voting collapse, critic regularization, and pseudo-label drift.',
+          summary: 'Executive presentation for mentor: 4 clean multi-round figures, master scorecards compared to baseline, and root-cause analysis.' },
+
         { id: 'audit', file: 'audit.html', nav: 'Audit', group: 'direction', toc: true, local: true, notice: 'local-only',
           title: 'Audit & New Direction',
           subtitle: 'What was wrong, what the data showed at the time, and the one idea worth a paper.',
