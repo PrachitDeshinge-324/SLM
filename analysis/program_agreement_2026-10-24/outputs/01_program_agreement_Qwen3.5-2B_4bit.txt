@@ -1,7 +1,24 @@
 missing prose16 run: results/gsm8k/generator/Qwen_Qwen3.5-2B/Qwen_Qwen3.5-2B_4bit_gsm8k_n16.jsonl
 Qwen/Qwen3.5-2B 4bit: 200 shared questions (prose 200, prose16 0, program 200)
-executing 1570 programs ...
 
-V  program status: ok 0.663, no_code 0.052, syntax_error 0.041, runtime_error 0.091, timeout 0.000, non_numeric 0.152
-   program cut-off rate 0.277; validity threshold ok >= 0.7: INVALID: stop here, fix the prompt or extraction
-   per-sample accuracy: prose 0.641, program 0.435 (failures count as wrong; 0.656 among working programs)
+V  program status: ok 0.799, no_code 0.018, syntax_error 0.022, runtime_error 0.080, timeout 0.001, non_numeric 0.079
+   program cut-off rate 0.093; validity threshold ok >= 0.7: VALID
+   per-sample accuracy: prose 0.641, program 0.502 (failures count as wrong; 0.629 among working programs)
+
+P/S selection accuracy on 200 questions (oracle over the 16 answers 0.950)
+  prose vote (8)                               0.770
+  P cross-modal vote (8 prose + 8 program)     0.780 | vs prose 8: +1.0 [-2.5, +4.5]
+  S1 agreement-weighted prose vote             0.795 | vs prose 8: +2.5 [-1.0, +6.0]
+  S2 program-only vote (8)                     0.690 | vs prose 8: -8.0 [-14.5, -1.5]
+  S3 prose vote, programs break ties           0.795 | vs prose 8: +2.5 [+0.5, +5.0]
+  S4 cross-modal only if prose share < 0.5     0.790 | vs prose 8: +2.0 [+0.0, +4.5]
+
+PRIMARY RESULT not computable: no independent 16-sample prose run for this model and precision
+
+M  questions whose 8-sample prose plurality is WRONG: what do working programs return?
+   (baseline: independent prose samples from the n16 run, same questions)
+   all prose-wrong questions          q=  45 | programs: same wrong answer 0.160, correct 0.206 (n=243)
+
+   questions whose prose plurality is RIGHT: share of working programs agreeing with it
+   154 questions, programs agree 0.728 (n=1035)
+   per-question accuracy correlation prose vs program: 0.72; questions where programs beat prose by >= 0.25: 0.070, prose beats programs by >= 0.25: 0.315

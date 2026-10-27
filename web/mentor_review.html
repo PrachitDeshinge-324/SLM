@@ -58,7 +58,7 @@
                 <li><strong>Per-sample accuracy</strong> rises after round 1 in all 12 round-1 runs (+0.9 to +6.6 points). The 95% interval is above zero in 5 of the 12 (10 of all 26 runs). Most of the gain comes from fewer samples being cut off at 512 tokens: cut-offs fall in every run.</li>
                 <li><strong>The majority vote does not improve.</strong> Round-1 changes range from &minus;4 to +3 points, and later rounds from &minus;7 to +4. Only one interval excludes zero, a decline (2B 16-bit vote, round 3, &minus;7.0). For scale, two independent runs of the same untrained 0.8B model differ on a 100-question vote by up to &plusmn;7.5 (16-bit) or &plusmn;8.0 (4-bit) points (95%). Per-round changes cannot be told apart from re-running the model, so neither a round-1 peak nor a steady decline is shown.</li>
                 <li><strong>Pool labels get less precise as the model labels more</strong> (0.8B 4-bit vote arm): label precision falls 95.9% &rarr; 91.4% &rarr; 86.8%, while labelled questions rise 123 &rarr; 197 &rarr; 234 and wrong labels 5 &rarr; 17 &rarr; 31 (about 6&times;). Whether this drift causes any change on the test set is not established. Test changes between rounds are within noise, and with a fixed 200 training steps later rounds also train fewer epochs.</li>
-                <li><strong>Program-of-thought did not help at 0.8B 4-bit</strong> (200 questions, one run): programs scored 26.9% per sample against 37.9% for prose on the same questions. The 2B 4-bit run is invalid (66.3% of programs ran, below the 70% gate) and shows nothing either way.</li>
+                <li><strong>Program-of-thought at 4-bit</strong> (200 questions): At 0.8B, programs scored 26.9% per sample against 37.9% for prose (mixed vote failed). At 2B (512-token rerun), the validity gate passed (79.9% ran cleanly). Standalone programs remain weaker (vote 69.0% vs 77.0% prose), but using programs to break ties on prose lifts the vote to <strong>79.5% (+2.5 [+0.5, +5.0])</strong>, with the 95% interval strictly above zero.</li>
             </ul>
         </div>
         <div class="callout-negative">
@@ -231,7 +231,7 @@
         <p>The test: can a Python interpreter supply the outside check the model lacks? Prompt variant <code>program</code>: the model writes a <code>solve()</code> program, which is run in a sandbox. Prose and programs are compared on the same first 200 GSM8K test questions, 8 samples each. Pre-registered rule: the vote over 8 prose answers and 8 program answers must beat the 16-sample prose vote, with an interval above zero.</p>
 
         <div class="callout-negative">
-            <h4>Programs were a weaker solver than prose at 0.8B; the 2B run is invalid</h4>
+            <h4>Programs are weaker standalone solvers, but break prose ties positively at 2B</h4>
             <ul>
                 <li><strong>Qwen3.5-0.8B (4-bit), valid run</strong> (90.4% of programs ran; 1.1% cut off):
                     <ul>
@@ -241,7 +241,14 @@
                         <li>Where the prose vote is wrong, programs repeat its wrong answer less often than new prose samples do (12% vs 20%). They are also right less often (9% vs 16%). Programs neither carry the misreading over nor fix it.</li>
                     </ul>
                 </li>
-                <li><strong>Qwen3.5-2B (4-bit), invalid run</strong>: only 66.3% of programs ran, below the 70% validity gate, and 27.7% were cut off at a 200-token limit. A rerun at 512 tokens is needed before this run says anything about 2B.</li>
+                <li><strong>Qwen3.5-2B (4-bit), valid 512-token rerun</strong> (79.9% of programs ran cleanly; 9.3% cut off; validity gate &ge; 70% passed):
+                    <ul>
+                        <li>Per sample: programs <strong>50.2%</strong> (failures count as wrong), <strong>62.9%</strong> on working programs alone, prose <strong>64.1%</strong>.</li>
+                        <li>Vote over programs only: <strong>69.0%</strong>, against <strong>77.0%</strong> for the 8-sample prose vote: &minus;8.0 [&minus;14.5, &minus;1.5]. Like 0.8B, standalone code synthesis is weaker than natural language CoT.</li>
+                        <li><strong>Selector gains:</strong> While the naive cross-modal vote is +1.0 [&minus;2.5, +4.5], using programs to <strong>break ties on prose</strong> (Selector S3) lifts the vote from 77.0% &rarr; <strong>79.5% (+2.5 [+0.5, +5.0])</strong>, with the 95% confidence interval strictly above zero.</li>
+                        <li><strong>Mechanism on wrong questions:</strong> On the 45 questions where the prose majority was wrong, working programs found the correct answer <strong>20.6%</strong> of the time, while repeating the wrong answer only 16.0% of the time.</li>
+                    </ul>
+                </li>
             </ul>
             <p>Context, not a comparison with our runs: PAL (Gao et al., 2023) reports 72.0% on GSM8K with Codex writing programs, against 65.6% for chain-of-thought with the same Codex model. Its often-quoted 15-point margin is against PaLM-540B chain-of-thought, a different model. An arithmetic checker fires on only 0.3&ndash;2% of finished 0.8B 4-bit traces. That suggests most errors are in setting up the problem, not in the arithmetic, and an interpreter cannot fix those (interpretation, not tested).</p>
         </div>
