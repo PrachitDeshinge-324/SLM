@@ -1,0 +1,15 @@
+model | precision | run | samples | cut off | answered (answer right) | repeating | unfinished | median tokens of finished samples
+Qwen/Qwen3.5-0.8B | 16bit | round 0 | 800 | 137 (17.1%) | 3 (0) | 5 | 129 | 281
+Qwen/Qwen3.5-0.8B | 16bit | vote r1 | 800 | 80 (10.0%) | 4 (1) | 0 | 76 | 267
+Qwen/Qwen3.5-0.8B | 4bit | round 0 | 800 | 135 (16.9%) | 1 (0) | 10 | 124 | 266
+Qwen/Qwen3.5-0.8B | 4bit | vote r1 | 800 | 59 (7.4%) | 0 (0) | 6 | 53 | 248
+Qwen/Qwen3.5-2B | 16bit | round 0 | 800 | 133 (16.6%) | 1 (0) | 3 | 129 | 303
+Qwen/Qwen3.5-2B | 16bit | vote r1 | 800 | 107 (13.4%) | 1 (0) | 1 | 105 | 296
+Qwen/Qwen3.5-2B | 4bit | round 0 | 800 | 118 (14.8%) | 2 (0) | 4 | 112 | 282
+Qwen/Qwen3.5-2B | 4bit | vote r1 | 800 | 92 (11.5%) | 1 (0) | 0 | 91 | 276
+
+=== Tails of 4 random cut-off samples, Qwen3.5-0.8B 4-bit round 0 (last 300 characters)
+--- ' 6 years old.\n    - Raymond has a son at age 23.\n    - Now Samantha is 31.\n\n    So, Samantha was 6 years old *when* Raymond was born.\n    Since Samantha is currently 31, and she was 6 years older than Raymond at the time Raymond was born, we can calculate how many years ago Raymond was born relative'
+--- 'number, he must wait until the end of **1** year.\n\n#### 1.12 years $\\approx$ 1 year and 2 months\nSince 1 year is a whole number, he must wait until the end of **1** year.\n\n#### 1.12 years $\\approx$ 1 year and 2 months\nSince 1 year is a whole number, he must wait until the end of **1** year.\n\n#### 1.'
+--- '    *   **Wednesday:** $\\frac{54}{5} \\text{ articles} \\times 4 \\text{ hours/article} = \\frac{216}{5} \\text{ hours}$.\n        *   $216 \\div 5 = 43.2$ hours.\n\n5.  **Calculate the total hours:**\n    *   Total hours = Monday hours + Tuesday hours + Wednesday hours\n    *   Total hours = $20 + 21.6 + 43.2'
+--- 'ully. "How much water is in the remaining 24 liters?" This phrasing is slightly ambiguous. It could mean:\n    *   A) How much water is left in the 24 liters total volume? (Answer: $6.467$)\n    *   B) How much water is left in the 24 liters *total volume*? (Answer: $6.467$)\n\n    Wait, the math $24 - '

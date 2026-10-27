@@ -17,7 +17,7 @@
 1. *Quantization hurts the single answer, not the vote's trustworthiness.* At 4-bit, accuracy per sample and the number of confident labels fall in all 10 model-dataset cells; when samples do agree, they are as often right as before. Majority voting hides about 1.4 points of the damage. 8-bit is indistinguishable from noise. [Data]
 2. *The drop in agreement estimates the drop in accuracy without labels* (0.85 points error on held-out models). [Data]
 3. *The model's own verifier adds almost nothing.* The one-line verifier is near chance on four of six models and adds nothing on top of the vote. [Data]
-4. *Self-training depends on precision.* Training on votes helped the 4-bit model (+6.4 points per sample, one seed, 200 questions) but not the 16-bit one, where the gain was only "finishing more often". [Data; mechanism is a hypothesis]
+4. *Self-training does not depend on precision, as far as we can tell.* A first 4-round pilot helped the 4-bit model (+6.4 points per sample, one seed, 200 questions) but not the 16-bit one. Later one-round runs did not replicate this: across 14 paired runs (0.8B and 2B), the 4-bit gain minus the 16-bit gain per sample is −4.9 to +2.9, and the one interval that excludes zero favours 16-bit. In every run the gain comes mostly from fewer samples being cut off at 512 tokens, and no run improves the majority vote. [Data, `analysis/self_training_review_2026-10-27/`, added 27 Oct]
 
 **Flaws, in order of importance.**
 - Our first results were wrong: the saved CSVs of 4 Oct came from stale scoring code and some cells compared different prompts. They were re-scored and must not be quoted. [Confirmed]
@@ -61,7 +61,7 @@ Full tables: [Docs/research_notes/SETUP_COMPARISON.md](Docs/research_notes/SETUP
 
 - Neither MACA nor 2504.04823 treats agreement calibration or pseudo-label precision as a function of bit-width [Lit, `Docs/research_notes/paper_planning/01_verified_literature_gaps.md`; the dossier asks for this search to be repeated before the paper is written].
 - Four findings the dossier says the literature lacks, all about the agreement signal [Data]: voting hides per-sample damage; 8-bit flips equal the replicate noise floor; vote-filtered labels keep precision at 4-bit but lose yield; the drop in agreement estimates the drop in per-sample accuracy without labels.
-- The precision-dependent effect of consensus SFT (helps 4-bit, not 16-bit) is the one training result worth following up, and it is one seed [Data, OBJECTIVE_REVIEW 2.3].
+- The precision-dependent effect of consensus SFT (helps 4-bit, not 16-bit) did not replicate in the one-round runs of 21-26 Oct [Data, `analysis/self_training_review_2026-10-27/01_precision_interaction.py`]. The open training question is now whether the votes add anything beyond teaching the model to finish within the token limit. Next test: train on vote-selected traces vs random finished traces vs minority-answer traces.
 
 ## 5. Issue register
 
@@ -72,7 +72,7 @@ Full tables: [Docs/research_notes/SETUP_COMPARISON.md](Docs/research_notes/SETUP
 | 3 | Gemma-1B 4-bit collapse | Answer-style switch (dossier 2.4, 2.11) | **Confirmed**, no conclusion depends on it | Pooled magnitudes shrink about a third without it | none |
 | 4 | Label drift: labels added by a trained model are 57-81% correct; unanimous labels decay (61/62 to 148/167 at 16-bit) | `analysis/objective_review_2026-10-16/01_label_dynamics.py` | **Confirmed** in these runs; cause (agreement is a property of the model being trained) is [Int] | Rising agreement after training is not evidence of accuracy | Frozen-label run (`--labels frozen`, not implemented) |
 | 5 | Brevity trap at 16-bit: gain comes from finishing more, accuracy when finished flat or down | OBJECTIVE_REVIEW 2.3, `04`, `05`, `06` | Measured; mechanism [Int] | Self-training gain at 16-bit is not a reasoning gain | Longer token cap or frozen-label run |
-| 6 | 4-bit gain (+6.4 [+3.4, +9.6] single sample) concentrated on quantization-damaged questions | Same | Measured once; "variance vs bias" is [Hyp] | The headline training result | Second seed; matched controls |
+| 6 | 4-bit gain (+6.4 [+3.4, +9.6] single sample) concentrated on quantization-damaged questions | Same | Measured once; "variance vs bias" is [Hyp]. **Not replicated** in the one-round runs (27 Oct review): 4-bit minus 16-bit gain −4.9 to +2.9 over 14 paired runs | No longer a headline result | Vote vs random vs minority-trace control |
 | 7 | DPO runaway generation (cut-off 0.16 to 0.56) | `qwen08_4bit_dpo_similar1`; length does not explain it (chosen longer in 26/55 pairs) | **Cause unresolved**: weak anchoring and likelihood displacement are [Hyp]; EOS suppression not ruled out | One DPO run only | Log policy chosen/rejected/EOS log-probs; add anchor |
 | 8 | **End-token mismatch**: all SFT and DPO adapters trained with `<|endoftext|>` as the end token, base model ends with `<|im_end|>` | `lora_training.end_token_id`; token-signal probe (TOKEN_SIGNALS_PLAN section 12) | Fact [Impl]; **effect not measured** | Could contribute to the "finishing" gain and to the DPO runaway | Retrain one round with `<|im_end|>` (needs approval: GPU) |
 | 9 | `end_token_id` fix, `--pairing median_majority`, `--nll_weight`, `--labels frozen` | CLAUDE.md "planned fix" | **Not implemented, not run** | none yet | Only if self-training is resumed |

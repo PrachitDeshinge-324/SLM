@@ -34,6 +34,7 @@
         table.minimal-table th, table.minimal-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
         table.minimal-table th { background: #edf2f7; color: #2d3748; font-weight: 600; font-size: 0.85rem; }
         table.minimal-table tr:hover { background: #f8fafc; }
+        table.minimal-table td small { white-space: nowrap; color: #718096; }
         .callout-negative {
             background: #fffaf0;
             border-left: 4px solid #dd6b20;
@@ -53,18 +54,28 @@
         <div class="summary-box">
             <h3>Key Empirical Findings (1-Minute Read)</h3>
             <ul>
-                <li><strong>The Experimental Scope</strong>: Multi-round self-training and test-time verification across <strong>Qwen3.5-0.8B</strong> and <strong>Qwen3.5-2B</strong> under both <strong>4-bit NF4</strong> and <strong>16-bit bfloat16</strong> precision.</li>
-                <li><strong>Round 1 Peak vs. Multi-Round Degradation</strong>: All models improve at Round 1 across both <strong>Pass@1</strong> (+2% to +7%) and <strong>Majority Vote</strong> (+2% to +4%). However, performance consistently degrades in subsequent rounds (R2 and R3) as errors accumulate in the unlabelled pool.</li>
-                <li><strong>The Error Mechanism (Label Drift)</strong>: Without external ground truth, models train on their own hallucinations. Plurality label accuracy in the pool drops from <strong>96% &rarr; 87%</strong>, tripling the volume of false training targets ($5 \rightarrow 17 \rightarrow 31$).</li>
-                <li><strong>The "Inverted Tool-Use" Penalty (Python PoT)</strong>: While frontier LLMs thrive on Program-of-Thought (PoT), sub-3B quantized models experience an <em>inversion effect</em>: executed Python code drops accuracy by <strong>-21.0 pts</strong> (81.0% &rarr; 60.0% on 2B 4-bit) due to high execution failure rates (43.4%).</li>
+                <li><strong>Scope</strong>: up to three rounds of self-training on the model's own votes for <strong>Qwen3.5-0.8B</strong> and <strong>Qwen3.5-2B</strong>, at <strong>4-bit NF4</strong> and <strong>16-bit bfloat16</strong>. Each run is scored on the same 100 GSM8K test questions, 8 samples each, 512 tokens. One training seed per run.</li>
+                <li><strong>Per-sample accuracy</strong> rises after round 1 in all 12 round-1 runs (+0.9 to +6.6 points). The 95% interval is above zero in 5 of the 12 (10 of all 26 runs). Most of the gain comes from fewer samples being cut off at 512 tokens: cut-offs fall in every run.</li>
+                <li><strong>The majority vote does not improve.</strong> Round-1 changes range from &minus;4 to +3 points, and later rounds from &minus;7 to +4. Only one interval excludes zero, a decline (2B 16-bit vote, round 3, &minus;7.0). For scale, two independent runs of the same untrained 0.8B model differ on a 100-question vote by up to &plusmn;7.5 (16-bit) or &plusmn;8.0 (4-bit) points (95%). Per-round changes cannot be told apart from re-running the model, so neither a round-1 peak nor a steady decline is shown.</li>
+                <li><strong>Pool labels get less precise as the model labels more</strong> (0.8B 4-bit vote arm): label precision falls 95.9% &rarr; 91.4% &rarr; 86.8%, while labelled questions rise 123 &rarr; 197 &rarr; 234 and wrong labels 5 &rarr; 17 &rarr; 31 (about 6&times;). Whether this drift causes any change on the test set is not established. Test changes between rounds are within noise, and with a fixed 200 training steps later rounds also train fewer epochs.</li>
+                <li><strong>Program-of-thought did not help at 0.8B 4-bit</strong> (200 questions, one run): programs scored 26.9% per sample against 37.9% for prose on the same questions. The 2B 4-bit run is invalid (66.3% of programs ran, below the 70% gate) and shows nothing either way.</li>
+            </ul>
+        </div>
+        <div class="callout-negative">
+            <h4>What these runs cannot show yet</h4>
+            <ul>
+                <li><strong>Small, single-seed cells.</strong> Each cell is one training seed on 100 questions. At 2B, a second seed of the same arm moved the vote by 4&ndash;5 points, as much as any gap between arms.</li>
+                <li><strong>Mixed generation settings.</strong> Round 0 and the arms were generated on different GPUs (T4 or L4) with batch sizes of 32&ndash;128. In an earlier pilot, batch size alone moved the untrained 4-bit vote by 11 points.</li>
+                <li><strong>No control for "learning to finish".</strong> No run has yet trained on finished traces that the vote did not select. Without it, a gain from the votes cannot be told apart from the model learning to write solutions that fit in 512 tokens. Cut-off samples are almost all solutions that stop mid-way: 90&ndash;99% hold no answer line and do not repeat.</li>
+                <li><strong>No evidence that precision changes the effect.</strong> The 4-bit training gain minus the 16-bit training gain per sample ranges from &minus;4.9 to +2.9 over 14 paired runs. The one interval that excludes zero favours 16-bit.</li>
             </ul>
         </div>
     </section>
 
     <!-- SECTION 1: MASTER SCORECARD -->
     <section class="content-box">
-        <h2>1. Complete Scorecard: Pass@1 and Majority Vote Across Rounds</h2>
-        <p>Across all models, self-training produces early single-sample (Pass@1) and consensus vote gains in Round 1, followed by multi-round stagnation or degradation. All deltas (&Delta;) are strictly relative to the untrained Round 0 baseline.</p>
+        <h2>1. Scorecard: Per-Sample Accuracy and Majority Vote Across Rounds</h2>
+        <p>Each cell gives the accuracy, the change from the untrained round 0 in points, and its 95% interval from resampling the 100 test questions. A badge is coloured only when the interval excludes zero. Per sample counts cut-off samples as wrong, and cut-off samples do not vote. A dash marks a run that does not exist or has not finished.</p>
 
         <div class="table-wrap">
             <table class="minimal-table">
@@ -88,104 +99,100 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <!-- 2B 4-bit -->
                     <tr>
                         <td rowspan="2" style="vertical-align: middle; border-bottom: 2px solid #cbd5e0;"><strong>Qwen-2B (4-bit)</strong></td>
-                        <td><strong>Pass@1</strong></td>
+                        <td><strong>Per sample</strong></td>
                         <td>66.8%</td>
-                        <td style="border-left: 1px solid #cbd5e0;">67.6% <span class="badge badge-up">+0.8</span></td>
-                        <td>66.5% <span class="badge badge-down">-0.3</span></td>
+                        <td style="border-left: 1px solid #cbd5e0;">67.6% <span class="badge badge-neutral">+0.9</span><br><small>[-2.0, +3.9]</small></td>
+                        <td>66.5% <span class="badge badge-neutral">-0.2</span><br><small>[-3.8, +3.4]</small></td>
                         <td style="border-right: 1px solid #cbd5e0;">—</td>
-                        <td>69.2% <span class="badge badge-up">+2.4</span></td>
-                        <td style="border-right: 1px solid #cbd5e0;">68.2% <span class="badge badge-up">+1.4</span></td>
-                        <td>70.1% <span class="badge badge-up">+3.3</span></td>
-                        <td><strong>70.2%</strong> <span class="badge badge-up">+3.4</span></td>
+                        <td>69.2% <span class="badge badge-neutral">+2.5</span><br><small>[-0.6, +5.6]</small></td>
+                        <td style="border-right: 1px solid #cbd5e0;">68.2% <span class="badge badge-neutral">+1.5</span><br><small>[-1.9, +4.8]</small></td>
+                        <td>70.1% <span class="badge badge-up">+3.4</span><br><small>[+0.2, +6.5]</small></td>
+                        <td>70.2% <span class="badge badge-neutral">+3.5</span><br><small>[+0.0, +7.1]</small></td>
                     </tr>
                     <tr style="border-bottom: 2px solid #cbd5e0;">
-                        <td><strong>Vote Acc</strong></td>
+                        <td><strong>Vote</strong></td>
                         <td>81.0%</td>
-                        <td style="border-left: 1px solid #cbd5e0;">78.0% <span class="badge badge-down">-3.0</span></td>
-                        <td>75.0% <span class="badge badge-down">-6.0</span></td>
+                        <td style="border-left: 1px solid #cbd5e0;">78.0% <span class="badge badge-neutral">-3.0</span><br><small>[-8.0, +2.0]</small></td>
+                        <td>75.0% <span class="badge badge-neutral">-6.0</span><br><small>[-12.0, +0.0]</small></td>
                         <td style="border-right: 1px solid #cbd5e0;">—</td>
-                        <td>77.0% <span class="badge badge-down">-4.0</span></td>
-                        <td style="border-right: 1px solid #cbd5e0;">79.0% <span class="badge badge-down">-2.0</span></td>
-                        <td><strong>83.0%</strong> <span class="badge badge-up">+2.0</span></td>
-                        <td>81.0% <span class="badge badge-neutral">±0.0</span></td>
+                        <td>77.0% <span class="badge badge-neutral">-4.0</span><br><small>[-10.0, +1.0]</small></td>
+                        <td style="border-right: 1px solid #cbd5e0;">79.0% <span class="badge badge-neutral">-2.0</span><br><small>[-8.0, +3.0]</small></td>
+                        <td>83.0% <span class="badge badge-neutral">+2.0</span><br><small>[-3.0, +7.0]</small></td>
+                        <td>81.0% <span class="badge badge-neutral">+0.0</span><br><small>[-7.0, +7.0]</small></td>
                     </tr>
 
-                    <!-- 2B 16-bit -->
                     <tr>
                         <td rowspan="2" style="vertical-align: middle; border-bottom: 2px solid #cbd5e0;"><strong>Qwen-2B (16-bit)</strong></td>
-                        <td><strong>Pass@1</strong></td>
+                        <td><strong>Per sample</strong></td>
                         <td>67.8%</td>
-                        <td style="border-left: 1px solid #cbd5e0;"><strong>72.1%</strong> <span class="badge badge-up">+4.3</span></td>
-                        <td>69.5% <span class="badge badge-up">+1.7</span></td>
-                        <td style="border-right: 1px solid #cbd5e0;">67.8% <span class="badge badge-neutral">±0.0</span></td>
-                        <td>69.4% <span class="badge badge-up">+1.6</span></td>
-                        <td style="border-right: 1px solid #cbd5e0;">68.8% <span class="badge badge-up">+1.0</span></td>
-                        <td>70.6% <span class="badge badge-up">+2.8</span></td>
-                        <td>68.9% <span class="badge badge-up">+1.1</span></td>
+                        <td style="border-left: 1px solid #cbd5e0;">72.1% <span class="badge badge-up">+4.4</span><br><small>[+1.1, +7.6]</small></td>
+                        <td>69.5% <span class="badge badge-neutral">+1.8</span><br><small>[-1.9, +5.4]</small></td>
+                        <td style="border-right: 1px solid #cbd5e0;">67.8% <span class="badge badge-neutral">+0.0</span><br><small>[-3.5, +3.4]</small></td>
+                        <td>69.4% <span class="badge badge-neutral">+1.6</span><br><small>[-2.0, +5.4]</small></td>
+                        <td style="border-right: 1px solid #cbd5e0;">68.8% <span class="badge badge-neutral">+1.0</span><br><small>[-2.9, +4.9]</small></td>
+                        <td>70.6% <span class="badge badge-neutral">+2.9</span><br><small>[-0.5, +6.6]</small></td>
+                        <td>68.9% <span class="badge badge-neutral">+1.1</span><br><small>[-2.1, +4.2]</small></td>
                     </tr>
                     <tr style="border-bottom: 2px solid #cbd5e0;">
-                        <td><strong>Vote Acc</strong></td>
+                        <td><strong>Vote</strong></td>
                         <td>81.0%</td>
-                        <td style="border-left: 1px solid #cbd5e0;"><strong>83.0%</strong> <span class="badge badge-up">+2.0</span></td>
-                        <td>80.0% <span class="badge badge-down">-1.0</span></td>
-                        <td style="border-right: 1px solid #cbd5e0;">74.0% <span class="badge badge-down">-7.0</span></td>
-                        <td>77.0% <span class="badge badge-down">-4.0</span></td>
-                        <td style="border-right: 1px solid #cbd5e0;">77.0% <span class="badge badge-down">-4.0</span></td>
-                        <td>79.0% <span class="badge badge-down">-2.0</span></td>
-                        <td>78.0% <span class="badge badge-down">-3.0</span></td>
+                        <td style="border-left: 1px solid #cbd5e0;">83.0% <span class="badge badge-neutral">+2.0</span><br><small>[-3.0, +7.0]</small></td>
+                        <td>80.0% <span class="badge badge-neutral">-1.0</span><br><small>[-8.0, +6.0]</small></td>
+                        <td style="border-right: 1px solid #cbd5e0;">74.0% <span class="badge badge-down">-7.0</span><br><small>[-13.0, -1.0]</small></td>
+                        <td>77.0% <span class="badge badge-neutral">-4.0</span><br><small>[-11.0, +2.0]</small></td>
+                        <td style="border-right: 1px solid #cbd5e0;">77.0% <span class="badge badge-neutral">-4.0</span><br><small>[-11.0, +2.0]</small></td>
+                        <td>79.0% <span class="badge badge-neutral">-2.0</span><br><small>[-9.0, +5.0]</small></td>
+                        <td>78.0% <span class="badge badge-neutral">-3.0</span><br><small>[-9.0, +3.0]</small></td>
                     </tr>
 
-                    <!-- 0.8B 4-bit -->
                     <tr>
                         <td rowspan="2" style="vertical-align: middle; border-bottom: 2px solid #cbd5e0;"><strong>Qwen-0.8B (4-bit)</strong></td>
-                        <td><strong>Pass@1</strong></td>
+                        <td><strong>Per sample</strong></td>
                         <td>40.6%</td>
-                        <td style="border-left: 1px solid #cbd5e0;"><strong>47.2%</strong> <span class="badge badge-up">+6.6</span></td>
-                        <td>45.5% <span class="badge badge-up">+4.9</span></td>
-                        <td style="border-right: 1px solid #cbd5e0;">44.5% <span class="badge badge-up">+3.9</span></td>
-                        <td>42.0% <span class="badge badge-up">+1.4</span></td>
-                        <td style="border-right: 1px solid #cbd5e0;">45.6% <span class="badge badge-up">+5.0</span></td>
-                        <td>43.8% <span class="badge badge-up">+3.2</span></td>
-                        <td>42.5% <span class="badge badge-up">+1.9</span></td>
+                        <td style="border-left: 1px solid #cbd5e0;">47.2% <span class="badge badge-up">+6.6</span><br><small>[+2.8, +10.5]</small></td>
+                        <td>45.5% <span class="badge badge-up">+4.9</span><br><small>[+0.2, +9.4]</small></td>
+                        <td style="border-right: 1px solid #cbd5e0;">44.5% <span class="badge badge-neutral">+3.9</span><br><small>[+0.0, +7.9]</small></td>
+                        <td>42.0% <span class="badge badge-neutral">+1.4</span><br><small>[-2.2, +4.8]</small></td>
+                        <td style="border-right: 1px solid #cbd5e0;">45.6% <span class="badge badge-up">+5.0</span><br><small>[+1.1, +9.0]</small></td>
+                        <td>43.8% <span class="badge badge-neutral">+3.1</span><br><small>[-1.0, +7.0]</small></td>
+                        <td>42.5% <span class="badge badge-neutral">+1.9</span><br><small>[-2.6, +6.2]</small></td>
                     </tr>
                     <tr style="border-bottom: 2px solid #cbd5e0;">
-                        <td><strong>Vote Acc</strong></td>
+                        <td><strong>Vote</strong></td>
                         <td>56.0%</td>
-                        <td style="border-left: 1px solid #cbd5e0;">59.0% <span class="badge badge-up">+3.0</span></td>
-                        <td>57.0% <span class="badge badge-up">+1.0</span></td>
-                        <td style="border-right: 1px solid #cbd5e0;">53.0% <span class="badge badge-down">-3.0</span></td>
-                        <td>56.0% <span class="badge badge-neutral">±0.0</span></td>
-                        <td style="border-right: 1px solid #cbd5e0;"><strong>60.0%</strong> <span class="badge badge-up">+4.0</span></td>
-                        <td>58.0% <span class="badge badge-up">+2.0</span></td>
-                        <td>54.0% <span class="badge badge-down">-2.0</span></td>
+                        <td style="border-left: 1px solid #cbd5e0;">59.0% <span class="badge badge-neutral">+3.0</span><br><small>[-5.0, +12.0]</small></td>
+                        <td>57.0% <span class="badge badge-neutral">+1.0</span><br><small>[-9.0, +10.0]</small></td>
+                        <td style="border-right: 1px solid #cbd5e0;">53.0% <span class="badge badge-neutral">-3.0</span><br><small>[-11.0, +4.0]</small></td>
+                        <td>56.0% <span class="badge badge-neutral">+0.0</span><br><small>[-8.0, +8.0]</small></td>
+                        <td style="border-right: 1px solid #cbd5e0;">60.0% <span class="badge badge-neutral">+4.0</span><br><small>[-4.0, +12.0]</small></td>
+                        <td>58.0% <span class="badge badge-neutral">+2.0</span><br><small>[-7.0, +10.0]</small></td>
+                        <td>54.0% <span class="badge badge-neutral">-2.0</span><br><small>[-11.0, +6.0]</small></td>
                     </tr>
 
-                    <!-- 0.8B 16-bit -->
                     <tr>
                         <td rowspan="2" style="vertical-align: middle;"><strong>Qwen-0.8B (16-bit)</strong></td>
-                        <td><strong>Pass@1</strong></td>
+                        <td><strong>Per sample</strong></td>
                         <td>46.6%</td>
-                        <td style="border-left: 1px solid #cbd5e0;">50.4% <span class="badge badge-up">+3.8</span></td>
-                        <td>51.2% <span class="badge badge-up">+4.6</span></td>
+                        <td style="border-left: 1px solid #cbd5e0;">50.4% <span class="badge badge-neutral">+3.8</span><br><small>[-0.2, +8.0]</small></td>
+                        <td>51.2% <span class="badge badge-up">+4.6</span><br><small>[+0.6, +8.8]</small></td>
                         <td style="border-right: 1px solid #cbd5e0;">—</td>
-                        <td>51.1% <span class="badge badge-up">+4.5</span></td>
-                        <td style="border-right: 1px solid #cbd5e0;"><strong>53.9%</strong> <span class="badge badge-up">+7.3</span></td>
-                        <td>53.1% <span class="badge badge-up">+6.5</span></td>
-                        <td>53.4% <span class="badge badge-up">+6.8</span></td>
+                        <td>51.1% <span class="badge badge-up">+4.5</span><br><small>[+0.8, +8.6]</small></td>
+                        <td style="border-right: 1px solid #cbd5e0;">53.9% <span class="badge badge-up">+7.2</span><br><small>[+3.8, +10.8]</small></td>
+                        <td>53.1% <span class="badge badge-up">+6.5</span><br><small>[+2.8, +10.8]</small></td>
+                        <td>53.4% <span class="badge badge-up">+6.8</span><br><small>[+3.1, +10.4]</small></td>
                     </tr>
                     <tr>
-                        <td><strong>Vote Acc</strong></td>
+                        <td><strong>Vote</strong></td>
                         <td>65.0%</td>
-                        <td style="border-left: 1px solid #cbd5e0;">63.0% <span class="badge badge-down">-2.0</span></td>
-                        <td>60.0% <span class="badge badge-down">-5.0</span></td>
+                        <td style="border-left: 1px solid #cbd5e0;">63.0% <span class="badge badge-neutral">-2.0</span><br><small>[-8.0, +5.0]</small></td>
+                        <td>60.0% <span class="badge badge-neutral">-5.0</span><br><small>[-12.0, +2.0]</small></td>
                         <td style="border-right: 1px solid #cbd5e0;">—</td>
-                        <td>61.0% <span class="badge badge-down">-4.0</span></td>
-                        <td style="border-right: 1px solid #cbd5e0;">64.0% <span class="badge badge-down">-1.0</span></td>
-                        <td><strong>67.0%</strong> <span class="badge badge-up">+2.0</span></td>
-                        <td>65.0% <span class="badge badge-neutral">±0.0</span></td>
+                        <td>61.0% <span class="badge badge-neutral">-4.0</span><br><small>[-12.0, +4.0]</small></td>
+                        <td style="border-right: 1px solid #cbd5e0;">64.0% <span class="badge badge-neutral">-1.0</span><br><small>[-8.0, +6.0]</small></td>
+                        <td>67.0% <span class="badge badge-neutral">+2.0</span><br><small>[-5.0, +9.0]</small></td>
+                        <td>65.0% <span class="badge badge-neutral">+0.0</span><br><small>[-8.0, +7.0]</small></td>
                     </tr>
                 </tbody>
             </table>
@@ -194,13 +201,13 @@
 
     <!-- SECTION 2: PASS@1 ACCURACY VISUALIZATION -->
     <section class="content-box">
-        <h2>2. Single-Sample (Pass@1) Accuracy Across Rounds</h2>
-        <p>Pass@1 measures the model's single-path reasoning fidelity without relying on test-time majority voting. All three arms are tracked across rounds against the untrained baseline.</p>
+        <h2>2. Per-Sample Accuracy Across Rounds</h2>
+        <p>Per-sample accuracy is the share of all samples that finish within 512 tokens with the right answer. It therefore measures finishing as well as reasoning, and finishing is what training changes most.</p>
 
         <div class="plot-box">
-            <img src="assets/plots/fig2_pass1_all_arms.png" alt="Single-Sample Pass@1 Accuracy Across Rounds">
+            <img src="assets/plots/fig2_pass1_all_arms.png" alt="Per-sample accuracy across rounds">
             <div class="caption">
-                <strong>Figure 1: Single-Sample (Pass@1) Trajectories Across Rounds</strong>. Notice that while consensus voting degrades, Pass@1 often retains gains longer (e.g. Qwen-2B 4-bit reaching 70.2% and 0.8B 16-bit reaching 53.9%).
+                <strong>Figure 1: Per-sample accuracy across rounds.</strong> Accuracy stays above round 0 in most runs. The highest points (2B 4-bit critic_reason round 2, 70.2%; 0.8B 16-bit critic round 2, 53.9%) are single runs with one seed. Read differences between arms or rounds against the intervals in the scorecard, not against the lines.
             </div>
         </div>
     </section>
@@ -208,48 +215,47 @@
     <!-- SECTION 3: MAJORITY VOTE TRAJECTORIES -->
     <section class="content-box">
         <h2>3. Plurality Vote Trajectories Across Rounds</h2>
-        <p>Test-time self-consistency (8 sampled solutions per question, plurality vote). Unlike Pass@1, majority voting drops sharply when pseudo-label consensus noise pollutes the training distribution.</p>
+        <p>Plurality vote over 8 sampled solutions per question. No trained run moves the vote further than two independent runs of the same untrained model differ (&plusmn;7.5 points at 16-bit, &plusmn;8.0 at 4-bit, 95%, on 100 questions).</p>
 
         <div class="plot-box">
-            <img src="assets/plots/fig1_majority_vote_all_arms.png" alt="Majority Vote Accuracy Across Rounds">
+            <img src="assets/plots/fig1_majority_vote_all_arms.png" alt="Majority vote accuracy across rounds">
             <div class="caption">
-                <strong>Figure 2: Plurality Vote Trajectories Across Rounds</strong>. Across nearly all regimes, performance peaks at Round 1. On 2B 4-bit, <code>critic_reason</code> preserves baseline accuracy (81.0%), whereas plain voting collapses to 75.0%.
+                <strong>Figure 2: Majority vote across rounds.</strong> Vote changes range from &minus;7 to +4 points, and only one interval excludes zero (2B 16-bit vote round 3, &minus;7.0). On 2B 4-bit at round 2, critic_reason (81.0%) is not significantly above the plain vote arm (75.0%): +6.0 [&minus;1.0, +13.0].
             </div>
         </div>
     </section>
 
     <!-- SECTION 4: INVERTED TOOL USE (PYTHON POT) -->
     <section class="content-box">
-        <h2>4. External Symbolic Verification: The "Inverted Tool-Use" Penalty</h2>
-        <p>A natural hypothesis to break this error loop is grounding reasoning in an external symbolic executor (Python interpreter). We evaluated Program-Aided Language modeling (PAL / PoT) across 200 GSM8K questions.</p>
+        <h2>4. Program-of-Thought at 4-bit</h2>
+        <p>The test: can a Python interpreter supply the outside check the model lacks? Prompt variant <code>program</code>: the model writes a <code>solve()</code> program, which is run in a sandbox. Prose and programs are compared on the same first 200 GSM8K test questions, 8 samples each. Pre-registered rule: the vote over 8 prose answers and 8 program answers must beat the 16-sample prose vote, with an interval above zero.</p>
 
         <div class="callout-negative">
-            <h4>Empirical Discovery: Program-of-Thought Degrades SLMs by 20 Points</h4>
-            <p>Unlike 70B+ frontier models which gain +15–20% from code generation, sub-3B quantized models experience an <strong>execution failure cliff and logic degradation</strong>:</p>
+            <h4>Programs were a weaker solver than prose at 0.8B; the 2B run is invalid</h4>
             <ul>
-                <li><strong>Qwen3.5-2B (4-bit) Executed PoT</strong>:
+                <li><strong>Qwen3.5-0.8B (4-bit), valid run</strong> (90.4% of programs ran; 1.1% cut off):
                     <ul>
-                        <li><strong>Execution Validity</strong>: <strong>67.7%</strong> of code traces ran cleanly. 27.7% were truncated by a 200-token cap (causing 85.7% of all crashes).</li>
-                        <li><strong>Accuracy on Completed Code</strong>: Even when isolating non-truncated code that ran cleanly, Pass@1 is only <strong>56.7%</strong> and Consensus Vote is <strong>60.5%</strong> (vs. <strong>81.0%</strong> for natural language CoT, a <strong>-20.5 pt penalty</strong>).</li>
+                        <li>Per sample: programs <strong>26.9%</strong>, prose <strong>37.9%</strong>. A failed program counts as wrong; working programs alone score 29.7%.</li>
+                        <li>Vote over programs only: <strong>37.0%</strong>, against <strong>54.5%</strong> for the 8-sample prose vote: &minus;17.5 [&minus;24.0, &minus;10.5].</li>
+                        <li>Pre-registered test: the mixed vote (8 prose + 8 programs) minus the 16-sample prose vote is &minus;5.0 [&minus;10.5, +0.0]. <strong>Failed.</strong></li>
+                        <li>Where the prose vote is wrong, programs repeat its wrong answer less often than new prose samples do (12% vs 20%). They are also right less often (9% vs 16%). Programs neither carry the misreading over nor fix it.</li>
                     </ul>
                 </li>
-                <li><strong>Qwen3.5-0.8B (4-bit) Executed PoT</strong> (512 token ceiling):
-                    <ul>
-                        <li><strong>Execution Validity</strong>: <strong>90.7%</strong> ran cleanly (cutoff was only 1.1%).</li>
-                        <li><strong>Accuracy</strong>: <strong>26.8%</strong> Pass@1 and <strong>37.0%</strong> Majority Vote (vs. <strong>56.0%</strong> for natural language CoT, a <strong>-19.0 pt penalty</strong>).</li>
-                </li>
+                <li><strong>Qwen3.5-2B (4-bit), invalid run</strong>: only 66.3% of programs ran, below the 70% validity gate, and 27.7% were cut off at a 200-token limit. A rerun at 512 tokens is needed before this run says anything about 2B.</li>
+            </ul>
+            <p>Context, not a comparison with our runs: PAL (Gao et al., 2023) reports 72.0% on GSM8K with Codex writing programs, against 65.6% for chain-of-thought with the same Codex model. Its often-quoted 15-point margin is against PaLM-540B chain-of-thought, a different model. An arithmetic checker fires on only 0.3&ndash;2% of finished 0.8B 4-bit traces. That suggests most errors are in setting up the problem, not in the arithmetic, and an interpreter cannot fix those (interpretation, not tested).</p>
         </div>
     </section>
 
     <!-- SECTION 5: MECHANISM -->
     <section class="content-box">
-        <h2>5. The Root Cause: Pseudo-Label Degradation in the Pool</h2>
-        <p>Why do multi-round self-training loops break down without ground truth? The model becomes overconfident in its own high-frequency errors.</p>
+        <h2>5. Label Drift in the Pool</h2>
+        <p>Each round re-labels the 500 pool questions with the model trained in the previous round. Reference answers are read only to score the labels for this page, never to choose them. Drift is measured, but it is not shown to cause the test results: no change between rounds on the test set is significant, and the fixed 200 training steps of 8 examples mean later rounds also see fewer epochs (1.87 on 854 solutions, 1.12 on 1,425, 0.96 on 1,673). Testing the cause needs a frozen-label run (round 0 labels in every round) with fixed epochs.</p>
 
         <div class="plot-box">
-            <img src="assets/plots/fig4_label_drift_mechanism.png" alt="Pseudo-Label Degradation in Pool">
+            <img src="assets/plots/fig4_label_drift_mechanism.png" alt="Pseudo-label precision in the pool across rounds">
             <div class="caption">
-                <strong>Figure 3: Compounding Hallucinations</strong>. (A) Pool label accuracy drops from 96% down to 87%. (B) As the model attempts to self-label more questions across rounds ($123 \rightarrow 197 \rightarrow 234$), the absolute number of hallucinated questions in the training pool triples ($5 \rightarrow 17 \rightarrow 31$).
+                <strong>Figure 3: Pool labels across rounds, 0.8B 4-bit vote arm.</strong> (A) Label precision falls 95.9% &rarr; 91.4% &rarr; 86.8%. (B) Labelled questions rise 123 &rarr; 197 &rarr; 234, and wrong labels 5 &rarr; 17 &rarr; 31 (about 6&times;).
             </div>
         </div>
     </section>
