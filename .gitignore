@@ -89,3 +89,7 @@ results/
 analysis/**/cache.pkl
 LLM_Course_Project_Paper_Template/*
 analysis/*
+!analysis/program_agreement_2026-10-24/
+!analysis/program_agreement_2026-10-24/*
+
+

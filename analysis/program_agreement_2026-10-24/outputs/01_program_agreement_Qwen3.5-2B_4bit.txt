@@ -1,0 +1,7 @@
+missing prose16 run: results/gsm8k/generator/Qwen_Qwen3.5-2B/Qwen_Qwen3.5-2B_4bit_gsm8k_n16.jsonl
+Qwen/Qwen3.5-2B 4bit: 200 shared questions (prose 200, prose16 0, program 200)
+executing 1570 programs ...
+
+V  program status: ok 0.663, no_code 0.052, syntax_error 0.041, runtime_error 0.091, timeout 0.000, non_numeric 0.152
+   program cut-off rate 0.277; validity threshold ok >= 0.7: INVALID: stop here, fix the prompt or extraction
+   per-sample accuracy: prose 0.641, program 0.435 (failures count as wrong; 0.656 among working programs)
