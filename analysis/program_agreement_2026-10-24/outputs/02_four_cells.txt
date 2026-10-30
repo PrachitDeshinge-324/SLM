@@ -1,0 +1,20 @@
+=== 1. Per sample, 200 questions
+model | precision | prose | program | program - prose
+Qwen/Qwen3.5-0.8B | 16bit | 48.4 | 32.0 | -16.4 [-20.2, -12.6]
+Qwen/Qwen3.5-0.8B | 4bit | 37.9 | 26.9 | -11.1 [-14.7, -7.3]
+Qwen/Qwen3.5-2B | 16bit | 68.1 | 60.1 | -8.1 [-11.9, -4.1]
+Qwen/Qwen3.5-2B | 4bit | 64.1 | 50.2 | -13.9 [-17.8, -9.8]
+
+=== 2. Vote selectors against prose vote
+model | precision | tied prose votes | prose vote: first answer / ties split | S3 - prose, as in 01 (both first answer) | S3 - prose, ties split | cross-modal - prose, ties split | S3 wins, losses (as in 01)
+Qwen/Qwen3.5-0.8B | 16bit | 33 | 68.5 / 67.4 | +0.0 [-2.5, +2.0] | +0.4 [-1.2, +1.9] | -1.8 [-5.1, +1.4] | 3, 3
+Qwen/Qwen3.5-0.8B | 4bit | 51 | 54.5 / 55.7 | +2.0 [-0.5, +4.5] | +1.0 [-0.9, +3.2] | +0.4 [-3.3, +4.4] | 5, 1
+Qwen/Qwen3.5-2B | 16bit | 11 | 82.0 / 82.5 | +0.0 [-1.5, +1.5] | -0.3 [-1.2, +0.7] | +0.8 [-1.8, +3.6] | 1, 1
+Qwen/Qwen3.5-2B | 4bit | 23 | 77.0 / 77.2 | +2.5 [+0.5, +5.0] | +2.6 [+1.0, +4.4] | +1.4 [-1.6, +4.4] | 5, 0
+
+=== 3. 4-bit minus 16-bit, same 200 questions
+model | metric | prose | program | program damage - prose damage
+Qwen/Qwen3.5-0.8B | per sample | -10.5 [-13.3, -7.8] | -5.1 [-8.1, -2.2] | +5.4 [+1.7, +9.1]
+Qwen/Qwen3.5-0.8B | vote, ties split | -11.8 [-16.6, -6.9] | -7.9 [-14.1, -1.7] | +3.9 [-3.5, +11.9]
+Qwen/Qwen3.5-2B | per sample | -4.0 [-6.8, -1.4] | -9.8 [-13.6, -6.1] | -5.8 [-9.8, -1.6]
+Qwen/Qwen3.5-2B | vote, ties split | -5.3 [-10.0, -1.4] | -7.9 [-13.7, -1.8] | -2.5 [-8.9, +4.1]

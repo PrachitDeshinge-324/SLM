@@ -35,6 +35,7 @@
         table.minimal-table th { background: #edf2f7; color: #2d3748; font-weight: 600; font-size: 0.85rem; }
         table.minimal-table tr:hover { background: #f8fafc; }
         table.minimal-table td small { white-space: nowrap; color: #718096; }
+        table.minimal-table.wrap-head th { white-space: normal; vertical-align: bottom; }
         .callout-negative {
             background: #fffaf0;
             border-left: 4px solid #dd6b20;
@@ -58,7 +59,7 @@
                 <li><strong>Per-sample accuracy</strong> rises after round 1 in all 12 round-1 runs (+0.9 to +6.6 points). The 95% interval is above zero in 5 of the 12 (10 of all 26 runs). Most of the gain comes from fewer samples being cut off at 512 tokens: cut-offs fall in every run.</li>
                 <li><strong>The majority vote does not improve.</strong> Round-1 changes range from &minus;4 to +3 points, and later rounds from &minus;7 to +4. Only one interval excludes zero, a decline (2B 16-bit vote, round 3, &minus;7.0). For scale, two independent runs of the same untrained 0.8B model differ on a 100-question vote by up to &plusmn;7.5 (16-bit) or &plusmn;8.0 (4-bit) points (95%). Per-round changes cannot be told apart from re-running the model, so neither a round-1 peak nor a steady decline is shown.</li>
                 <li><strong>Pool labels get less precise as the model labels more</strong> (0.8B 4-bit vote arm): label precision falls 95.9% &rarr; 91.4% &rarr; 86.8%, while labelled questions rise 123 &rarr; 197 &rarr; 234 and wrong labels 5 &rarr; 17 &rarr; 31 (about 6&times;). Whether this drift causes any change on the test set is not established. Test changes between rounds are within noise, and with a fixed 200 training steps later rounds also train fewer epochs.</li>
-                <li><strong>Program-of-thought at 4-bit</strong> (200 questions): At 0.8B, programs scored 26.9% per sample against 37.9% for prose (mixed vote failed). At 2B (512-token rerun), the validity gate passed (79.9% ran cleanly). Standalone programs remain weaker (vote 69.0% vs 77.0% prose), but using programs to break ties on prose lifts the vote to <strong>79.5% (+2.5 [+0.5, +5.0])</strong>, with the 95% interval strictly above zero.</li>
+                <li><strong>Program-of-thought is a weaker solver than prose in all four cells</strong> (200 questions, one run per cell, all valid). Per sample, programs score 8.1 to 16.4 points below prose. The pre-registered mixed vote failed at 0.8B and could not be tested at 2B. The one gain is exploratory: at 2B 4-bit, letting programs break prose ties adds <strong>+2.5 [+0.5, +5.0]</strong> points, or 5 questions, and needs testing on new questions.</li>
             </ul>
         </div>
         <div class="callout-negative">
@@ -225,30 +226,136 @@
         </div>
     </section>
 
-    <!-- SECTION 4: INVERTED TOOL USE (PYTHON POT) -->
+    <!-- SECTION 4: PROGRAM-OF-THOUGHT -->
     <section class="content-box">
-        <h2>4. Program-of-Thought at 4-bit</h2>
-        <p>The test: can a Python interpreter supply the outside check the model lacks? Prompt variant <code>program</code>: the model writes a <code>solve()</code> program, which is run in a sandbox. Prose and programs are compared on the same first 200 GSM8K test questions, 8 samples each. Pre-registered rule: the vote over 8 prose answers and 8 program answers must beat the 16-sample prose vote, with an interval above zero.</p>
+        <h2>4. Program-of-Thought at 16-bit and 4-bit</h2>
+        <p>The test: can a Python interpreter supply the outside check the model lacks? With prompt variant <code>program</code>, the model writes a <code>solve()</code> program, which is run in a sandbox. Prose and programs are compared on the same first 200 GSM8K test questions, 8 samples each, 512 tokens. All four cells passed the validity gate (at least 70% of programs run).</p>
+
+        <h3>Programs against prose</h3>
+        <p>Failed programs and cut-off prose samples count as wrong. Intervals are 95%, from resampling the 200 questions.</p>
+        <div class="table-wrap">
+            <table class="minimal-table wrap-head">
+                <thead>
+                    <tr>
+                        <th>Model &amp; Precision</th>
+                        <th>Programs ran</th>
+                        <th>Programs cut off</th>
+                        <th>Per sample: prose</th>
+                        <th>Per sample: programs</th>
+                        <th>Programs &minus; prose</th>
+                        <th>Vote: prose</th>
+                        <th>Vote: programs only</th>
+                        <th>Programs &minus; prose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Qwen-2B (4-bit)</strong></td>
+                        <td>79.9%</td>
+                        <td>9.3%</td>
+                        <td>64.1%</td>
+                        <td>50.2%</td>
+                        <td><span class="badge badge-down">-13.9</span><br><small>[-17.8, -9.8]</small></td>
+                        <td>77.0%</td>
+                        <td>69.0%</td>
+                        <td><span class="badge badge-down">-8.0</span><br><small>[-14.5, -1.5]</small></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Qwen-2B (16-bit)</strong></td>
+                        <td>89.0%</td>
+                        <td>5.0%</td>
+                        <td>68.1%</td>
+                        <td>60.1%</td>
+                        <td><span class="badge badge-down">-8.1</span><br><small>[-11.9, -4.1]</small></td>
+                        <td>82.0%</td>
+                        <td>76.5%</td>
+                        <td><span class="badge badge-down">-5.5</span><br><small>[-10.0, -1.0]</small></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Qwen-0.8B (4-bit)</strong></td>
+                        <td>90.4%</td>
+                        <td>1.1%</td>
+                        <td>37.9%</td>
+                        <td>26.9%</td>
+                        <td><span class="badge badge-down">-11.1</span><br><small>[-14.7, -7.3]</small></td>
+                        <td>54.5%</td>
+                        <td>37.0%</td>
+                        <td><span class="badge badge-down">-17.5</span><br><small>[-24.0, -10.5]</small></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Qwen-0.8B (16-bit)</strong></td>
+                        <td>81.9%</td>
+                        <td>0.9%</td>
+                        <td>48.4%</td>
+                        <td>32.0%</td>
+                        <td><span class="badge badge-down">-16.4</span><br><small>[-20.2, -12.6]</small></td>
+                        <td>68.5%</td>
+                        <td>45.0%</td>
+                        <td><span class="badge badge-down">-23.5</span><br><small>[-30.0, -17.0]</small></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h3>Can programs improve the prose vote?</h3>
+        <p>Each column is a change from the 8-sample prose vote, in points. The mixed vote pools 8 prose and 8 program answers. The tie-break keeps the prose vote and lets programs choose only when prose answers tie.</p>
+        <div class="table-wrap">
+            <table class="minimal-table wrap-head">
+                <thead>
+                    <tr>
+                        <th>Model &amp; Precision</th>
+                        <th>Mixed vote</th>
+                        <th>Tie-break</th>
+                        <th>Tie-break, prose ties split evenly</th>
+                        <th>Tied prose votes (of 200)</th>
+                        <th>Tie-break: questions won, lost</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Qwen-2B (4-bit)</strong></td>
+                        <td><span class="badge badge-neutral">+1.0</span><br><small>[-2.5, +4.5]</small></td>
+                        <td><span class="badge badge-up">+2.5</span><br><small>[+0.5, +5.0]</small></td>
+                        <td><span class="badge badge-up">+2.6</span><br><small>[+1.0, +4.4]</small></td>
+                        <td>23</td>
+                        <td>5, 0</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Qwen-2B (16-bit)</strong></td>
+                        <td><span class="badge badge-neutral">+1.0</span><br><small>[-2.0, +4.0]</small></td>
+                        <td><span class="badge badge-neutral">+0.0</span><br><small>[-1.5, +1.5]</small></td>
+                        <td><span class="badge badge-neutral">-0.3</span><br><small>[-1.2, +0.7]</small></td>
+                        <td>11</td>
+                        <td>1, 1</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Qwen-0.8B (4-bit)</strong></td>
+                        <td><span class="badge badge-neutral">+2.0</span><br><small>[-2.0, +6.0]</small></td>
+                        <td><span class="badge badge-neutral">+2.0</span><br><small>[-0.5, +4.5]</small></td>
+                        <td><span class="badge badge-neutral">+1.0</span><br><small>[-0.9, +3.2]</small></td>
+                        <td>51</td>
+                        <td>5, 1</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Qwen-0.8B (16-bit)</strong></td>
+                        <td><span class="badge badge-neutral">+0.0</span><br><small>[-4.0, +4.0]</small></td>
+                        <td><span class="badge badge-neutral">+0.0</span><br><small>[-2.5, +2.0]</small></td>
+                        <td><span class="badge badge-neutral">+0.4</span><br><small>[-1.2, +1.9]</small></td>
+                        <td>33</td>
+                        <td>3, 3</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
 
         <div class="callout-negative">
-            <h4>Programs are weaker standalone solvers, but break prose ties positively at 2B</h4>
+            <h4>Programs are a weaker solver than prose in all four cells; the one gain is a small tie-break at 2B 4-bit</h4>
             <ul>
-                <li><strong>Qwen3.5-0.8B (4-bit), valid run</strong> (90.4% of programs ran; 1.1% cut off):
-                    <ul>
-                        <li>Per sample: programs <strong>26.9%</strong>, prose <strong>37.9%</strong>. A failed program counts as wrong; working programs alone score 29.7%.</li>
-                        <li>Vote over programs only: <strong>37.0%</strong>, against <strong>54.5%</strong> for the 8-sample prose vote: &minus;17.5 [&minus;24.0, &minus;10.5].</li>
-                        <li>Pre-registered test: the mixed vote (8 prose + 8 programs) minus the 16-sample prose vote is &minus;5.0 [&minus;10.5, +0.0]. <strong>Failed.</strong></li>
-                        <li>Where the prose vote is wrong, programs repeat its wrong answer less often than new prose samples do (12% vs 20%). They are also right less often (9% vs 16%). Programs neither carry the misreading over nor fix it.</li>
-                    </ul>
-                </li>
-                <li><strong>Qwen3.5-2B (4-bit), valid 512-token rerun</strong> (79.9% of programs ran cleanly; 9.3% cut off; validity gate &ge; 70% passed):
-                    <ul>
-                        <li>Per sample: programs <strong>50.2%</strong> (failures count as wrong), <strong>62.9%</strong> on working programs alone, prose <strong>64.1%</strong>.</li>
-                        <li>Vote over programs only: <strong>69.0%</strong>, against <strong>77.0%</strong> for the 8-sample prose vote: &minus;8.0 [&minus;14.5, &minus;1.5]. Like 0.8B, standalone code synthesis is weaker than natural language CoT.</li>
-                        <li><strong>Selector gains:</strong> While the naive cross-modal vote is +1.0 [&minus;2.5, +4.5], using programs to <strong>break ties on prose</strong> (Selector S3) lifts the vote from 77.0% &rarr; <strong>79.5% (+2.5 [+0.5, +5.0])</strong>, with the 95% confidence interval strictly above zero.</li>
-                        <li><strong>Mechanism on wrong questions:</strong> On the 45 questions where the prose majority was wrong, working programs found the correct answer <strong>20.6%</strong> of the time, while repeating the wrong answer only 16.0% of the time.</li>
-                    </ul>
-                </li>
+                <li><strong>Pre-registered test failed where it could be run.</strong> The mixed vote had to beat a 16-sample prose vote with an interval above zero. At 0.8B it did not: &minus;5.0 [&minus;10.5, +0.0] at 4-bit and +0.0 [&minus;5.0, +5.0] at 16-bit. 2B has no independent 16-sample prose run, so this test could not be run there.</li>
+                <li><strong>The tie-break gain is small and exploratory.</strong> At 2B 4-bit it adds +2.5 points, which is 5 questions out of 200. It also holds when prose ties are split evenly, so it is not an artifact of the tie rule. But it is a secondary selector, it appears in one cell of four, and it is the only one of 16 selector comparisons whose interval clearly excludes zero. About one such result is expected by chance. It needs testing on new questions.</li>
+                <li><strong>Where the prose vote is wrong:</strong> at 0.8B, working programs repeat the wrong answer less often than new prose samples do, and are also right less often (4-bit: 12% vs 20% repeat, 9% vs 16% right; 16-bit: 14% vs 20% repeat, 9% vs 16% right). They neither carry the mistake over nor fix it. At 2B, working programs are right more often than they repeat the wrong answer (4-bit: 20.6% vs 16.0%, 45 questions; 16-bit: 24.2% vs 18.1%, 32 questions). Without a 16-sample prose run we cannot say whether a new prose sample would do just as well.</li>
+                <li><strong>No consistent link with precision.</strong> 4-bit lowers programs less than prose at 0.8B (&minus;5.1 vs &minus;10.5 per sample) but more at 2B (&minus;9.8 vs &minus;4.0). The direction flips with model size, and the share of programs that run also moves in opposite directions (0.8B up, 2B down).</li>
+                <li><strong>Limits.</strong> One run per cell, 200 questions. Program and prose runs were generated separately, not side by side.</li>
             </ul>
             <p>Context, not a comparison with our runs: PAL (Gao et al., 2023) reports 72.0% on GSM8K with Codex writing programs, against 65.6% for chain-of-thought with the same Codex model. Its often-quoted 15-point margin is against PaLM-540B chain-of-thought, a different model. An arithmetic checker fires on only 0.3&ndash;2% of finished 0.8B 4-bit traces. That suggests most errors are in setting up the problem, not in the arithmetic, and an interpreter cannot fix those (interpretation, not tested).</p>
         </div>

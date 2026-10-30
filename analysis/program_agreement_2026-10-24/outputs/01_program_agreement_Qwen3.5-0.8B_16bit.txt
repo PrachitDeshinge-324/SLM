@@ -1,0 +1,28 @@
+Qwen/Qwen3.5-0.8B 16bit: 200 shared questions (prose 1319, prose16 1319, program 200)
+
+V  program status: ok 0.819, no_code 0.015, syntax_error 0.022, runtime_error 0.116, timeout 0.000, non_numeric 0.028
+   program cut-off rate 0.009; validity threshold ok >= 0.7: VALID
+   per-sample accuracy: prose 0.484, program 0.320 (failures count as wrong; 0.391 among working programs)
+
+P/S selection accuracy on 200 questions (oracle over the 16 answers 0.870)
+  prose vote (8)                               0.685 | vs prose 16: +0.0 [-5.0, +5.5]
+  P cross-modal vote (8 prose + 8 program)     0.685 | vs prose 16: +0.0 [-5.0, +5.0] | vs prose 8: +0.0 [-4.0, +4.0]
+  S1 agreement-weighted prose vote             0.680 | vs prose 16: -0.5 [-5.5, +4.5] | vs prose 8: -0.5 [-4.0, +3.0]
+  S2 program-only vote (8)                     0.450 | vs prose 16: -23.5 [-30.0, -16.5] | vs prose 8: -23.5 [-30.0, -17.0]
+  S3 prose vote, programs break ties           0.685 | vs prose 16: +0.0 [-5.0, +5.0] | vs prose 8: +0.0 [-2.5, +2.0]
+  S4 cross-modal only if prose share < 0.5     0.700 | vs prose 16: +1.5 [-3.5, +6.5] | vs prose 8: +1.5 [-1.5, +4.5]
+  prose vote (16, independent run)             0.685 | vs prose 8: +0.0 [-5.5, +5.0]
+
+PRIMARY RESULT: cross-modal vote minus 16-sample prose vote +0.0 [-5.0, +5.0] -> FAIL (pre-registered: lower bound above zero)
+
+M  questions whose 8-sample prose plurality is WRONG: what do working programs return?
+   (baseline: independent prose samples from the n16 run, same questions)
+   all prose-wrong questions          q=  59 | programs: same wrong answer 0.143, correct 0.089 (n=371) | prose16: same wrong 0.203, correct 0.156 (n=720)
+     damage type systematic           q=   6 | programs: same wrong answer 0.050, correct 0.200 (n=40) | prose16: same wrong 0.076, correct 0.288 (n=66)
+     damage type random               q=   1 | programs: same wrong answer 0.000, correct 0.000 (n=8) | prose16: same wrong 0.071, correct 0.500 (n=14)
+     damage type both fail            q=  45 | programs: same wrong answer 0.166, correct 0.079 (n=277) | prose16: same wrong 0.217, correct 0.122 (n=558)
+     damage type helped               q=   7 | programs: same wrong answer 0.109, correct 0.065 (n=46) | prose16: same wrong 0.232, correct 0.220 (n=82)
+
+   questions whose prose plurality is RIGHT: share of working programs agreeing with it
+   137 questions, programs agree 0.518 (n=923)
+   per-question accuracy correlation prose vs program: 0.66; questions where programs beat prose by >= 0.25: 0.090, prose beats programs by >= 0.25: 0.390

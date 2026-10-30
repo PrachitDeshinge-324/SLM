@@ -1,0 +1,24 @@
+missing prose16 run: results/gsm8k/generator/Qwen_Qwen3.5-2B/Qwen_Qwen3.5-2B_16bit_gsm8k_n16.jsonl
+Qwen/Qwen3.5-2B 16bit: 200 shared questions (prose 200, prose16 0, program 200)
+
+V  program status: ok 0.890, no_code 0.000, syntax_error 0.011, runtime_error 0.049, timeout 0.002, non_numeric 0.048
+   program cut-off rate 0.050; validity threshold ok >= 0.7: VALID
+   per-sample accuracy: prose 0.681, program 0.601 (failures count as wrong; 0.675 among working programs)
+
+P/S selection accuracy on 200 questions (oracle over the 16 answers 0.945)
+  prose vote (8)                               0.820
+  P cross-modal vote (8 prose + 8 program)     0.830 | vs prose 8: +1.0 [-2.0, +4.0]
+  S1 agreement-weighted prose vote             0.830 | vs prose 8: +1.0 [-1.5, +4.0]
+  S2 program-only vote (8)                     0.765 | vs prose 8: -5.5 [-10.0, -1.0]
+  S3 prose vote, programs break ties           0.820 | vs prose 8: +0.0 [-1.5, +1.5]
+  S4 cross-modal only if prose share < 0.5     0.830 | vs prose 8: +1.0 [+0.0, +2.5]
+
+PRIMARY RESULT not computable: no independent 16-sample prose run for this model and precision
+
+M  questions whose 8-sample prose plurality is WRONG: what do working programs return?
+   (baseline: independent prose samples from the n16 run, same questions)
+   all prose-wrong questions          q=  32 | programs: same wrong answer 0.181, correct 0.242 (n=215)
+
+   questions whose prose plurality is RIGHT: share of working programs agreeing with it
+   164 questions, programs agree 0.763 (n=1192)
+   per-question accuracy correlation prose vs program: 0.69; questions where programs beat prose by >= 0.25: 0.120, prose beats programs by >= 0.25: 0.275
