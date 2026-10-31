@@ -101,6 +101,11 @@
           subtitle: 'Empirical results across Qwen3.5-0.8B and 2B: majority voting collapse, critic regularization, and pseudo-label drift.',
           summary: 'Executive presentation for mentor: 4 clean multi-round figures, master scorecards compared to baseline, and root-cause analysis.' },
 
+        { id: 'dynamics', file: 'self_training_dynamics.html', nav: '3-Stage Dynamics', group: 'results', libs: ['mermaid', 'mathjax'], toc: true,
+          title: 'Three-Stage Self-Training Dynamics & Literature Context',
+          subtitle: 'Visual breakdown of Stage 1 (Generator), Stage 2 (Verifier Filter), and Stage 3 (Test Set), with real examples and literature context.',
+          summary: 'What changes each round in SLMs: one-sample accuracy, vote and label quality, real examples, and a comparison with prior literature.' },
+
         { id: 'audit', file: 'audit.html', nav: 'Audit', group: 'direction', toc: true, local: true, notice: 'local-only',
           title: 'Audit & New Direction',
           subtitle: 'What was wrong, what the data showed at the time, and the one idea worth a paper.',

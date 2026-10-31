@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Three-Stage Self-Training Dynamics & Literature Context</title>
+    <link rel="stylesheet" href="assets/css/site.css">
+    <style>
+        .concept-card {
+            background: #ffffff;
+            border: 1px solid var(--border, #e2e8f0);
+            border-radius: 8px;
+            padding: 1.25rem 1.5rem;
+            margin: 1.25rem 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        }
+        .concept-card h3 {
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            color: #2b6cb0;
+            font-size: 1.15rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .stage-badge {
+            display: inline-block;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .badge-stage1 { background: #ebf8ff; color: #2b6cb0; border: 1px solid #bee3f8; }
+        .badge-stage2 { background: #fefcbf; color: #744210; border: 1px solid #faf089; }
+        .badge-stage3 { background: #f0fff4; color: #22543d; border: 1px solid #c6f6d5; }
+        .badge-danger { background: #fed7d7; color: #9b2c2c; border: 1px solid #feb2b2; }
+        
+        .example-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin: 1rem 0;
+        }
+        .example-header {
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .side-by-side {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+            margin-top: 0.85rem;
+        }
+        @media (max-width: 768px) {
+            .side-by-side { grid-template-columns: 1fr; }
+        }
+        .panel {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 1rem;
+            font-size: 0.88rem;
+        }
+        .panel-good { border-left: 4px solid #38a169; background: #f0fff4; }
+        .panel-bad { border-left: 4px solid #e53e3e; background: #fffafa; }
+        .panel-neutral { border-left: 4px solid #4a5568; background: #f7fafc; }
+        .panel h5 { margin: 0 0 0.5rem 0; font-size: 0.95rem; font-weight: 700; }
+        .panel-good h5 { color: #22543d; }
+        .panel-bad h5 { color: #9b2c2c; }
+        .panel-neutral h5 { color: #2d3748; }
+        .panel pre {
+            background: #ffffff;
+            color: #1e293b;
+            border: 1px solid #cbd5e1;
+            padding: 0.65rem 0.85rem;
+            border-radius: 4px;
+            font-size: 0.84rem;
+            line-height: 1.45;
+            margin: 0.5rem 0;
+            overflow-x: auto;
+        }
+        .panel pre code { background: transparent !important; color: inherit !important; padding: 0 !important; }
+        .takeaway {
+            margin-top: 0.5rem;
+            padding: 0.45rem 0.75rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.84rem;
+        }
+        .takeaway-good { background: #c6f6d5; color: #22543d; }
+        .takeaway-bad { background: #fed7d7; color: #9b2c2c; }
+        .takeaway-neutral { background: #e2e8f0; color: #2d3748; }
+
+        /* Minimal clean SVG chart container */
+        .chart-card {
+            background: #ffffff;
+            border: 1px solid var(--border, #e2e8f0);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin: 1.25rem 0;
+        }
+        .chart-title {
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: #2d3748;
+            margin-bottom: 0.25rem;
+        }
+        .chart-subtitle {
+            font-size: 0.86rem;
+            color: #718096;
+            margin-bottom: 1rem;
+        }
+        .lit-table th, .lit-table td {
+            font-size: 0.88rem;
+            line-height: 1.5;
+        }
+        table.wrap-head th {
+            white-space: normal;
+            vertical-align: bottom;
+            letter-spacing: 0;
+            text-transform: none;
+        }
+        table.wrap-head th, table.wrap-head td {
+            padding: 0.4rem 0.35rem;
+            font-size: 0.76rem;
+            line-height: 1.35;
+        }
+
+        /* Arm selector navigation */
+        .arm-nav {
+            display: flex;
+            gap: 0.5rem;
+            margin: 0.75rem 0 1rem 0;
+            flex-wrap: wrap;
+        }
+        .arm-btn {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            color: #475569;
+            padding: 0.4rem 0.85rem;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .arm-btn:hover {
+            background: #e2e8f0;
+            color: #1e293b;
+        }
+        .arm-btn.active {
+            background: #2b6cb0;
+            border-color: #2b6cb0;
+            color: #ffffff;
+            box-shadow: 0 1px 3px rgba(43,108,176,0.25);
+        }
+        .arm-badge-note {
+            display: inline-block;
+            padding: 0.35rem 0.75rem;
+            font-size: 0.82rem;
+            border-radius: 6px;
+            background: #fffbeb;
+            border: 1px solid #fef3c7;
+            border-left: 4px solid #d97706;
+            color: #92400e;
+            margin: 0.5rem 0 0.85rem 0;
+            line-height: 1.45;
+        }
+        .stat-pill-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.85rem;
+            margin-top: 1rem;
+        }
+        @media (max-width: 768px) {
+            .stat-pill-row { grid-template-columns: 1fr; }
+            .grid-2col { grid-template-columns: 1fr !important; }
+        }
+        .stat-pill {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 0.85rem 1rem;
+            font-size: 0.84rem;
+        }
+        .stat-pill-title {
+            font-weight: 700;
+            font-size: 0.88rem;
+            margin-bottom: 0.35rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+    </style>
+</head>
+<body>
+<script src="assets/js/site.js"></script>
+<main id="results-root">
+
+    <!-- EXECUTIVE OVERVIEW -->
+    <section class="content-box">
+        <h2>Executive Summary: How Self-Training Unfolds Across 3 Stages</h2>
+        <p>In label-free self-training, the model generates its own reasoning traces, filters them by consensus agreement, and retrains itself. To see what changes each round in Small Language Models (SLMs), we track <strong>three stages</strong>:</p>
+
+        <div class="mermaid" style="text-align: center; margin: 1.5rem 0;">
+flowchart LR
+    A["<b>500 Pool Questions</b><br>GSM8K Training Split"] --> B["<b>Stage 1: Generator</b><br>Sample 8 traces per question<br>(4,000 total solutions)"]
+    B --> C["<b>Stage 2: Verifier / Filter</b><br>Select confident subset<br>(≥ 6 of 8 agreement)"]
+    C --> D["<b>LoRA Training</b><br>SFT on harvested traces"]
+    D --> E["<b>Stage 3: Test Set</b><br>Evaluate on unseen test set<br>(100 questions)"]
+    D -.->|"Next Round Rollout"| B
+        </div>
+
+        <div class="summary-box" style="background: #f8fafc; border-left: 4px solid #3182ce; padding: 1.25rem 1.5rem; margin: 1rem 0; border-radius: 0 8px 8px 0;">
+            <h3 style="margin-top: 0; color: #2b6cb0;">Core Intuition in 1 Minute</h3>
+            <ul style="margin: 0; padding-left: 1.25rem; color: #2d3748; line-height: 1.6;">
+                <li><strong>Stage 1 (Generator, 0.8B 4-bit vote arm):</strong> One sample on the pool rises 38.0 &rarr; 46.5 &rarr; 48.0%, while the majority vote of its 8 samples stays flat (56.0 &rarr; 58.2 &rarr; 56.4%). Part of the one-sample rise is finishing (cut-offs 17.1 &rarr; 7.4%) and part is better finished answers (45.8 &rarr; 51.9% right when finished). At 16-bit, the gain on unseen pool questions is all finishing.</li>
+                <li><strong>Stage 2 (Verifier / Filter):</strong> More questions reach 6 of 8 agreement ($123 \rightarrow 197 \rightarrow 234$), but the <strong>share of wrong labels triples from 4.1% to 13.2%</strong>. Rising agreement is therefore not evidence of accuracy.</li>
+                <li><strong>Stage 3 (Held-Out Test Set, 100 questions):</strong> One sample rises in Round 1 (+6.6 [+2.6, +10.5]), and later rounds show no clear change. Every vote change on the test set stays inside the &plusmn;8-point re-run noise.</li>
+            </ul>
+            <p style="margin: 0.75rem 0 0 0; color: #2d3748; font-size: 0.9rem;">Falling label quality is measured, but we have not shown that it causes any decline. No difference between the three arms holds across training seeds. Each cell here is one run.</p>
+        </div>
+    </section>
+
+    <!-- SECTION 1: THE THREE STAGES VISUALIZED -->
+    <section class="content-box">
+        <h2>1. The Three Stages: Visual Trajectories Across All Arms &amp; Precisions</h2>
+        <p>The visualizations below track how self-training unfolds across rounds on the 500-question training pool and held-out test set. Both <strong>4-bit NF4</strong> and <strong>16-bit bfloat16</strong> are plotted together across all three filtering arms (<strong>Majority Vote</strong>, <strong>Critic</strong>, and <strong>Critic + Reason</strong>):</p>
+
+        <div class="arm-badge-note">
+            <strong>How to read these charts:</strong>
+            In <strong>Qwen3.5-0.8B</strong>, all three arms have pool and test runs for Rounds 0, 1 and 2.<br>
+            In <strong>Qwen3.5-2B</strong>, the Round 2 pool was run only for the <strong>Majority Vote</strong> arm. The other two arms have Round 2 test results only (77%&ndash;81%).<br>
+            Stage 2 charts apply the plain 6-of-8 vote to every arm's samples, so the arms can be compared. The critic arms actually train on critic + vote labels, listed in the scorecard.<br>
+            Runs are not all on one GPU or batch size. For example, the two 0.8B 16-bit critic arms used batch 32 for the Round 2 pool and the vote arm used batch 64.
+        </div>
+
+        <!-- SUBSECTION 1.1: QWEN-0.8B -->
+        <h3 style="margin-top: 1.5rem; color: #2b6cb0; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+            <span>Figure 1: Qwen3.5-0.8B Multi-Round Dynamics</span>
+            <span style="font-size: 0.8rem; font-weight: normal; color: #64748b;">All 3 arms completed across all rounds</span>
+        </h3>
+
+        <!-- 0.8B Arm Navigation Tabs -->
+        <div class="arm-nav">
+            <button class="arm-btn q08b-btn active" id="q08b-btn-all" onclick="switchArmTab('q08b', 'all')">All Arms Head-to-Head</button>
+            <button class="arm-btn q08b-btn" id="q08b-btn-vote" onclick="switchArmTab('q08b', 'vote')">Arm 1: Majority Vote</button>
+            <button class="arm-btn q08b-btn" id="q08b-btn-critic" onclick="switchArmTab('q08b', 'critic')">Arm 2: Critic</button>
+            <button class="arm-btn q08b-btn" id="q08b-btn-reason" onclick="switchArmTab('q08b', 'reason')">Arm 3: Critic + Reason</button>
+        </div>
+
+        <!-- 0.8B PANEL 1: ALL ARMS HEAD-TO-HEAD -->
+        <div class="q08b-panel" id="q08b-all" style="display: block;">
+            <div class="grid-2col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+                
+                <!-- 0.8B All Arms Stage 1 Majority Vote Chart -->
+                <div class="chart-card">
+                    <div class="chart-title">Stage 1: Pool Majority Vote Across Arms (0.8B)</div>
+                    <div class="chart-subtitle">One seed each; arm gaps did not hold across seeds on the test runs</div>
+                    <svg viewBox="0 0 400 230" style="width: 100%; height: auto; font-family: sans-serif;">
+                        <!-- Grid lines -->
+                        <line x1="40" y1="25" x2="360" y2="25" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="62.5" x2="360" y2="62.5" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="100" x2="360" y2="100" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="137.5" x2="360" y2="137.5" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="175" x2="360" y2="175" stroke="#cbd5e1" stroke-width="1.5"/>
+                        
+                        <!-- Y Axis Labels (50% to 70%, 1% = 7.5px) -->
+                        <text x="32" y="29" font-size="10" fill="#94a3b8" text-anchor="end">70%</text>
+                        <text x="32" y="66" font-size="10" fill="#94a3b8" text-anchor="end">65%</text>
+                        <text x="32" y="104" font-size="10" fill="#94a3b8" text-anchor="end">60%</text>
+                        <text x="32" y="141" font-size="10" fill="#94a3b8" text-anchor="end">55%</text>
+                        <text x="32" y="179" font-size="10" fill="#94a3b8" text-anchor="end">50%</text>
+                        
+                        <!-- X Axis Labels -->
+                        <text x="85" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 0</text>
+                        <text x="200" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 1</text>
+                        <text x="315" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 2</text>
+                        
+                        <!-- 16-bit Arms (Solid Lines) -->
+                        <!-- 16-bit Vote: 65.6% -> 63.8% -> 60.6% -->
+                        <polyline fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,58.0 200,71.5 315,95.5"/>
+                        <circle cx="85" cy="58.0" r="4" fill="#2563eb"/>
+                        <circle cx="200" cy="71.5" r="4" fill="#2563eb"/>
+                        <circle cx="315" cy="95.5" r="4" fill="#2563eb"/>
+                        <text x="325" y="99" font-size="9" fill="#1d4ed8" font-weight="700">60.6% (Vote)</text>
+
+                        <!-- 16-bit Critic: 65.6% -> 64.4% -> 62.6% -->
+                        <polyline fill="none" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,58.0 200,67.0 315,80.5"/>
+                        <circle cx="200" cy="67.0" r="4" fill="#ea580c"/>
+                        <circle cx="315" cy="80.5" r="4" fill="#ea580c"/>
+                        <text x="325" y="83" font-size="9" fill="#c2410c" font-weight="700">62.6% (Critic)</text>
+
+                        <!-- 16-bit Critic+Reason: 65.6% -> 65.2% -> 65.2% -->
+                        <polyline fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,58.0 200,61.0 315,61.0"/>
+                        <circle cx="200" cy="61.0" r="4" fill="#059669"/>
+                        <circle cx="315" cy="61.0" r="4" fill="#059669"/>
+                        <text x="325" y="64" font-size="9" fill="#047857" font-weight="700">65.2% (Reason)</text>
+
+                        <!-- 4-bit Arms (Dashed Lines) -->
+                        <!-- 4-bit Vote: 56.0% -> 58.2% -> 56.4% -->
+                        <polyline fill="none" stroke="#3b82f6" stroke-width="1.8" stroke-dasharray="4,3" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,130.0 200,113.5 315,127.0"/>
+                        <circle cx="85" cy="130.0" r="3" fill="#3b82f6"/>
+                        <circle cx="200" cy="113.5" r="3" fill="#3b82f6"/>
+                        <circle cx="315" cy="127.0" r="3" fill="#3b82f6"/>
+
+                        <!-- 4-bit Critic: 56.0% -> 56.6% -> 56.0% -->
+                        <polyline fill="none" stroke="#fb923c" stroke-width="1.8" stroke-dasharray="4,3" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,130.0 200,125.5 315,130.0"/>
+                        <circle cx="200" cy="125.5" r="3" fill="#fb923c"/>
+                        <circle cx="315" cy="130.0" r="3" fill="#fb923c"/>
+
+                        <!-- 4-bit Critic+Reason: 56.0% -> 57.6% -> 58.2% -->
+                        <polyline fill="none" stroke="#10b981" stroke-width="1.8" stroke-dasharray="4,3" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,130.0 200,118.0 315,113.5"/>
+                        <circle cx="200" cy="118.0" r="3" fill="#10b981"/>
+                        <circle cx="315" cy="113.5" r="3" fill="#10b981"/>
+                    </svg>
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.76rem; border-top: 1px solid #f1f5f9; padding-top: 0.4rem;">
+                        <span><b style="color: #2563eb;">—</b> Vote</span>
+                        <span><b style="color: #ea580c;">—</b> Critic</span>
+                        <span><b style="color: #059669;">—</b> Critic + Reason</span>
+                        <span style="color: #64748b;">(Solid: 16-bit | Dashed: 4-bit)</span>
+                    </div>
+                </div>
+
+                <!-- 0.8B All Arms Stage 2 Error Contamination Chart -->
+                <div class="chart-card">
+                    <div class="chart-title">Stage 2: Wrong Labels at 6 of 8 (0.8B)</div>
+                    <div class="chart-subtitle">All arms rise; Round 2 gaps between arms are within chance (p = 0.33 at 16-bit, 0.78 at 4-bit)</div>
+                    <svg viewBox="0 0 400 230" style="width: 100%; height: auto; font-family: sans-serif;">
+                        <!-- Grid lines -->
+                        <line x1="40" y1="25" x2="360" y2="25" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="62.5" x2="360" y2="62.5" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="100" x2="360" y2="100" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="137.5" x2="360" y2="137.5" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="175" x2="360" y2="175" stroke="#cbd5e1" stroke-width="1.5"/>
+                        
+                        <!-- Y Axis Labels (0% to 16%, 1% = 9.375px) -->
+                        <text x="32" y="29" font-size="10" fill="#94a3b8" text-anchor="end">16%</text>
+                        <text x="32" y="66" font-size="10" fill="#94a3b8" text-anchor="end">12%</text>
+                        <text x="32" y="104" font-size="10" fill="#94a3b8" text-anchor="end">8%</text>
+                        <text x="32" y="141" font-size="10" fill="#94a3b8" text-anchor="end">4%</text>
+                        <text x="32" y="179" font-size="10" fill="#94a3b8" text-anchor="end">0%</text>
+                        
+                        <!-- X Axis Labels -->
+                        <text x="85" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 0</text>
+                        <text x="200" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 1</text>
+                        <text x="315" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 2</text>
+                        
+                        <!-- 16-bit Vote: 4.7% -> 9.0% -> 12.9% -->
+                        <polyline fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,130.9 200,90.6 315,54.1"/>
+                        <circle cx="85" cy="130.9" r="4" fill="#2563eb"/>
+                        <circle cx="200" cy="90.6" r="4" fill="#2563eb"/>
+                        <circle cx="315" cy="54.1" r="4" fill="#2563eb"/>
+                        <text x="325" y="52" font-size="9" fill="#1d4ed8" font-weight="700">12.9% (Vote)</text>
+
+                        <!-- 16-bit Critic: 4.7% -> 10.7% -> 12.9% -->
+                        <polyline fill="none" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,130.9 200,74.7 315,54.1"/>
+                        <circle cx="200" cy="74.7" r="4" fill="#ea580c"/>
+                        <circle cx="315" cy="54.1" r="4" fill="#ea580c"/>
+
+                        <!-- 16-bit Critic+Reason: 4.7% -> 9.5% -> 9.8% -->
+                        <polyline fill="none" stroke="#059669" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,130.9 200,85.9 315,83.1"/>
+                        <circle cx="200" cy="85.9" r="4.5" fill="#059669"/>
+                        <circle cx="315" cy="83.1" r="4.5" fill="#059669"/>
+                        <text x="325" y="86" font-size="9" fill="#047857" font-weight="700">9.8% (Reason)</text>
+
+                        <!-- 4-bit Arms (Dashed Lines) -->
+                        <!-- 4-bit Vote: 4.1% -> 8.6% -> 13.2% -->
+                        <polyline fill="none" stroke="#3b82f6" stroke-width="1.8" stroke-dasharray="4,3" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,136.6 200,94.4 315,51.2"/>
+                        <circle cx="85" cy="136.6" r="3" fill="#3b82f6"/>
+                        <circle cx="200" cy="94.4" r="3" fill="#3b82f6"/>
+                        <circle cx="315" cy="51.2" r="3" fill="#3b82f6"/>
+
+                        <!-- 4-bit Critic: 4.1% -> 11.5% -> 13.3% -->
+                        <polyline fill="none" stroke="#fb923c" stroke-width="1.8" stroke-dasharray="4,3" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,136.6 200,67.2 315,50.3"/>
+                        <circle cx="200" cy="67.2" r="3" fill="#fb923c"/>
+                        <circle cx="315" cy="50.3" r="3" fill="#fb923c"/>
+
+                        <!-- 4-bit Critic+Reason: 4.1% -> 7.6% -> 12.3% -->
+                        <polyline fill="none" stroke="#10b981" stroke-width="1.8" stroke-dasharray="4,3" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,136.6 200,103.7 315,59.7"/>
+                        <circle cx="200" cy="103.7" r="3" fill="#10b981"/>
+                        <circle cx="315" cy="59.7" r="3" fill="#10b981"/>
+                    </svg>
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.76rem; border-top: 1px solid #f1f5f9; padding-top: 0.4rem;">
+                        <span><b style="color: #2563eb;">—</b> Vote</span>
+                        <span><b style="color: #ea580c;">—</b> Critic</span>
+                        <span><b style="color: #059669;">—</b> Critic + Reason</span>
+                        <span style="color: #64748b;">(Solid: 16-bit | Dashed: 4-bit)</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Summary Stat Pills for 0.8B -->
+            <div class="stat-pill-row">
+                <div class="stat-pill" style="border-left: 4px solid #2563eb;">
+                    <div class="stat-pill-title" style="color: #1e40af;">Arm 1: Majority Vote</div>
+                    <div><b>R2 Pool Vote:</b> 60.6% (16-bit) | 56.4% (4-bit)</div>
+                    <div><b>R2 Wrong Labels:</b> 12.9% (16-bit) | 13.2% (4-bit)</div>
+                    <div style="color: #64748b; font-size: 0.78rem; margin-top: 0.25rem;">Wrong labels roughly triple. The vote is flat at 4-bit and 5 points lower at 16-bit.</div>
+                </div>
+                <div class="stat-pill" style="border-left: 4px solid #ea580c;">
+                    <div class="stat-pill-title" style="color: #c2410c;">Arm 2: Critic</div>
+                    <div><b>R2 Pool Vote:</b> 62.6% (16-bit) | 56.0% (4-bit)</div>
+                    <div><b>R2 Wrong Labels:</b> 12.9% (16-bit) | 13.3% (4-bit)</div>
+                    <div style="color: #64748b; font-size: 0.78rem; margin-top: 0.25rem;">Wrong labels rise much as in the vote arm.</div>
+                </div>
+                <div class="stat-pill" style="border-left: 4px solid #059669;">
+                    <div class="stat-pill-title" style="color: #047857;">Arm 3: Critic + Reason</div>
+                    <div><b>R2 Pool Vote:</b> 65.2% (16-bit) | 58.2% (4-bit)</div>
+                    <div><b>R2 Wrong Labels:</b> 9.8% (16-bit) | 12.3% (4-bit)</div>
+                    <div style="color: #64748b; font-size: 0.78rem; margin-top: 0.25rem;">Highest pool vote here, but lowest 4-bit test vote at R2 (54%). The gaps are within chance.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 0.8B PANEL 2: VOTE ARM SPECIFIC -->
+        <div class="q08b-panel" id="q08b-vote" style="display: none;">
+            <div class="grid-2col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+                <div class="chart-card">
+                    <div class="chart-title">Arm 1 (Vote): Majority Vote vs Pass@1 (0.8B)</div>
+                    <div class="chart-subtitle">Pool vote stays flat at 4-bit and falls at 16-bit while Pass@1 rises</div>
+                    <svg viewBox="0 0 380 230" style="width: 100%; height: auto; font-family: sans-serif;">
+                        <line x1="40" y1="25" x2="360" y2="25" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="62.5" x2="360" y2="62.5" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="100" x2="360" y2="100" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="137.5" x2="360" y2="137.5" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="175" x2="360" y2="175" stroke="#cbd5e1" stroke-width="1.5"/>
+                        <text x="32" y="29" font-size="10" fill="#94a3b8" text-anchor="end">70%</text>
+                        <text x="32" y="66" font-size="10" fill="#94a3b8" text-anchor="end">60%</text>
+                        <text x="32" y="104" font-size="10" fill="#94a3b8" text-anchor="end">50%</text>
+                        <text x="32" y="141" font-size="10" fill="#94a3b8" text-anchor="end">40%</text>
+                        <text x="32" y="179" font-size="10" fill="#94a3b8" text-anchor="end">30%</text>
+                        <text x="85" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 0</text>
+                        <text x="200" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 1</text>
+                        <text x="315" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 2</text>
+                        <polyline fill="none" stroke="#7c3aed" stroke-width="2.5" points="85,41.5 200,48.3 315,60.3"/>
+                        <circle cx="85" cy="41.5" r="4" fill="#7c3aed"/><circle cx="200" cy="48.3" r="4" fill="#7c3aed"/><circle cx="315" cy="60.3" r="4" fill="#7c3aed"/>
+                        <text x="85" y="33" font-size="9.5" fill="#6d28d9" font-weight="700" text-anchor="middle">65.6%</text>
+                        <text x="200" y="40" font-size="9.5" fill="#6d28d9" font-weight="700" text-anchor="middle">63.8%</text>
+                        <text x="315" y="52" font-size="9.5" fill="#6d28d9" font-weight="700" text-anchor="middle">60.6%</text>
+                        <polyline fill="none" stroke="#2563eb" stroke-width="2.5" points="85,77.5 200,69.3 315,76.0"/>
+                        <circle cx="85" cy="77.5" r="4" fill="#2563eb"/><circle cx="200" cy="69.3" r="4" fill="#2563eb"/><circle cx="315" cy="76.0" r="4" fill="#2563eb"/>
+                        <text x="85" y="69" font-size="9.5" fill="#1e40af" font-weight="700" text-anchor="middle">56.0%</text>
+                        <text x="200" y="61" font-size="9.5" fill="#1e40af" font-weight="700" text-anchor="middle">58.2%</text>
+                        <text x="315" y="88" font-size="9.5" fill="#1e40af" font-weight="700" text-anchor="middle">56.4%</text>
+                        <polyline fill="none" stroke="#a855f7" stroke-width="2" stroke-dasharray="4,3" points="85,112.8 200,95.5 315,91.8"/>
+                        <polyline fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="4,3" points="85,145.0 200,113.1 315,107.5"/>
+                    </svg>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.78rem; text-align: center;">
+                        <span style="color: #7c3aed; font-weight: 700;">— 16-bit Majority Vote</span>
+                        <span style="color: #2563eb; font-weight: 700;">— 4-bit Majority Vote</span>
+                        <span style="color: #a855f7; font-weight: 600;">-- 16-bit Pass@1</span>
+                        <span style="color: #10b981; font-weight: 600;">-- 4-bit Pass@1</span>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Arm 1 (Vote): Filtered Questions &amp; Error Rate</div>
+                    <div class="chart-subtitle">Questions grow (123 &rarr; 234) while wrong labels triple (4.1% &rarr; 13.2%). Bars use the left axis, lines the right.</div>
+                    <svg viewBox="0 0 380 230" style="width: 100%; height: auto; font-family: sans-serif;">
+                        <line x1="40" y1="25" x2="360" y2="25" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="75" x2="360" y2="75" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="125" x2="360" y2="125" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="175" x2="360" y2="175" stroke="#cbd5e1" stroke-width="1.5"/>
+                        <text x="32" y="29" font-size="10" fill="#94a3b8" text-anchor="end">300 Q</text>
+                        <text x="32" y="79" font-size="10" fill="#94a3b8" text-anchor="end">200 Q</text>
+                        <text x="32" y="129" font-size="10" fill="#94a3b8" text-anchor="end">100 Q</text>
+                        <text x="32" y="179" font-size="10" fill="#94a3b8" text-anchor="end">0 Q</text>
+                        <text x="92" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 0</text>
+                        <text x="197" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 1</text>
+                        <text x="302" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 2</text>
+                        <text x="376" y="29" font-size="10" fill="#94a3b8" text-anchor="end">16%</text>
+                        <text x="376" y="104" font-size="10" fill="#94a3b8" text-anchor="end">8%</text>
+                        <text x="376" y="179" font-size="10" fill="#94a3b8" text-anchor="end">0%</text>
+                        <rect x="68" y="113.5" width="22" height="61.5" fill="#93c5fd" rx="2"/>
+                        <text x="79" y="108" font-size="8.5" fill="#1e40af" font-weight="700" text-anchor="middle">123</text>
+                        <rect x="94" y="90" width="22" height="85" fill="#c4b5fd" rx="2"/>
+                        <text x="105" y="84" font-size="8.5" fill="#6d28d9" font-weight="700" text-anchor="middle">170</text>
+                        <rect x="173" y="76.5" width="22" height="98.5" fill="#93c5fd" rx="2"/>
+                        <text x="184" y="71" font-size="8.5" fill="#1e40af" font-weight="700" text-anchor="middle">197</text>
+                        <rect x="199" y="58.5" width="22" height="116.5" fill="#c4b5fd" rx="2"/>
+                        <text x="210" y="53" font-size="8.5" fill="#6d28d9" font-weight="700" text-anchor="middle">233</text>
+                        <rect x="278" y="58" width="22" height="117" fill="#93c5fd" rx="2"/>
+                        <text x="289" y="52" font-size="8.5" fill="#1e40af" font-weight="700" text-anchor="middle">234</text>
+                        <rect x="304" y="47.5" width="22" height="127.5" fill="#c4b5fd" rx="2"/>
+                        <text x="315" y="42" font-size="8.5" fill="#6d28d9" font-weight="700" text-anchor="middle">255</text>
+                        <polyline fill="none" stroke="#dc2626" stroke-width="2.5" points="79,136.5 184,94.3 289,51.2"/>
+                        <polyline fill="none" stroke="#b91c1c" stroke-width="2" stroke-dasharray="4,3" points="105,130.9 210,90.6 315,54.0"/>
+                    </svg>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.78rem; text-align: center;">
+                        <span style="color: #1e40af; font-weight: 700;">■ 4-bit Questions</span>
+                        <span style="color: #6d28d9; font-weight: 700;">■ 16-bit Questions</span>
+                        <span style="color: #dc2626; font-weight: 600;">— 4-bit Error Rate</span>
+                        <span style="color: #b91c1c; font-weight: 600;">-- 16-bit Error Rate</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 0.8B PANEL 3: CRITIC ARM SPECIFIC -->
+        <div class="q08b-panel" id="q08b-critic" style="display: none;">
+            <div class="grid-2col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+                <div class="chart-card">
+                    <div class="chart-title">Arm 2 (Critic): Majority Vote vs Pass@1 (0.8B)</div>
+                    <div class="chart-subtitle">16-bit reaches 62.6% (60.6% on Vote); 4-bit flat at 56.0%</div>
+                    <svg viewBox="0 0 380 230" style="width: 100%; height: auto; font-family: sans-serif;">
+                        <line x1="40" y1="25" x2="360" y2="25" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="62.5" x2="360" y2="62.5" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="100" x2="360" y2="100" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="137.5" x2="360" y2="137.5" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="175" x2="360" y2="175" stroke="#cbd5e1" stroke-width="1.5"/>
+                        <text x="32" y="29" font-size="10" fill="#94a3b8" text-anchor="end">70%</text>
+                        <text x="32" y="66" font-size="10" fill="#94a3b8" text-anchor="end">60%</text>
+                        <text x="32" y="104" font-size="10" fill="#94a3b8" text-anchor="end">50%</text>
+                        <text x="32" y="141" font-size="10" fill="#94a3b8" text-anchor="end">40%</text>
+                        <text x="32" y="179" font-size="10" fill="#94a3b8" text-anchor="end">30%</text>
+                        <text x="85" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 0</text>
+                        <text x="200" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 1</text>
+                        <text x="315" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 2</text>
+                        <polyline fill="none" stroke="#ea580c" stroke-width="2.5" points="85,41.5 200,46.0 315,52.8"/>
+                        <circle cx="85" cy="41.5" r="4" fill="#ea580c"/><circle cx="200" cy="46.0" r="4" fill="#ea580c"/><circle cx="315" cy="52.8" r="4" fill="#ea580c"/>
+                        <text x="85" y="33" font-size="9.5" fill="#c2410c" font-weight="700" text-anchor="middle">65.6%</text>
+                        <text x="200" y="38" font-size="9.5" fill="#c2410c" font-weight="700" text-anchor="middle">64.4%</text>
+                        <text x="315" y="44" font-size="9.5" fill="#c2410c" font-weight="700" text-anchor="middle">62.6%</text>
+                        <polyline fill="none" stroke="#f97316" stroke-width="2.5" points="85,77.5 200,75.2 315,77.5"/>
+                        <circle cx="85" cy="77.5" r="4" fill="#f97316"/><circle cx="200" cy="75.2" r="4" fill="#f97316"/><circle cx="315" cy="77.5" r="4" fill="#f97316"/>
+                        <text x="85" y="69" font-size="9.5" fill="#ea580c" font-weight="700" text-anchor="middle">56.0%</text>
+                        <text x="200" y="67" font-size="9.5" fill="#ea580c" font-weight="700" text-anchor="middle">56.6%</text>
+                        <text x="315" y="89" font-size="9.5" fill="#ea580c" font-weight="700" text-anchor="middle">56.0%</text>
+                        <polyline fill="none" stroke="#fdba74" stroke-width="2" stroke-dasharray="4,3" points="85,112.8 200,91.0 315,88.0"/>
+                        <polyline fill="none" stroke="#fbbf24" stroke-width="2" stroke-dasharray="4,3" points="85,145.0 200,119.9 315,111.3"/>
+                    </svg>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.78rem; text-align: center;">
+                        <span style="color: #ea580c; font-weight: 700;">— 16-bit Majority Vote</span>
+                        <span style="color: #f97316; font-weight: 700;">— 4-bit Majority Vote</span>
+                        <span style="color: #fdba74; font-weight: 600;">-- 16-bit Pass@1</span>
+                        <span style="color: #fbbf24; font-weight: 600;">-- 4-bit Pass@1</span>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Arm 2 (Critic): Filtered Questions &amp; Error Rate</div>
+                    <div class="chart-subtitle">Questions at 6 of 8 reach 218 / 263; wrong labels match Vote at 12.9%–13.3%. Bars use the left axis, lines the right.</div>
+                    <svg viewBox="0 0 380 230" style="width: 100%; height: auto; font-family: sans-serif;">
+                        <line x1="40" y1="25" x2="360" y2="25" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="75" x2="360" y2="75" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="125" x2="360" y2="125" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="175" x2="360" y2="175" stroke="#cbd5e1" stroke-width="1.5"/>
+                        <text x="32" y="29" font-size="10" fill="#94a3b8" text-anchor="end">300 Q</text>
+                        <text x="32" y="79" font-size="10" fill="#94a3b8" text-anchor="end">200 Q</text>
+                        <text x="32" y="129" font-size="10" fill="#94a3b8" text-anchor="end">100 Q</text>
+                        <text x="32" y="179" font-size="10" fill="#94a3b8" text-anchor="end">0 Q</text>
+                        <text x="92" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 0</text>
+                        <text x="197" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 1</text>
+                        <text x="302" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 2</text>
+                        <text x="376" y="29" font-size="10" fill="#94a3b8" text-anchor="end">16%</text>
+                        <text x="376" y="104" font-size="10" fill="#94a3b8" text-anchor="end">8%</text>
+                        <text x="376" y="179" font-size="10" fill="#94a3b8" text-anchor="end">0%</text>
+                        <rect x="68" y="113.5" width="22" height="61.5" fill="#fed7aa" rx="2"/>
+                        <text x="79" y="108" font-size="8.5" fill="#c2410c" font-weight="700" text-anchor="middle">123</text>
+                        <rect x="94" y="90" width="22" height="85" fill="#fdba74" rx="2"/>
+                        <text x="105" y="84" font-size="8.5" fill="#9a3412" font-weight="700" text-anchor="middle">170</text>
+                        <rect x="173" y="79" width="22" height="96" fill="#fed7aa" rx="2"/>
+                        <text x="184" y="74" font-size="8.5" fill="#c2410c" font-weight="700" text-anchor="middle">192</text>
+                        <rect x="199" y="54" width="22" height="121" fill="#fdba74" rx="2"/>
+                        <text x="210" y="49" font-size="8.5" fill="#9a3412" font-weight="700" text-anchor="middle">242</text>
+                        <rect x="278" y="66" width="22" height="109" fill="#fed7aa" rx="2"/>
+                        <text x="289" y="61" font-size="8.5" fill="#c2410c" font-weight="700" text-anchor="middle">218</text>
+                        <rect x="304" y="43.5" width="22" height="131.5" fill="#fdba74" rx="2"/>
+                        <text x="315" y="38" font-size="8.5" fill="#9a3412" font-weight="700" text-anchor="middle">263</text>
+                        <polyline fill="none" stroke="#ea580c" stroke-width="2.5" points="79,136.5 184,67.2 289,50.3"/>
+                        <polyline fill="none" stroke="#c2410c" stroke-width="2" stroke-dasharray="4,3" points="105,130.9 210,74.7 315,54.1"/>
+                    </svg>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.78rem; text-align: center;">
+                        <span style="color: #c2410c; font-weight: 700;">■ 4-bit Questions</span>
+                        <span style="color: #9a3412; font-weight: 700;">■ 16-bit Questions</span>
+                        <span style="color: #ea580c; font-weight: 600;">— 4-bit Error Rate</span>
+                        <span style="color: #c2410c; font-weight: 600;">-- 16-bit Error Rate</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 0.8B PANEL 4: CRITIC + REASON ARM SPECIFIC -->
+        <div class="q08b-panel" id="q08b-reason" style="display: none;">
+            <div class="grid-2col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+                <div class="chart-card">
+                    <div class="chart-title">Arm 3 (Critic+Reason): Majority Vote vs Pass@1 (0.8B)</div>
+                    <div class="chart-subtitle">Pool vote: 16-bit 65.6% &rarr; 65.2%; 4-bit 56.0% &rarr; 58.2%. One seed.</div>
+                    <svg viewBox="0 0 380 230" style="width: 100%; height: auto; font-family: sans-serif;">
+                        <line x1="40" y1="25" x2="360" y2="25" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="62.5" x2="360" y2="62.5" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="100" x2="360" y2="100" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="137.5" x2="360" y2="137.5" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="175" x2="360" y2="175" stroke="#cbd5e1" stroke-width="1.5"/>
+                        <text x="32" y="29" font-size="10" fill="#94a3b8" text-anchor="end">70%</text>
+                        <text x="32" y="66" font-size="10" fill="#94a3b8" text-anchor="end">60%</text>
+                        <text x="32" y="104" font-size="10" fill="#94a3b8" text-anchor="end">50%</text>
+                        <text x="32" y="141" font-size="10" fill="#94a3b8" text-anchor="end">40%</text>
+                        <text x="32" y="179" font-size="10" fill="#94a3b8" text-anchor="end">30%</text>
+                        <text x="85" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 0</text>
+                        <text x="200" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 1</text>
+                        <text x="315" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 2</text>
+                        <polyline fill="none" stroke="#059669" stroke-width="2.5" points="85,41.5 200,43.0 315,43.0"/>
+                        <circle cx="85" cy="41.5" r="4" fill="#059669"/><circle cx="200" cy="43.0" r="4" fill="#059669"/><circle cx="315" cy="43.0" r="4" fill="#059669"/>
+                        <text x="85" y="33" font-size="9.5" fill="#047857" font-weight="700" text-anchor="middle">65.6%</text>
+                        <text x="200" y="35" font-size="9.5" fill="#047857" font-weight="700" text-anchor="middle">65.2%</text>
+                        <text x="315" y="35" font-size="9.5" fill="#047857" font-weight="700" text-anchor="middle">65.2%</text>
+                        <polyline fill="none" stroke="#10b981" stroke-width="2.5" points="85,77.5 200,71.5 315,69.3"/>
+                        <circle cx="85" cy="77.5" r="4" fill="#10b981"/><circle cx="200" cy="71.5" r="4" fill="#10b981"/><circle cx="315" cy="69.3" r="4" fill="#10b981"/>
+                        <text x="85" y="89" font-size="9.5" fill="#065f46" font-weight="700" text-anchor="middle">56.0%</text>
+                        <text x="200" y="63" font-size="9.5" fill="#065f46" font-weight="700" text-anchor="middle">57.6%</text>
+                        <text x="315" y="61" font-size="9.5" fill="#065f46" font-weight="700" text-anchor="middle">58.2%</text>
+                        <polyline fill="none" stroke="#34d399" stroke-width="2" stroke-dasharray="4,3" points="85,112.8 200,95.9 315,79.4"/>
+                        <polyline fill="none" stroke="#6ee7b7" stroke-width="2" stroke-dasharray="4,3" points="85,145.0 200,120.3 315,111.2"/>
+                    </svg>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.78rem; text-align: center;">
+                        <span style="color: #059669; font-weight: 700;">— 16-bit Majority Vote</span>
+                        <span style="color: #10b981; font-weight: 700;">— 4-bit Majority Vote</span>
+                        <span style="color: #34d399; font-weight: 600;">-- 16-bit Pass@1 (55.5%)</span>
+                        <span style="color: #6ee7b7; font-weight: 600;">-- 4-bit Pass@1</span>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Arm 3 (Critic+Reason): Filtered Questions &amp; Error Rate</div>
+                    <div class="chart-subtitle">Wrong labels reach 9.8% (16-bit) and 12.3% (4-bit); gaps to the other arms are within chance. Bars use the left axis, lines the right.</div>
+                    <svg viewBox="0 0 380 230" style="width: 100%; height: auto; font-family: sans-serif;">
+                        <line x1="40" y1="25" x2="360" y2="25" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="75" x2="360" y2="75" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="125" x2="360" y2="125" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="175" x2="360" y2="175" stroke="#cbd5e1" stroke-width="1.5"/>
+                        <text x="32" y="29" font-size="10" fill="#94a3b8" text-anchor="end">300 Q</text>
+                        <text x="32" y="79" font-size="10" fill="#94a3b8" text-anchor="end">200 Q</text>
+                        <text x="32" y="129" font-size="10" fill="#94a3b8" text-anchor="end">100 Q</text>
+                        <text x="32" y="179" font-size="10" fill="#94a3b8" text-anchor="end">0 Q</text>
+                        <text x="92" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 0</text>
+                        <text x="197" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 1</text>
+                        <text x="302" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 2</text>
+                        <text x="376" y="29" font-size="10" fill="#94a3b8" text-anchor="end">16%</text>
+                        <text x="376" y="104" font-size="10" fill="#94a3b8" text-anchor="end">8%</text>
+                        <text x="376" y="179" font-size="10" fill="#94a3b8" text-anchor="end">0%</text>
+                        <rect x="68" y="113.5" width="22" height="61.5" fill="#a7f3d0" rx="2"/>
+                        <text x="79" y="108" font-size="8.5" fill="#065f46" font-weight="700" text-anchor="middle">123</text>
+                        <rect x="94" y="90" width="22" height="85" fill="#6ee7b7" rx="2"/>
+                        <text x="105" y="84" font-size="8.5" fill="#047857" font-weight="700" text-anchor="middle">170</text>
+                        <rect x="173" y="82.5" width="22" height="92.5" fill="#a7f3d0" rx="2"/>
+                        <text x="184" y="77" font-size="8.5" fill="#065f46" font-weight="700" text-anchor="middle">185</text>
+                        <rect x="199" y="64.5" width="22" height="110.5" fill="#6ee7b7" rx="2"/>
+                        <text x="210" y="59" font-size="8.5" fill="#047857" font-weight="700" text-anchor="middle">221</text>
+                        <rect x="278" y="69.5" width="22" height="105.5" fill="#a7f3d0" rx="2"/>
+                        <text x="289" y="64" font-size="8.5" fill="#065f46" font-weight="700" text-anchor="middle">211</text>
+                        <rect x="304" y="48" width="22" height="127" fill="#6ee7b7" rx="2"/>
+                        <text x="315" y="43" font-size="8.5" fill="#047857" font-weight="700" text-anchor="middle">254</text>
+                        <polyline fill="none" stroke="#059669" stroke-width="2.5" points="79,136.5 184,103.7 289,59.7"/>
+                        <polyline fill="none" stroke="#047857" stroke-width="2.5" stroke-dasharray="4,3" points="105,130.9 210,85.9 315,83.1"/>
+                    </svg>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.78rem; text-align: center;">
+                        <span style="color: #065f46; font-weight: 700;">■ 4-bit Questions</span>
+                        <span style="color: #047857; font-weight: 700;">■ 16-bit Questions</span>
+                        <span style="color: #059669; font-weight: 600;">— 4-bit Error Rate</span>
+                        <span style="color: #047857; font-weight: 600;">-- 16-bit Error Rate</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUBSECTION 1.2: QWEN-2B -->
+        <h3 style="margin-top: 2.25rem; color: #2b6cb0; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+            <span>Figure 2: Qwen3.5-2B Multi-Round Dynamics</span>
+            <span style="font-size: 0.8rem; font-weight: normal; color: #b45309;">Round 2 pool rollout: Vote arm only</span>
+        </h3>
+
+        <!-- 2B Arm Navigation Tabs -->
+        <div class="arm-nav">
+            <button class="arm-btn q2b-btn active" id="q2b-btn-all" onclick="switchArmTab('q2b', 'all')">All Arms Head-to-Head</button>
+            <button class="arm-btn q2b-btn" id="q2b-btn-vote" onclick="switchArmTab('q2b', 'vote')">Arm 1: Majority Vote</button>
+            <button class="arm-btn q2b-btn" id="q2b-btn-critic" onclick="switchArmTab('q2b', 'critic')">Arm 2: Critic</button>
+            <button class="arm-btn q2b-btn" id="q2b-btn-reason" onclick="switchArmTab('q2b', 'reason')">Arm 3: Critic + Reason</button>
+        </div>
+
+        <!-- 2B PANEL 1: ALL ARMS HEAD-TO-HEAD -->
+        <div class="q2b-panel" id="q2b-all" style="display: block;">
+            <div class="grid-2col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+                
+                <!-- 2B All Arms Stage 1 Majority Vote Chart -->
+                <div class="chart-card">
+                    <div class="chart-title">Stage 1: Pool Majority Vote Across Arms (2B)</div>
+                    <div class="chart-subtitle">Higher baseline (~81%); Vote reaches 78.6% in R2. Only the vote arm has an R2 pool run.</div>
+                    <svg viewBox="0 0 380 230" style="width: 100%; height: auto; font-family: sans-serif;">
+                        <line x1="40" y1="25" x2="360" y2="25" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="75" x2="360" y2="75" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="125" x2="360" y2="125" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="175" x2="360" y2="175" stroke="#cbd5e1" stroke-width="1.5"/>
+                        
+                        <text x="32" y="29" font-size="10" fill="#94a3b8" text-anchor="end">85%</text>
+                        <text x="32" y="79" font-size="10" fill="#94a3b8" text-anchor="end">80%</text>
+                        <text x="32" y="129" font-size="10" fill="#94a3b8" text-anchor="end">75%</text>
+                        <text x="32" y="179" font-size="10" fill="#94a3b8" text-anchor="end">70%</text>
+                        
+                        <text x="85" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 0</text>
+                        <text x="200" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 1</text>
+                        <text x="315" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 2</text>
+                        
+                        <!-- 16-bit Arms (Solid Lines) -->
+                        <polyline fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,65.0 200,73.0 315,89.0"/>
+                        <circle cx="85" cy="65.0" r="4" fill="#2563eb"/>
+                        <circle cx="200" cy="73.0" r="4" fill="#2563eb"/>
+                        <circle cx="315" cy="89.0" r="4" fill="#2563eb"/>
+                        <text x="325" y="92" font-size="9" fill="#1d4ed8" font-weight="700">78.6% (Vote)</text>
+
+                        <!-- 16-bit Critic -->
+                        <polyline fill="none" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,65.0 200,73.0"/>
+                        <circle cx="200" cy="73.0" r="4" fill="#ea580c"/>
+
+                        <!-- 16-bit Critic+Reason -->
+                        <polyline fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,65.0 200,65.0"/>
+                        <circle cx="200" cy="65.0" r="4" fill="#059669"/>
+
+                        <!-- 4-bit Arms (Dashed Lines) -->
+                        <polyline fill="none" stroke="#3b82f6" stroke-width="1.8" stroke-dasharray="4,3" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,115.0 200,123.0 315,135.0"/>
+                        <circle cx="85" cy="115.0" r="3" fill="#3b82f6"/>
+                        <circle cx="200" cy="123.0" r="3" fill="#3b82f6"/>
+                        <circle cx="315" cy="135.0" r="3" fill="#3b82f6"/>
+                        <text x="325" y="139" font-size="8.5" fill="#2563eb">74.0% (4b)</text>
+
+                        <polyline fill="none" stroke="#fb923c" stroke-width="1.8" stroke-dasharray="4,3" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,115.0 200,125.0"/>
+                        <circle cx="200" cy="125.0" r="3" fill="#fb923c"/>
+
+                        <polyline fill="none" stroke="#10b981" stroke-width="1.8" stroke-dasharray="4,3" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,115.0 200,111.0"/>
+                        <circle cx="200" cy="111.0" r="3" fill="#10b981"/>
+                    </svg>
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.76rem; border-top: 1px solid #f1f5f9; padding-top: 0.4rem;">
+                        <span><b style="color: #2563eb;">—</b> Vote (All 3 Rounds)</span>
+                        <span><b style="color: #ea580c;">—</b> Critic (R0-R1 Pool)</span>
+                        <span><b style="color: #059669;">—</b> Critic+Reason (R0-R1 Pool)</span>
+                    </div>
+                </div>
+
+                <!-- 2B All Arms Stage 2 Error Contamination Chart -->
+                <div class="chart-card">
+                    <div class="chart-title">Stage 2: Wrong Labels at 6 of 8 (2B)</div>
+                    <div class="chart-subtitle">Wrong labels double from 5.4% to 10.7% on 4-bit; 16-bit climbs to 8.7%</div>
+                    <svg viewBox="0 0 380 230" style="width: 100%; height: auto; font-family: sans-serif;">
+                        <line x1="40" y1="25" x2="360" y2="25" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="67.8" x2="360" y2="67.8" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="110.7" x2="360" y2="110.7" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="153.6" x2="360" y2="153.6" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="175" x2="360" y2="175" stroke="#cbd5e1" stroke-width="1.5"/>
+                        
+                        <text x="32" y="29" font-size="10" fill="#94a3b8" text-anchor="end">14%</text>
+                        <text x="32" y="72" font-size="10" fill="#94a3b8" text-anchor="end">10%</text>
+                        <text x="32" y="115" font-size="10" fill="#94a3b8" text-anchor="end">6%</text>
+                        <text x="32" y="157" font-size="10" fill="#94a3b8" text-anchor="end">2%</text>
+                        <text x="32" y="179" font-size="10" fill="#94a3b8" text-anchor="end">0%</text>
+                        
+                        <text x="85" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 0</text>
+                        <text x="200" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 1</text>
+                        <text x="315" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 2</text>
+                        
+                        <!-- 16-bit Vote: 5.7% -> 7.0% -> 8.7% -->
+                        <polyline fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,113.9 200,100.0 315,81.8"/>
+                        <circle cx="85" cy="113.9" r="4" fill="#2563eb"/>
+                        <circle cx="200" cy="100.0" r="4" fill="#2563eb"/>
+                        <circle cx="315" cy="81.8" r="4" fill="#2563eb"/>
+                        <text x="325" y="85" font-size="9" fill="#1d4ed8" font-weight="700">8.7% (16b)</text>
+
+                        <!-- 16-bit Critic: 5.7% -> 7.0% -->
+                        <polyline fill="none" stroke="#ea580c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,113.9 200,100.0"/>
+                        <circle cx="200" cy="100.0" r="4" fill="#ea580c"/>
+
+                        <!-- 16-bit Critic+Reason: 5.7% -> 5.8% -->
+                        <polyline fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,113.9 200,112.9"/>
+                        <circle cx="200" cy="112.9" r="4" fill="#059669"/>
+                        <text x="210" y="117" font-size="8.5" fill="#047857">5.8% (Reason)</text>
+
+                        <!-- 4-bit Vote: 5.4% -> 9.0% -> 10.7% -->
+                        <polyline fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,117.2 200,78.6 315,60.4"/>
+                        <circle cx="85" cy="117.2" r="3.5" fill="#dc2626"/>
+                        <circle cx="200" cy="78.6" r="3.5" fill="#dc2626"/>
+                        <circle cx="315" cy="60.4" r="3.5" fill="#dc2626"/>
+                        <text x="325" y="62" font-size="9" fill="#b91c1c" font-weight="700">10.7% (4b)</text>
+
+                        <!-- 4-bit Critic: 5.4% -> 9.9% -->
+                        <polyline fill="none" stroke="#fb923c" stroke-width="1.8" stroke-dasharray="4,3" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,117.2 200,68.9"/>
+                        <circle cx="200" cy="68.9" r="3" fill="#fb923c"/>
+
+                        <!-- 4-bit Critic+Reason: 5.4% -> 8.4% -->
+                        <polyline fill="none" stroke="#10b981" stroke-width="1.8" stroke-dasharray="4,3" stroke-linecap="round" stroke-linejoin="round"
+                                  points="85,117.2 200,85.0"/>
+                        <circle cx="200" cy="85.0" r="3" fill="#10b981"/>
+                    </svg>
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.76rem; border-top: 1px solid #f1f5f9; padding-top: 0.4rem;">
+                        <span style="color: #2563eb; font-weight: 600;">— 16-bit Vote (8.7%)</span>
+                        <span style="color: #dc2626; font-weight: 600;">— 4-bit Vote (10.7%)</span>
+                        <span style="color: #059669; font-weight: 600;">— 16-bit Reason (5.8%)</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Summary Stat Pills for 2B -->
+            <div class="stat-pill-row">
+                <div class="stat-pill" style="border-left: 4px solid #2563eb;">
+                    <div class="stat-pill-title" style="color: #1e40af;">Arm 1: Majority Vote (All Rounds)</div>
+                    <div><b>R2 Pool Vote:</b> 78.6% (16-bit) | 74.0% (4-bit)</div>
+                    <div><b>R2 Wrong Labels:</b> 8.7% (16-bit) | 10.7% (4-bit)</div>
+                    <div style="color: #64748b; font-size: 0.78rem; margin-top: 0.25rem;">Only arm with an R2 pool run. Wrong labels double at 4-bit, from 5.4% to 10.7%.</div>
+                </div>
+                <div class="stat-pill" style="border-left: 4px solid #ea580c;">
+                    <div class="stat-pill-title" style="color: #c2410c;">Arm 2: Critic</div>
+                    <div><b>R1 Pool Vote / Wrong Labels:</b> 80.2% / 7.0% (16-bit)</div>
+                    <div><b>R2 Test Vote:</b> 77.0% (16-bit) | 79.0% (4-bit)</div>
+                    <div style="color: #64748b; font-size: 0.78rem; margin-top: 0.25rem;">No R2 pool run; test set only.</div>
+                </div>
+                <div class="stat-pill" style="border-left: 4px solid #059669;">
+                    <div class="stat-pill-title" style="color: #047857;">Arm 3: Critic + Reason</div>
+                    <div><b>R1 Pool Vote / Wrong Labels:</b> 81.0% / 5.8% (16-bit)</div>
+                    <div><b>R2 Test Vote:</b> 78.0% (16-bit) | 81.0% (4-bit)</div>
+                    <div style="color: #64748b; font-size: 0.78rem; margin-top: 0.25rem;">No R2 pool run. R1 gap to Vote is within chance (19/326 vs 23/328, p = 0.63).</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2B PANEL 2: VOTE ARM SPECIFIC -->
+        <div class="q2b-panel" id="q2b-vote" style="display: none;">
+            <div class="grid-2col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+                <div class="chart-card">
+                    <div class="chart-title">Arm 1 (Vote): Majority Vote vs Pass@1 (2B)</div>
+                    <div class="chart-subtitle">Pool vote goes 81% &rarr; 78.6% at 16-bit while Pass@1 rises 3.8 points</div>
+                    <svg viewBox="0 0 380 230" style="width: 100%; height: auto; font-family: sans-serif;">
+                        <line x1="40" y1="25" x2="360" y2="25" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="75" x2="360" y2="75" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="125" x2="360" y2="125" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="175" x2="360" y2="175" stroke="#cbd5e1" stroke-width="1.5"/>
+                        <text x="32" y="29" font-size="10" fill="#94a3b8" text-anchor="end">85%</text>
+                        <text x="32" y="79" font-size="10" fill="#94a3b8" text-anchor="end">75%</text>
+                        <text x="32" y="129" font-size="10" fill="#94a3b8" text-anchor="end">65%</text>
+                        <text x="32" y="179" font-size="10" fill="#94a3b8" text-anchor="end">55%</text>
+                        <text x="85" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 0</text>
+                        <text x="200" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 1</text>
+                        <text x="315" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 2</text>
+                        <polyline fill="none" stroke="#7c3aed" stroke-width="2.5" points="85,45.0 200,49.0 315,57.0"/>
+                        <circle cx="85" cy="45.0" r="4" fill="#7c3aed"/><circle cx="200" cy="49.0" r="4" fill="#7c3aed"/><circle cx="315" cy="57.0" r="4" fill="#7c3aed"/>
+                        <text x="85" y="37" font-size="9.5" fill="#6d28d9" font-weight="700" text-anchor="middle">81.0%</text>
+                        <text x="200" y="41" font-size="9.5" fill="#6d28d9" font-weight="700" text-anchor="middle">80.2%</text>
+                        <text x="315" y="49" font-size="9.5" fill="#6d28d9" font-weight="700" text-anchor="middle">78.6%</text>
+                        <polyline fill="none" stroke="#2563eb" stroke-width="2.5" points="85,70.0 200,74.0 315,80.0"/>
+                        <circle cx="85" cy="70.0" r="4" fill="#2563eb"/><circle cx="200" cy="74.0" r="4" fill="#2563eb"/><circle cx="315" cy="80.0" r="4" fill="#2563eb"/>
+                        <text x="85" y="62" font-size="9.5" fill="#1e40af" font-weight="700" text-anchor="middle">76.0%</text>
+                        <text x="200" y="66" font-size="9.5" fill="#1e40af" font-weight="700" text-anchor="middle">75.2%</text>
+                        <text x="315" y="72" font-size="9.5" fill="#1e40af" font-weight="700" text-anchor="middle">74.0%</text>
+                        <polyline fill="none" stroke="#a855f7" stroke-width="2" stroke-dasharray="4,3" points="85,125.0 200,109.5 315,106.0"/>
+                        <polyline fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="4,3" points="85,144.0 200,132.0 315,127.5"/>
+                    </svg>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.78rem; text-align: center;">
+                        <span style="color: #7c3aed; font-weight: 700;">— 16-bit Majority Vote</span>
+                        <span style="color: #2563eb; font-weight: 700;">— 4-bit Majority Vote</span>
+                        <span style="color: #a855f7; font-weight: 600;">-- 16-bit Pass@1</span>
+                        <span style="color: #10b981; font-weight: 600;">-- 4-bit Pass@1</span>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Arm 1 (Vote): Filtered Questions &amp; Error Rate (2B)</div>
+                    <div class="chart-subtitle">Questions grow (279 &rarr; 328) while wrong labels climb (5.4% &rarr; 10.7%). Bars use the left axis, lines the right.</div>
+                    <svg viewBox="0 0 380 230" style="width: 100%; height: auto; font-family: sans-serif;">
+                        <line x1="40" y1="25" x2="360" y2="25" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="62.5" x2="360" y2="62.5" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="100" x2="360" y2="100" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="137.5" x2="360" y2="137.5" stroke="#f1f5f9" stroke-width="1"/>
+                        <line x1="40" y1="175" x2="360" y2="175" stroke="#cbd5e1" stroke-width="1.5"/>
+                        <text x="32" y="29" font-size="10" fill="#94a3b8" text-anchor="end">400 Q</text>
+                        <text x="32" y="66" font-size="10" fill="#94a3b8" text-anchor="end">300 Q</text>
+                        <text x="32" y="104" font-size="10" fill="#94a3b8" text-anchor="end">200 Q</text>
+                        <text x="32" y="141" font-size="10" fill="#94a3b8" text-anchor="end">100 Q</text>
+                        <text x="32" y="179" font-size="10" fill="#94a3b8" text-anchor="end">0 Q</text>
+                        <text x="92" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 0</text>
+                        <text x="197" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 1</text>
+                        <text x="302" y="196" font-size="11" fill="#475569" font-weight="600" text-anchor="middle">Round 2</text>
+                        <text x="376" y="29" font-size="10" fill="#94a3b8" text-anchor="end">16%</text>
+                        <text x="376" y="104" font-size="10" fill="#94a3b8" text-anchor="end">8%</text>
+                        <text x="376" y="179" font-size="10" fill="#94a3b8" text-anchor="end">0%</text>
+                        <rect x="68" y="70.4" width="22" height="104.6" fill="#93c5fd" rx="2"/>
+                        <text x="79" y="65" font-size="8.5" fill="#1e40af" font-weight="700" text-anchor="middle">279</text>
+                        <rect x="94" y="62.5" width="22" height="112.5" fill="#c4b5fd" rx="2"/>
+                        <text x="105" y="57" font-size="8.5" fill="#6d28d9" font-weight="700" text-anchor="middle">300</text>
+                        <rect x="173" y="62.5" width="22" height="112.5" fill="#93c5fd" rx="2"/>
+                        <text x="184" y="57" font-size="8.5" fill="#1e40af" font-weight="700" text-anchor="middle">300</text>
+                        <rect x="199" y="52.0" width="22" height="123.0" fill="#c4b5fd" rx="2"/>
+                        <text x="210" y="47" font-size="8.5" fill="#6d28d9" font-weight="700" text-anchor="middle">328</text>
+                        <rect x="278" y="52.0" width="22" height="123.0" fill="#93c5fd" rx="2"/>
+                        <text x="289" y="47" font-size="8.5" fill="#1e40af" font-weight="700" text-anchor="middle">328</text>
+                        <rect x="304" y="45.2" width="22" height="129.8" fill="#c4b5fd" rx="2"/>
+                        <text x="315" y="40" font-size="8.5" fill="#6d28d9" font-weight="700" text-anchor="middle">346</text>
+                        <polyline fill="none" stroke="#dc2626" stroke-width="2.5" points="79,124.3 184,90.6 289,74.6"/>
+                        <polyline fill="none" stroke="#b91c1c" stroke-width="2" stroke-dasharray="4,3" points="105,121.5 210,109.3 315,93.4"/>
+                    </svg>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.78rem; text-align: center;">
+                        <span style="color: #1e40af; font-weight: 700;">■ 4-bit Questions</span>
+                        <span style="color: #6d28d9; font-weight: 700;">■ 16-bit Questions</span>
+                        <span style="color: #dc2626; font-weight: 600;">— 4-bit Error Rate</span>
+                        <span style="color: #b91c1c; font-weight: 600;">-- 16-bit Error Rate</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2B PANEL 3: CRITIC ARM SPECIFIC -->
+        <div class="q2b-panel" id="q2b-critic" style="display: none;">
+            <div class="grid-2col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+                <div class="chart-card">
+                    <div class="chart-title">Arm 2 (Critic): Majority Vote (2B)</div>
+                    <div class="chart-subtitle">Round 0 &rarr; Round 1 on Pool | Round 2 Evaluated on Held-Out Test Set</div>
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 1.25rem; font-size: 0.9rem; line-height: 1.6;">
+                        <h4 style="margin-top: 0; color: #c2410c;">Training Pool Rollout (GSM8K 500Q):</h4>
+                        <ul style="margin: 0.5rem 0; padding-left: 1.25rem;">
+                            <li><strong>Round 0 Base:</strong> 81.0% (16-bit) | 76.0% (4-bit)</li>
+                            <li><strong>Round 1 Pool:</strong> 80.2% (16-bit) | 75.0% (4-bit)</li>
+                            <li><strong>Round 2 Pool:</strong> <em>Not run</em></li>
+                        </ul>
+                        <h4 style="margin: 1rem 0 0.5rem 0; color: #2b6cb0;">Held-Out Test Set Evaluation (GSM8K 100Q):</h4>
+                        <ul style="margin: 0.5rem 0; padding-left: 1.25rem;">
+                            <li><strong>Round 0 Test:</strong> 81.0% (16-bit) | 81.0% (4-bit)</li>
+                            <li><strong>Round 1 Test:</strong> 77.0% (16-bit) | 77.0% (4-bit)</li>
+                            <li><strong>Round 2 Test:</strong> 77.0% (16-bit) | 79.0% (4-bit)</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Arm 2 (Critic): Filtered Questions &amp; Error Rate</div>
+                    <div class="chart-subtitle">Round 1: 322 questions at 9.9% wrong (4-bit), 327 at 7.0% wrong (16-bit), by the plain 6-of-8 rule</div>
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 1.25rem; font-size: 0.9rem; line-height: 1.6;">
+                        <h4 style="margin-top: 0; color: #c2410c;">Stage 2 Filter Results:</h4>
+                        <ul style="margin: 0.5rem 0; padding-left: 1.25rem;">
+                            <li><strong>Round 0:</strong> 300 picked, 17 wrong (5.7% error in 16-bit) | 279 picked (5.4% error in 4-bit)</li>
+                            <li><strong>Round 1:</strong> 327 picked, 23 wrong (7.0% error in 16-bit) | 322 picked, 32 wrong (9.9% error in 4-bit)</li>
+                        </ul>
+                        <div class="takeaway takeaway-neutral" style="margin-top: 1rem;">
+                            Takeaway: Wrong labels rise much as in the vote arm, from 5.7% to 7.0% at 16-bit and from 5.4% to 9.9% at 4-bit.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2B PANEL 4: CRITIC + REASON ARM SPECIFIC -->
+        <div class="q2b-panel" id="q2b-reason" style="display: none;">
+            <div class="grid-2col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+                <div class="chart-card">
+                    <div class="chart-title">Arm 3 (Critic+Reason): Trajectory (2B)</div>
+                    <div class="chart-subtitle">Round 0 &rarr; Round 1 on Pool | Round 2 on Held-Out Test Set</div>
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 1.25rem; font-size: 0.9rem; line-height: 1.6;">
+                        <h4 style="margin-top: 0; color: #047857;">Training Pool Rollout (GSM8K 500Q):</h4>
+                        <ul style="margin: 0.5rem 0; padding-left: 1.25rem;">
+                            <li><strong>Round 0 Base:</strong> 81.0% (16-bit) | 76.0% (4-bit)</li>
+                            <li><strong>Round 1 Pool:</strong> 81.0% (16-bit) | 76.4% (4-bit)</li>
+                            <li><strong>Round 2 Pool:</strong> <em>Not run</em></li>
+                        </ul>
+                        <h4 style="margin: 1rem 0 0.5rem 0; color: #2b6cb0;">Held-Out Test Set Evaluation (GSM8K 100Q):</h4>
+                        <ul style="margin: 0.5rem 0; padding-left: 1.25rem;">
+                            <li><strong>Round 0 Test:</strong> 81.0% (16-bit) | 81.0% (4-bit)</li>
+                            <li><strong>Round 1 Test:</strong> 79.0% (16-bit) | 83.0% (4-bit)</li>
+                            <li><strong>Round 2 Test:</strong> 78.0% (16-bit) | 81.0% (4-bit)</li>
+                        </ul>
+                        <p style="margin: 0.5rem 0 0 0; font-size: 0.82rem; color: #64748b;">The second training seed at 4-bit differs from the first by about 5 vote points, so these gaps are not attributable to the arm.</p>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Arm 3 (Critic+Reason): Filtered Questions &amp; Error Rate (2B)</div>
+                    <div class="chart-subtitle">Round 1: 326 questions at 5.8% wrong (16-bit), by the plain 6-of-8 rule</div>
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 1.25rem; font-size: 0.9rem; line-height: 1.6;">
+                        <h4 style="margin-top: 0; color: #047857;">Stage 2 Filter Results:</h4>
+                        <ul style="margin: 0.5rem 0; padding-left: 1.25rem;">
+                            <li><strong>Round 0:</strong> 300 picked, 17 wrong (5.7% error in 16-bit) | 279 picked (5.4% error in 4-bit)</li>
+                            <li><strong>Round 1:</strong> 326 picked, 19 wrong (<strong>5.8% error in 16-bit</strong>) | 309 picked (8.4% error in 4-bit)</li>
+                        </ul>
+                        <div class="takeaway takeaway-neutral" style="margin-top: 1rem;">
+                            Takeaway: At 16-bit, Round 1 wrong labels are 5.8% here and 7.0% in the vote arm, a gap within chance (p = 0.63).
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </section>
+
+    <!-- SECTION 2: CONCRETE DUMMY EXAMPLES -->
+    <section class="content-box">
+        <h2>2. Real Examples of What Each Stage Does</h2>
+        <p>These are real questions and samples from the 0.8B 4-bit pool runs, shortened with "&hellip;". They were chosen to show each case clearly, so they illustrate the stages and say nothing about how common each case is. Reference answers appear here only for scoring.</p>
+
+        <!-- CASE 1 -->
+        <div class="example-box">
+            <div class="example-header">
+                <span>Case A: A Right Label (Agreement &amp; Correct)</span>
+                <span class="stage-badge badge-stage2">Stage 2 Success</span>
+            </div>
+            <p><em><strong>Question:</strong> "James buys 5 packs of beef that are 4 pounds each. The price of beef is $5.50 per pound. How much did he pay?" (Reference answer = 110)</em></p>
+            <div class="side-by-side">
+                <div class="panel panel-good">
+                    <h5>Round 0 Samples (8 Samples)</h5>
+                    <p>All 8 samples reach 110. One of them:</p>
+                    <pre><code>5 packs x 4 pounds/pack = 20 pounds of beef
+20 pounds x $5.50/pound = $110.00
+James paid 110 dollars. #### 110</code></pre>
+                    <div class="takeaway takeaway-good">
+                        Vote: 8 of 8 agree on 110, above the 6-of-8 threshold. Kept for training.
+                    </div>
+                </div>
+                <div class="panel panel-good">
+                    <h5>What the Next Round Learns</h5>
+                    <p>The LoRA adapter trains on these solutions. At 0.8B 4-bit, 118 of the 123 labels kept in Round 0 are right.</p>
+                    <div class="takeaway takeaway-good">
+                        Result: Most kept labels in Round 0 are correct (95.9%).
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CASE 2 -->
+        <div class="example-box">
+            <div class="example-header">
+                <span>Case B: A Wrong Label (Shared Misreading)</span>
+                <span class="stage-badge badge-danger">Stage 2 Failure</span>
+            </div>
+            <p><em><strong>Question:</strong> "Jeremy listened to five fewer songs yesterday than today. Yesterday, he listened to nine songs. How many songs did Jeremy listen to in two days?" (Reference answer = 23)</em></p>
+            <div class="side-by-side">
+                <div class="panel panel-bad">
+                    <h5>Round 0 Samples (8 Samples)</h5>
+                    <p>6 of 8 samples misread the comparison and get 13. The other 2 get the right answer, 23:</p>
+                    <pre><code>Since he listened to five fewer songs today,
+he listened to 9 - 5 = 4 songs today.
+9 (yesterday) + 4 (today) = 13 songs.
+#### 13</code></pre>
+                    <div class="takeaway takeaway-bad">
+                        Vote: 6 of 8 agree on 13, which meets the threshold. Kept for training.
+                    </div>
+                </div>
+                <div class="panel panel-bad">
+                    <h5>What the Next Round Learns</h5>
+                    <p>The filter has no reference answers, so high agreement is all it sees. The solutions reaching 13 go into training, and the 2 right solutions are dropped.</p>
+                    <div class="takeaway takeaway-bad">
+                        Measured: 5 of 123 kept labels are wrong in Round 0, and 31 of 234 in the Round 2 pool run. We have not shown that these wrong labels cause any decline.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CASE 3 -->
+        <div class="example-box">
+            <div class="example-header">
+                <span>Case C: Finishing Inside the Token Limit</span>
+                <span class="stage-badge badge-stage1">Stage 1 Change</span>
+            </div>
+            <p><em><strong>Question:</strong> "A farmer has twice as many pigs as cows, and 4 more cows than goats. If the farmer has 56 animals total, how many goats does he have?" (Reference answer = 11)</em></p>
+            <div class="side-by-side">
+                <div class="panel panel-neutral">
+                    <h5>Round 0 (Untrained Model)</h5>
+                    <p>5 of 8 samples are cut off here. This one is still working when it reaches the limit, as most cut-off samples are:</p>
+                    <pre><code>&hellip; Let me re-read the equation setup.
+Equation: C + P + G = 56
+C + 2C + (C + 4) = 56
+&hellip;
+Total = 13 + [CUT OFF AT 512 TOKENS]</code></pre>
+                    <div class="takeaway takeaway-bad">
+                        Scoring: Hit the token limit, so it counts as wrong.
+                    </div>
+                </div>
+                <div class="panel panel-good">
+                    <h5>Round 1 (After One Round of Self-Training)</h5>
+                    <p>2 of 8 samples are cut off. This one sets up the same problem and finishes:</p>
+                    <pre><code>"4 more cows than goats" implies: C = G + 4
+From this, we can solve for G: G = C - 4
+&hellip;
+[Finished in 384 tokens, answer 11]</code></pre>
+                    <div class="takeaway takeaway-good">
+                        Scoring: Finished within 512 tokens with the right answer.
+                    </div>
+                </div>
+            </div>
+            <p style="margin-top: 0.75rem; margin-bottom: 0; font-size: 0.86rem; color: #4a5568;">
+                <strong>Key Takeaway:</strong> Learning to finish is a large part of the Pass@1 rise from 38% to 48%, but not all of it at 4-bit. From Round 0 to Round 2, average length falls 324 &rarr; 282 tokens and cut-offs fall 17.1 &rarr; 7.4%, while right-when-finished rises 45.8 &rarr; 51.9%. On 377 pool questions it never trained on, the Round 1 model gains +3.9 [+1.6, +6.3] when finished at 4-bit. At 16-bit the same gain is &minus;1.1 [&minus;3.6, +1.4] on 330 questions. This comparison is one run at 0.8B, so treat it as a hypothesis.
+            </p>
+        </div>
+    </section>
+
+    <!-- SECTION 3: LITERATURE COMPARISON -->
+    <section class="content-box">
+        <h2>3. Literature Context: How Our Findings Align with Prior Work</h2>
+        <p>No paper we read reports all three stages per round. The early jump and later plateau match published results, and ReST-EM also sees training performance keep rising while test does not. The main difference is the vote: ReST-EM, LMSI, MACA and SRT report vote gains, and ours does not move. Values come from extracts of each paper, so check them against the PDFs before citing.</p>
+
+        <div class="table-wrap">
+            <table class="minimal-table lit-table">
+                <thead>
+                    <tr>
+                        <th>Paper &amp; Model</th>
+                        <th>Method</th>
+                        <th>Reported Trajectory</th>
+                        <th>Comparison to Our Findings</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Qi et al. (2026)</strong><br><em>Gemma-1B &amp; 4B, Knights and Knaves</em></td>
+                        <td>Iterative Self-Verification (DPO)</td>
+                        <td>Gemma-1B barely moves (7.8% &rarr; 8.4%). On 4B, Pass@1 rises 31.0 &rarr; 40.7% while Pass@32 stays flat (78.0% &rarr; 77.4%).</td>
+                        <td><strong>Partial match:</strong> Pass@1 rises in both, and small models gain least. It is a different task, and it does not report label quality per round.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>LMSI (Huang et al., 2022)</strong><br><em>PaLM-540B; UL2</em></td>
+                        <td>Majority Vote Self-Training</td>
+                        <td>PaLM-540B GSM8K vote 74.4% &rarr; 82.1%. UL2 gains much less, which the authors attribute to model size. LMSI ran only one round.</td>
+                        <td><strong>Differs on the vote:</strong> its vote rises and ours does not. It supports the size effect, but it says nothing about later rounds.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>ReST-EM (Singh et al., 2023)</strong><br><em>PaLM-2 on MATH &amp; APPS</em></td>
+                        <td>Generate, filter by a gold-answer reward, then fine-tune</td>
+                        <td>Training performance rises linearly while test does not. Small test gains after iteration 1 on MATH. APPS regresses at iteration 2; the authors suspect overfitting on a small set of problems.</td>
+                        <td><strong>Matches the shape:</strong> train keeps rising and test plateaus. Its labels are gold-filtered, so this happens without any wrong labels.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>SRT (Shafayat et al., 2025)</strong><br><em>Four base models, including Qwen2.5-Math-7B</em></td>
+                        <td>Online RL on the model's own majority vote</td>
+                        <td>Vote quality rises early, then all four base models collapse with prolonged training. After 1,200 steps Qwen2.5-Math-7B outputs a constant answer.</td>
+                        <td><strong>Different setting:</strong> online RL counted in steps, not rounds. Our runs show no collapse, but both show agreement can rise without accuracy.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>MACA (Samanta et al., 2025)</strong><br><em>Qwen-2B &amp; Llama-3B, debate of 3 clones</em></td>
+                        <td>Multi-agent debate consensus</td>
+                        <td>GSM8K debate vote: Qwen-2B 49.6 &rarr; 60.8 &rarr; 62.2 &rarr; 62.6%; Llama-3B 65.6 &rarr; 72.0 &rarr; 74.6 &rarr; 70.8%. Big first jump, then diminishing returns.</td>
+                        <td><strong>Partial match:</strong> the first jump and plateau match, but its vote rises and ours does not. It uses debate, a 256-token cap and 1,500 training questions.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- SECTION 4: MASTER SCORECARD FOR MENTOR REVIEW -->
+    <section class="content-box">
+        <h2>4. Scorecard: 500-Question Pool and 100-Question Test</h2>
+        <p>All 4 model cells, scored after the fact against GSM8K reference answers. One training seed each.</p>
+        <ul>
+            <li><strong>Noise:</strong> two runs of the same untrained 0.8B model differ on a 100-question vote by about &plusmn;8 points, so test vote gaps of that size mean nothing here.</li>
+            <li><strong>Ties:</strong> votes in this table give ties to the first answer seen.</li>
+            <li><strong>Labels:</strong> the 6-of-8 row applies the plain vote to every arm. The critic + vote row shows what the two critic arms trained on next.</li>
+            <li><strong>A dash means not run:</strong> the 2B critic arms have no Round 2 pool run, and no critic pass exists on any Round 2 pool run.</li>
+        </ul>
+
+        <div class="table-wrap">
+            <table class="minimal-table wrap-head">
+                <thead>
+                    <tr>
+                        <th>Model &amp; Stage</th>
+                        <th>Round 0 (Base)</th>
+                        <th>R1 Vote</th>
+                        <th>R1 Critic</th>
+                        <th>R1 Critic + Reason</th>
+                        <th>R2 Vote</th>
+                        <th>R2 Critic</th>
+                        <th>R2 Critic + Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 0.8B 4-bit -->
+                    <tr style="background: #f8fafc; font-weight: 700;">
+                        <td colspan="8">Qwen3.5-0.8B (4-bit NF4)</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 1: Pool Pass@1</td>
+                        <td>38.0%</td>
+                        <td>46.5%</td>
+                        <td>44.7%</td>
+                        <td>44.6%</td>
+                        <td>48.0%</td>
+                        <td>47.0%</td>
+                        <td>47.0%</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 1: Pool Majority Vote</td>
+                        <td>56.0%</td>
+                        <td>58.2%</td>
+                        <td>56.6%</td>
+                        <td>57.6%</td>
+                        <td>56.4%</td>
+                        <td>56.0%</td>
+                        <td>58.2%</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 2: Questions at 6 of 8 (Plain Vote)</td>
+                        <td>123 (4.1% err)</td>
+                        <td>197 (8.6% err)</td>
+                        <td>192 (11.5% err)</td>
+                        <td>185 (7.6% err)</td>
+                        <td>234 (13.2% err)</td>
+                        <td>218 (13.3% err)</td>
+                        <td>211 (12.3% err)</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 2: Critic + Vote Labels Trained On Next</td>
+                        <td>148 (6.1% err)</td>
+                        <td>—</td>
+                        <td>202 (12.4% err)</td>
+                        <td>204 (7.4% err)</td>
+                        <td>—</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 3: Test Pass@1 (100 Questions)</td>
+                        <td>40.6%</td>
+                        <td>47.2%</td>
+                        <td>42.0%</td>
+                        <td>43.8%</td>
+                        <td>45.5%</td>
+                        <td>45.6%</td>
+                        <td>42.5%</td>
+                    </tr>
+                    <tr style="border-bottom: 2px solid #cbd5e1;">
+                        <td>Stage 3: Test Vote (100 Questions)</td>
+                        <td>56.0%</td>
+                        <td>59.0%</td>
+                        <td>56.0%</td>
+                        <td>58.0%</td>
+                        <td>57.0%</td>
+                        <td>60.0%</td>
+                        <td>54.0%</td>
+                    </tr>
+
+                    <!-- 0.8B 16-bit -->
+                    <tr style="background: #f8fafc; font-weight: 700;">
+                        <td colspan="8">Qwen3.5-0.8B (16-bit bfloat16)</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 1: Pool Pass@1</td>
+                        <td>46.6%</td>
+                        <td>51.2%</td>
+                        <td>52.4%</td>
+                        <td>51.1%</td>
+                        <td>52.2%</td>
+                        <td>53.2%</td>
+                        <td>55.5%</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 1: Pool Majority Vote</td>
+                        <td>65.6%</td>
+                        <td>63.8%</td>
+                        <td>64.4%</td>
+                        <td>65.2%</td>
+                        <td>60.6%</td>
+                        <td>62.6%</td>
+                        <td>65.2%</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 2: Questions at 6 of 8 (Plain Vote)</td>
+                        <td>170 (4.7% err)</td>
+                        <td>233 (9.0% err)</td>
+                        <td>242 (10.7% err)</td>
+                        <td>221 (9.5% err)</td>
+                        <td>255 (12.9% err)</td>
+                        <td>263 (12.9% err)</td>
+                        <td>254 (9.8% err)</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 2: Critic + Vote Labels Trained On Next</td>
+                        <td>203 (7.9% err)</td>
+                        <td>—</td>
+                        <td>264 (12.5% err)</td>
+                        <td>238 (9.2% err)</td>
+                        <td>—</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 3: Test Pass@1 (100 Questions)</td>
+                        <td>46.6%</td>
+                        <td>50.4%</td>
+                        <td>51.1%</td>
+                        <td>53.1%</td>
+                        <td>51.2%</td>
+                        <td>53.9%</td>
+                        <td>53.4%</td>
+                    </tr>
+                    <tr style="border-bottom: 2px solid #cbd5e1;">
+                        <td>Stage 3: Test Vote (100 Questions)</td>
+                        <td>65.0%</td>
+                        <td>63.0%</td>
+                        <td>61.0%</td>
+                        <td>67.0%</td>
+                        <td>60.0%</td>
+                        <td>64.0%</td>
+                        <td>65.0%</td>
+                    </tr>
+
+                    <!-- 2B 4-bit -->
+                    <tr style="background: #f8fafc; font-weight: 700;">
+                        <td colspan="8">Qwen3.5-2B (4-bit NF4)</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 1: Pool Pass@1</td>
+                        <td>61.2%</td>
+                        <td>63.6%</td>
+                        <td>64.6%</td>
+                        <td>64.5%</td>
+                        <td>64.5%</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 1: Pool Majority Vote</td>
+                        <td>76.0%</td>
+                        <td>75.2%</td>
+                        <td>75.0%</td>
+                        <td>76.4%</td>
+                        <td>74.0%</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 2: Questions at 6 of 8 (Plain Vote)</td>
+                        <td>279 (5.4% err)</td>
+                        <td>300 (9.0% err)</td>
+                        <td>322 (9.9% err)</td>
+                        <td>309 (8.4% err)</td>
+                        <td>328 (10.7% err)</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 2: Critic + Vote Labels Trained On Next</td>
+                        <td>305 (7.2% err)</td>
+                        <td>—</td>
+                        <td>343 (10.2% err)</td>
+                        <td>323 (8.0% err)</td>
+                        <td>—</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 3: Test Pass@1 (100 Questions)</td>
+                        <td>66.8%</td>
+                        <td>67.6%</td>
+                        <td>69.2%</td>
+                        <td>70.1%</td>
+                        <td>66.5%</td>
+                        <td>68.2%</td>
+                        <td>70.2%</td>
+                    </tr>
+                    <tr style="border-bottom: 2px solid #cbd5e1;">
+                        <td>Stage 3: Test Vote (100 Questions)</td>
+                        <td>81.0%</td>
+                        <td>78.0%</td>
+                        <td>77.0%</td>
+                        <td>83.0%</td>
+                        <td>75.0%</td>
+                        <td>79.0%</td>
+                        <td>81.0%</td>
+                    </tr>
+
+                    <!-- 2B 16-bit -->
+                    <tr style="background: #f8fafc; font-weight: 700;">
+                        <td colspan="8">Qwen3.5-2B (16-bit bfloat16)</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 1: Pool Pass@1</td>
+                        <td>65.0%</td>
+                        <td>68.1%</td>
+                        <td>67.5%</td>
+                        <td>67.2%</td>
+                        <td>68.8%</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 1: Pool Majority Vote</td>
+                        <td>81.0%</td>
+                        <td>80.2%</td>
+                        <td>80.2%</td>
+                        <td>81.0%</td>
+                        <td>78.6%</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 2: Questions at 6 of 8 (Plain Vote)</td>
+                        <td>300 (5.7% err)</td>
+                        <td>328 (7.0% err)</td>
+                        <td>327 (7.0% err)</td>
+                        <td>326 (5.8% err)</td>
+                        <td>346 (8.7% err)</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 2: Critic + Vote Labels Trained On Next</td>
+                        <td>312 (5.8% err)</td>
+                        <td>—</td>
+                        <td>335 (7.2% err)</td>
+                        <td>338 (7.7% err)</td>
+                        <td>—</td>
+                        <td>—</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 3: Test Pass@1 (100 Questions)</td>
+                        <td>67.8%</td>
+                        <td>72.1%</td>
+                        <td>69.4%</td>
+                        <td>70.6%</td>
+                        <td>69.5%</td>
+                        <td>68.8%</td>
+                        <td>68.9%</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 3: Test Vote (100 Questions)</td>
+                        <td>81.0%</td>
+                        <td>83.0%</td>
+                        <td>77.0%</td>
+                        <td>79.0%</td>
+                        <td>80.0%</td>
+                        <td>77.0%</td>
+                        <td>78.0%</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</main>
+
+<script>
+function switchArmTab(modelId, armId) {
+    document.querySelectorAll('.' + modelId + '-panel').forEach(function(panel) {
+        panel.style.display = 'none';
+    });
+    var target = document.getElementById(modelId + '-' + armId);
+    if (target) {
+        target.style.display = 'block';
+    }
+    document.querySelectorAll('.' + modelId + '-btn').forEach(function(btn) {
+        btn.classList.remove('active');
+    });
+    var activeBtn = document.getElementById(modelId + '-btn-' + armId);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+    }
+}
+</script>
+</body>
+
+</html>
