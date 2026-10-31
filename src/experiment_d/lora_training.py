@@ -232,43 +232,95 @@ def train_lora(model, tokenizer, examples: list, steps: int, batch_size: int = 8
 # ─── Preference training (length-normalised DPO) ─────────────────────────────
 
 def build_preference_example(tokenizer, dataset_name: str, question: str, chosen: str, rejected: str,
-                             end_token: int, max_length: int):
-    """{chosen, rejected} training examples for one pair, or None when either does not fit in max_length."""
+                             end_token, max_length: int, mask_end: bool = False):
+    """
+    {chosen, rejected} training examples for one pair, or None when either does not fit in max_length.
+
+    mask_end: also give each side `pref_labels`, its labels without the end tokens. The preference score
+    then compares the two solutions' text only and never pushes the end of the rejected one down (which
+    would teach not stopping); the end tokens stay in `labels`, for the chosen-text loss and for logging.
+    """
     examples = {side: build_training_example(tokenizer, dataset_name, question, trace, end_token, max_length)
                 for side, trace in (("chosen", chosen), ("rejected", rejected))}
-    return None if None in examples.values() else examples
+    if None in examples.values():
+        return None
+    if mask_end:
+        end_length = 1 if isinstance(end_token, int) else len(end_token)
+        for example in examples.values():
+            example["pref_labels"] = example["labels"][:-end_length] + [IGNORE_INDEX] * end_length
+    return examples
 
 
-def mean_token_logps(model, input_ids, attention_mask, labels, compute_dtype=None):
+def token_logps(model, input_ids, attention_mask, labels, compute_dtype=None, chunked: bool = False):
+    """
+    Log-probability of every labelled token, shape (rows, length - 1), float32; 0 where the label is
+    IGNORE_INDEX. Only the labelled positions go through the softmax, since the vocabulary is large.
+
+    chunked: apply the output head to those positions a chunk at a time and recompute each chunk in the
+    backward pass (as chunked_answer_loss does), so the logits of the whole sequence are never held.
+    """
+    device = input_ids.device
+    use_autocast = device.type == "cuda" and compute_dtype in (torch.float16, torch.bfloat16)
+    targets = labels[:, 1:]
+    scored = targets != IGNORE_INDEX
+    with torch.autocast(device_type=device.type, dtype=compute_dtype, enabled=use_autocast):
+        if chunked:
+            from torch.utils.checkpoint import checkpoint
+
+            out = model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False,
+                        output_hidden_states=True, logits_to_keep=1)
+            hidden, flat_targets = out.hidden_states[-1][:, :-1][scored], targets[scored]
+            head = model.get_output_embeddings()
+            flat = torch.cat([checkpoint(_chunk_logps, head, hidden[start:start + LOSS_CHUNK_TOKENS],
+                                         flat_targets[start:start + LOSS_CHUNK_TOKENS], use_reentrant=False)
+                              for start in range(0, hidden.shape[0], LOSS_CHUNK_TOKENS)])
+        else:
+            logits = model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False).logits
+            flat = -F.cross_entropy(logits[:, :-1][scored].float(), targets[scored], reduction="none")
+    return torch.zeros(targets.shape, device=device, dtype=torch.float32).masked_scatter(scored, flat)
+
+
+def _chunk_logps(head, hidden, targets):
+    """Log-probs of a chunk's target tokens, in float32; the head runs in the surrounding autocast dtype."""
+    return -F.cross_entropy(head(hidden).float(), targets, reduction="none")
+
+
+def mean_token_logps(model, input_ids, attention_mask, labels, compute_dtype=None, chunked: bool = False):
     """
     Per-row mean log-probability of the scored tokens (labels != IGNORE_INDEX), in float32.
 
     The mean over a solution's tokens, not their sum, is the length-normalised score: a long and a
-    short solution are compared per token. Only the scored positions go through the softmax, since
-    the vocabulary is large.
+    short solution are compared per token.
     """
-    device = input_ids.device
-    use_autocast = device.type == "cuda" and compute_dtype in (torch.float16, torch.bfloat16)
-    with torch.autocast(device_type=device.type, dtype=compute_dtype, enabled=use_autocast):
-        logits = model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False).logits
-    targets = labels[:, 1:]
-    scored = targets != IGNORE_INDEX
-    token_logps = -F.cross_entropy(logits[:, :-1][scored].float(), targets[scored], reduction="none")
-    rows = scored.nonzero()[:, 0]
-    sums = torch.zeros(len(labels), device=device, dtype=torch.float32).index_add(0, rows, token_logps)
-    return sums / scored.sum(dim=1).clamp(min=1)
+    logps = token_logps(model, input_ids, attention_mask, labels, compute_dtype, chunked)
+    return logps.sum(dim=1) / (labels[:, 1:] != IGNORE_INDEX).sum(dim=1).clamp(min=1)
 
 
-def _pair_logps(model, tokenizer, pairs: list, compute_dtype):
-    """(chosen, rejected) mean log-probs of a few pairs, in one forward pass."""
+def _pair_logps(model, tokenizer, pairs: list, compute_dtype, chunked: bool = False) -> dict:
+    """
+    Scores a few pairs in one forward pass. Rows are the chosen solutions then the rejected ones; every
+    entry is per pair, float32, mean per token:
+      chosen, rejected: log-prob over the preference tokens (`pref_labels`, else all labels);
+      nll: the chosen solution's loss over all its labelled tokens, end included;
+      end_chosen, end_rejected: log-prob of the end tokens (0 where there are none), no gradient.
+    """
     examples = [pair["chosen"] for pair in pairs] + [pair["rejected"] for pair in pairs]
-    input_ids, attention_mask, labels = _collate(examples, tokenizer.pad_token_id, model_device(model))
-    logps = mean_token_logps(model, input_ids, attention_mask, labels, compute_dtype)
-    return logps[:len(pairs)], logps[len(pairs):]
+    device, count = model_device(model), len(pairs)
+    input_ids, attention_mask, labels = _collate(examples, tokenizer.pad_token_id, device)
+    _, _, pref_labels = _collate([{**example, "labels": example.get("pref_labels", example["labels"])}
+                                  for example in examples], tokenizer.pad_token_id, device)
+    logps = token_logps(model, input_ids, attention_mask, labels, compute_dtype, chunked)
+    scored, preferred = labels[:, 1:] != IGNORE_INDEX, pref_labels[:, 1:] != IGNORE_INDEX
+    ends = scored & ~preferred
+    mean = lambda mask: (logps * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
+    pref, nll, end = mean(preferred), -mean(scored), mean(ends).detach()
+    return {"chosen": pref[:count], "rejected": pref[count:], "nll": nll[:count],
+            "end_chosen": end[:count], "end_rejected": end[count:]}
 
 
 @torch.no_grad()
-def reference_logps(model, tokenizer, pairs: list, micro_batch_size: int = 1, compute_dtype=None) -> list:
+def reference_logps(model, tokenizer, pairs: list, micro_batch_size: int = 1, compute_dtype=None,
+                    chunked: bool = False) -> list:
     """
     [(chosen, rejected)] mean log-probs under the model as it is now. Run it on the frozen base
     before the adapter is attached: the reference never changes, so it is scored once.
@@ -278,8 +330,8 @@ def reference_logps(model, tokenizer, pairs: list, micro_batch_size: int = 1, co
     scores = []
     try:
         for start in range(0, len(pairs), micro_batch_size):
-            chosen, rejected = _pair_logps(model, tokenizer, pairs[start:start + micro_batch_size], compute_dtype)
-            scores += list(zip(chosen.tolist(), rejected.tolist()))
+            scored = _pair_logps(model, tokenizer, pairs[start:start + micro_batch_size], compute_dtype, chunked)
+            scores += list(zip(scored["chosen"].tolist(), scored["rejected"].tolist()))
     finally:
         model.train(was_training)
     return scores
@@ -296,15 +348,22 @@ def dpo_loss(policy_chosen, policy_rejected, ref_chosen, ref_rejected, beta: flo
 
 def train_lora_dpo(model, tokenizer, pairs: list, steps: int, batch_size: int = 16, micro_batch_size: int = 1,
                    learning_rate: float = 5e-5, beta: float = 2.0, seed: int = 0, compute_dtype=None,
-                   log_every: int = 10, max_grad_norm: float = 1.0) -> dict:
+                   log_every: int = 10, max_grad_norm: float = 1.0, nll_weight: float = 0.0,
+                   chunked_loss: bool = False, stage_sizes: list = None) -> dict:
     """
-    Run `steps` AdamW updates of the adapter on preference pairs and return
-    {losses, margins, preferred}: per step, the mean loss, the mean margin and the share of pairs
-    whose margin is positive.
+    Run `steps` AdamW updates of the adapter on preference pairs and return, per step, the mean of:
+    losses (the training loss), margins, preferred (the share of pairs whose margin is positive), nll
+    (the chosen solutions' loss), chosen_shift and rejected_shift (policy minus reference log-prob; a
+    chosen shift below zero is likelihood displacement), end_chosen and end_rejected (log-prob of the
+    end tokens; falling means the model is learning to stop later).
 
-    pairs: [{chosen, rejected, ref_chosen, ref_rejected}], the first two from build_preference_example,
-    the last two from reference_logps. Batches are drawn as in train_lora; each micro-batch scores
-    micro_batch_size pairs (both solutions) at once and the gradients are summed.
+    pairs: [{chosen, rejected, ref_chosen, ref_rejected, weight (optional, default 1)}], the first two from
+    build_preference_example, the next two from reference_logps. Batches are drawn as in train_lora; each
+    micro-batch scores micro_batch_size pairs (both solutions) at once and the gradients are summed.
+    Per pair the loss is weight * (DPO loss + nll_weight * chosen NLL), averaged over the batch.
+    chunked_loss: score the tokens with the chunked output head (much less memory, same values).
+    stage_sizes: `pairs` is consecutive stages of these sizes (a curriculum); pairs are shuffled within a
+    stage only, so the stages are met in order.
     """
     parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
     optimizer = torch.optim.AdamW(parameters, lr=learning_rate, weight_decay=0.0)
@@ -314,30 +373,45 @@ def train_lora_dpo(model, tokenizer, pairs: list, steps: int, batch_size: int = 
 
     shuffler = random.Random(seed)
     torch.manual_seed(seed)  # dropout
-    queue, history = [], {"losses": [], "margins": [], "preferred": []}
+    stage_sizes = stage_sizes or [len(pairs)]
+    if sum(stage_sizes) != len(pairs):
+        raise ValueError(f"stage_sizes sum to {sum(stage_sizes)}, but there are {len(pairs)} pairs")
+    queue = []
+    history = {key: [] for key in ("losses", "margins", "preferred", "nll", "chosen_shift", "rejected_shift",
+                                   "end_chosen", "end_rejected")}
     model.train()
     try:
         for step in range(steps):
             if len(queue) < batch_size:
-                order = list(range(len(pairs)))
-                shuffler.shuffle(order)
-                queue.extend(order)
+                start = 0
+                for size in stage_sizes:
+                    order = list(range(start, start + size))
+                    shuffler.shuffle(order)
+                    queue.extend(order)
+                    start += size
             batch, queue = queue[:batch_size], queue[batch_size:]
 
             optimizer.zero_grad(set_to_none=True)
-            step_loss, margins = 0.0, []
+            step_loss, seen = 0.0, {key: [] for key in history if key != "losses"}
             for start in range(0, len(batch), micro_batch_size):
                 chunk = [pairs[i] for i in batch[start:start + micro_batch_size]]
-                policy_chosen, policy_rejected = _pair_logps(model, tokenizer, chunk, compute_dtype)
+                scored = _pair_logps(model, tokenizer, chunk, compute_dtype, chunked_loss)
                 ref_chosen = torch.tensor([pair["ref_chosen"] for pair in chunk], device=device)
                 ref_rejected = torch.tensor([pair["ref_rejected"] for pair in chunk], device=device)
-                losses, margin = dpo_loss(policy_chosen, policy_rejected, ref_chosen, ref_rejected, beta)
-                loss = losses.sum() / len(batch)
+                weights = torch.tensor([pair.get("weight", 1.0) for pair in chunk], device=device)
+                losses, margin = dpo_loss(scored["chosen"], scored["rejected"], ref_chosen, ref_rejected, beta)
+                loss = (weights * (losses + nll_weight * scored["nll"])).sum() / len(batch)
                 if not torch.isfinite(loss):
                     raise FloatingPointError(f"DPO loss is {loss.item()} at step {step + 1}; stopping without saving an adapter.")
                 scaler.scale(loss).backward()
                 step_loss += loss.item()
-                margins += margin.detach().tolist()
+                seen["margins"] += margin.detach().tolist()
+                seen["preferred"] += (margin.detach() > 0).float().tolist()
+                seen["nll"] += scored["nll"].detach().tolist()
+                seen["chosen_shift"] += (scored["chosen"].detach() - ref_chosen).tolist()
+                seen["rejected_shift"] += (scored["rejected"].detach() - ref_rejected).tolist()
+                seen["end_chosen"] += scored["end_chosen"].tolist()
+                seen["end_rejected"] += scored["end_rejected"].tolist()
 
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(parameters, max_grad_norm)
@@ -345,13 +419,14 @@ def train_lora_dpo(model, tokenizer, pairs: list, steps: int, batch_size: int = 
             scaler.update()
 
             history["losses"].append(step_loss)
-            history["margins"].append(sum(margins) / len(margins))
-            history["preferred"].append(sum(m > 0 for m in margins) / len(margins))
+            for key, values in seen.items():
+                history[key].append(sum(values) / len(values))
             if (step + 1) % log_every == 0 or step + 1 == steps:
                 recent = slice(-log_every, None)
-                mean = lambda values: sum(values[recent]) / len(values[recent])
-                print(f"step {step + 1}/{steps}  loss {mean(history['losses']):.4f}  margin {mean(history['margins']):+.4f}  "
-                      f"chosen preferred {mean(history['preferred']):.2f}", flush=True)
+                mean = lambda key: sum(history[key][recent]) / len(history[key][recent])
+                print(f"step {step + 1}/{steps}  loss {mean('losses'):.4f}  margin {mean('margins'):+.4f}  "
+                      f"chosen preferred {mean('preferred'):.2f}  chosen shift {mean('chosen_shift'):+.4f}  "
+                      f"rejected shift {mean('rejected_shift'):+.4f}", flush=True)
     finally:
         model.eval()
     return history

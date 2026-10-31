@@ -5,6 +5,8 @@ Nothing here reads a reference answer. A question is labelled by the majority vo
 and kept only when enough of them agree; the training text is the model's own solutions that reach
 that label.
 """
+from collections import Counter
+
 from src.experiment_d.answer_extraction import get_extractor
 from src.experiment_d.answer_matching import normalize_answer
 from src.experiment_d.benchmarks import question_key
@@ -64,23 +66,50 @@ def assert_disjoint(pool_questions: list, eval_questions: list, prompt_example: 
 PAIRINGS = ("similar_length", "longest_shortest")
 
 
-def select_preference_pairs(records: list, dataset_name: str, threshold: float = 0.625,
-                            pairing: str = "similar_length") -> list:
+def _distinct_pairs(majority: list, minority: list, limit: int) -> list:
     """
-    At most one {qid, question, label, rejected_answer, agreement, chosen, rejected, chosen_length,
-    rejected_length} per question, for preference training on the model's own votes.
+    Up to `limit` (chosen, rejected) pairs, closest in length first, none reusing a chosen or a rejected
+    solution of an earlier pair, so a question's pairs are different texts. The first pair is the one
+    min() over all combinations picks (ties go to the earliest samples).
+    """
+    combos = sorted(((m, n) for m in majority for n in minority), key=lambda pair: abs(pair[0][1] - pair[1][1]))
+    taken, used_chosen, used_rejected = [], set(), set()
+    for m, n in combos:
+        if m[0] in used_chosen or n[0] in used_rejected:
+            continue
+        taken.append((m, n))
+        used_chosen.add(m[0])
+        used_rejected.add(n[0])
+        if len(taken) == limit:
+            break
+    return taken
+
+
+def select_preference_pairs(records: list, dataset_name: str, threshold: float = 0.625,
+                            pairing: str = "similar_length", pairs_per_question: int = 1,
+                            skip_ties: bool = False) -> list:
+    """
+    At most `pairs_per_question` {qid, question, label, rejected_answer, agreement, margin, chosen,
+    rejected, chosen_length, rejected_length} per question, for preference training on the model's own
+    votes.
 
     A question is kept when its majority answer is given by at least `threshold` of ALL its samples
     (0.625 = 5 of 8). Chosen is a complete solution reaching the majority answer, rejected a complete
     solution reaching another answer; answers are compared after normalisation ('18' == '18.00').
     Truncated samples never vote and are never paired. Lengths are the generated token counts.
+    margin: the majority answer's votes minus the runner-up's, over all samples (0 for a tie).
 
     pairing: 'similar_length' takes the chosen/rejected pair closest in length, so length does not
     separate the two (ties go to the earliest samples); 'longest_shortest' takes the longest majority
-    and the shortest minority solution (the length-confounded ablation).
+    and the shortest minority solution (the length-confounded ablation, one pair per question).
+    pairs_per_question: with 'similar_length', further pairs of the same question reuse neither solution.
+    skip_ties: drop questions where another answer has as many votes as the majority one; the vote
+    then picks between them by sample order, which is not evidence.
     """
     if pairing not in PAIRINGS:
         raise ValueError(f"pairing must be one of {PAIRINGS}, got {pairing!r}")
+    if pairs_per_question < 1 or (pairing == "longest_shortest" and pairs_per_question != 1):
+        raise ValueError("pairs_per_question must be at least 1, and 1 for longest_shortest")
     extractor = get_extractor(dataset_name)
     pairs = []
     for record in records:
@@ -88,6 +117,11 @@ def select_preference_pairs(records: list, dataset_name: str, threshold: float =
         extracted = [None if sample.get("cutoff", False) else extractor(sample["response"]) for sample in samples]
         label, majority_key, count, keys = majority_vote(extracted)
         if label is None or count < threshold * len(samples) - 1e-9:
+            continue
+        others = sorted((votes for key, votes in Counter(k for k in keys if k is not None).items()
+                         if key != majority_key), reverse=True)
+        runner_up = others[0] if others else 0
+        if skip_ties and runner_up == count:
             continue
         majority, minority, seen = [], [], set()
         for sample, answer, key in zip(samples, extracted, keys):
@@ -98,22 +132,58 @@ def select_preference_pairs(records: list, dataset_name: str, threshold: float =
         if not majority or not minority:
             continue
         if pairing == "similar_length":
-            chosen, rejected = min(((m, n) for m in majority for n in minority), key=lambda pair: abs(pair[0][1] - pair[1][1]))
+            chosen_rejected = _distinct_pairs(majority, minority, pairs_per_question)
         else:
-            chosen = max(majority, key=lambda item: item[1])
-            rejected = min(minority, key=lambda item: item[1])
-        pairs.append({
-            "qid": record["qid"],
-            "question": record["question"],
-            "label": label,
-            "rejected_answer": rejected[2],
-            "agreement": count / len(samples),
-            "chosen": chosen[0],
-            "rejected": rejected[0],
-            "chosen_length": chosen[1],
-            "rejected_length": rejected[1],
-        })
+            chosen_rejected = [(max(majority, key=lambda item: item[1]), min(minority, key=lambda item: item[1]))]
+        for chosen, rejected in chosen_rejected:
+            pairs.append({
+                "qid": record["qid"],
+                "question": record["question"],
+                "label": label,
+                "rejected_answer": rejected[2],
+                "agreement": count / len(samples),
+                "margin": (count - runner_up) / len(samples),
+                "chosen": chosen[0],
+                "rejected": rejected[0],
+                "chosen_length": chosen[1],
+                "rejected_length": rejected[1],
+            })
     return pairs
+
+
+def rotate_pairs(pairs: list, epochs: int) -> list:
+    """
+    The training list for `epochs` passes: epoch e uses each question's (e mod n)-th pair, where n is how
+    many distinct pairs it has, so a question with fewer pairs than epochs repeats some. Entries are the
+    same dict objects as in `pairs`, so anything computed once per pair (reference scores) is shared.
+    """
+    by_question = {}
+    for pair in pairs:
+        by_question.setdefault(pair["qid"], []).append(pair)
+    return [group[epoch % len(group)] for epoch in range(epochs) for group in by_question.values()]
+
+
+def curriculum_pairs(pairs: list, thresholds: list) -> tuple:
+    """
+    (training list, stage sizes) for a curriculum over vote agreement: stage s holds every question whose
+    agreement reaches thresholds[s], and each question uses its next pair each time it appears. With rising
+    difficulty (thresholds falling) the first stage is the high-agreement questions alone and the last is all
+    of them. Agreement comes from the vote, so no reference answer is involved. Entries are the same dict
+    objects as in `pairs`; each pair dict must carry its own `agreement`.
+    """
+    if sorted(thresholds, reverse=True) != list(thresholds):
+        raise ValueError(f"curriculum thresholds must not rise, got {thresholds}")
+    by_question = {}
+    for pair in pairs:
+        by_question.setdefault(pair["qid"], []).append(pair)
+    schedule, sizes, seen = [], [], {}
+    for threshold in thresholds:
+        stage = [qid for qid, group in by_question.items() if group[0]["agreement"] >= threshold - 1e-9]
+        for qid in stage:
+            schedule.append(by_question[qid][seen.get(qid, 0) % len(by_question[qid])])
+            seen[qid] = seen.get(qid, 0) + 1
+        sizes.append(len(stage))
+    return schedule, sizes
 
 
 LABEL_RULES = ("vote", "critic")

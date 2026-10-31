@@ -13,9 +13,10 @@ from src.experiment_d.lora_training import (
     dpo_loss,
     mean_token_logps,
     reference_logps,
+    token_logps,
     train_lora_dpo,
 )
-from src.experiment_d.self_training import select_preference_pairs
+from src.experiment_d.self_training import curriculum_pairs, rotate_pairs, select_preference_pairs
 
 
 def _sample(response, length, cutoff=False):
@@ -152,6 +153,151 @@ def test_single_pair_overfit():
     assert history["preferred"][-1] == 1.0 and not model.training
 
 
+def test_several_distinct_pairs_per_question():
+    pairs = select_preference_pairs([_record("q", FIVE_OF_EIGHT)], "gsm8k_train", pairs_per_question=3)
+    assert len(pairs) == 3
+    # The first pair is the single-pair choice; later ones reuse neither solution.
+    assert (pairs[0]["chosen"], pairs[0]["rejected"]) == ("c\n#### 5", "h\n#### 8")
+    assert len({p["chosen"] for p in pairs}) == 3 and len({p["rejected"] for p in pairs}) == 3
+    # Only three minority solutions exist, so a fourth pair is not invented.
+    assert len(select_preference_pairs([_record("q", FIVE_OF_EIGHT)], "gsm8k_train", pairs_per_question=9)) == 3
+    assert select_preference_pairs([_record("q", FIVE_OF_EIGHT)], "gsm8k_train", pairs_per_question=1) == pairs[:1]
+    try:
+        select_preference_pairs([], "gsm8k_train", pairing="longest_shortest", pairs_per_question=2)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("several pairs with longest_shortest were accepted")
+
+
+def test_margin_and_tie_skipping():
+    pair, = select_preference_pairs([_record("q", FIVE_OF_EIGHT)], "gsm8k_train")
+    assert pair["margin"] == (5 - 1) / 8                       # 5 votes against the runner-up's 1
+    tie = [("a\n#### 5", 1), ("b\n#### 5", 2), ("c\n#### 5", 3), ("d\n#### 5", 4),
+           ("e\n#### 9", 5), ("f\n#### 9", 6), ("g\n#### 9", 7), ("h\n#### 9", 8)]
+    kept, = select_preference_pairs([_record("q", tie)], "gsm8k_train", threshold=0.5)
+    assert kept["margin"] == 0.0
+    assert select_preference_pairs([_record("q", tie)], "gsm8k_train", threshold=0.5, skip_ties=True) == []
+    assert len(select_preference_pairs([_record("q", FIVE_OF_EIGHT)], "gsm8k_train", skip_ties=True)) == 1
+
+
+def test_rotation_gives_each_epoch_another_pair():
+    pairs = [{"qid": "a", "n": 0}, {"qid": "a", "n": 1}, {"qid": "b", "n": 0}]
+    schedule = rotate_pairs(pairs, 3)
+    assert [(p["qid"], p["n"]) for p in schedule] == [("a", 0), ("b", 0), ("a", 1), ("b", 0), ("a", 0), ("b", 0)]
+    assert schedule[1] is schedule[3] is pairs[2]              # shared dicts: scored once as reference
+
+
+def test_end_tokens_are_left_out_of_the_preference_labels_only():
+    tokenizer = _FakeTokenizer()
+    pair = build_preference_example(tokenizer, "gsm8k_train", "Q", "ab", "xyz", end_token=[7, 8], max_length=64, mask_end=True)
+    assert pair["chosen"]["labels"] == [IGNORE_INDEX] * 3 + [ord("a"), ord("b"), 7, 8]
+    assert pair["chosen"]["pref_labels"] == [IGNORE_INDEX] * 3 + [ord("a"), ord("b"), IGNORE_INDEX, IGNORE_INDEX]
+    assert pair["rejected"]["pref_labels"][-2:] == [IGNORE_INDEX] * 2 and pair["rejected"]["labels"][-2:] == [7, 8]
+    assert "pref_labels" not in build_preference_example(tokenizer, "gsm8k_train", "Q", "ab", "xyz", 0, 64)["chosen"]
+
+
+def test_chunked_scores_match_full_scores():
+    model, tokenizer = _tiny_model(), _FakeTokenizer()
+    examples = [build_preference_example(tokenizer, "gsm8k_train", "Q", "a long solution", "no", end_token=0, max_length=64)[side]
+                for side in ("chosen", "rejected")]
+    input_ids, attention_mask, labels = _collate(examples, tokenizer.pad_token_id, torch.device("cpu"))
+    full = token_logps(model, input_ids, attention_mask, labels)
+    chunked = token_logps(model, input_ids, attention_mask, labels, chunked=True)
+    assert torch.allclose(full, chunked, atol=1e-5) and (full[labels[:, 1:] == IGNORE_INDEX] == 0).all()
+    assert torch.allclose(mean_token_logps(model, input_ids, attention_mask, labels),
+                          mean_token_logps(model, input_ids, attention_mask, labels, chunked=True), atol=1e-5)
+
+
+def _pair(tokenizer, model, **kwargs):
+    pair = build_preference_example(tokenizer, "gsm8k_train", "Q2", "three four", "seven", end_token=[7, 8], max_length=64, **kwargs)
+    (pair["ref_chosen"], pair["ref_rejected"]), = reference_logps(model, tokenizer, [pair])
+    return pair
+
+
+def test_nll_term_weights_and_chunked_loss():
+    """
+    At the start the DPO loss is ln 2 and the chosen NLL is the base's, so the total is
+    weight * (ln 2 + nll_weight * nll); a chunked run takes the same first step as a full one.
+    """
+    tokenizer = _FakeTokenizer()
+    results = {}
+    for name, kwargs in (("plain", {}), ("nll_weight", {"nll_weight": 1.0, "weight": 2.0}),
+                         ("chunked", {"nll_weight": 1.0, "weight": 2.0, "chunked_loss": True})):
+        model = _tiny_model()
+        pair = _pair(tokenizer, model, mask_end=True)
+        pair["weight"] = kwargs.pop("weight", 1.0)
+        model, _ = attach_lora(model, rank=4, alpha=8, dropout=0.0)
+        results[name] = train_lora_dpo(model, tokenizer, [pair], steps=1, batch_size=1, learning_rate=0.0, log_every=1000, **kwargs)
+    nll = results["plain"]["nll"][0]
+    assert nll > 0 and math.isclose(results["plain"]["losses"][0], math.log(2), abs_tol=1e-5)
+    assert math.isclose(results["nll_weight"]["losses"][0], 2.0 * (math.log(2) + nll), rel_tol=1e-4)
+    assert math.isclose(results["chunked"]["losses"][0], results["nll_weight"]["losses"][0], rel_tol=1e-4)
+    assert results["plain"]["end_chosen"][0] < 0 and results["plain"]["end_rejected"][0] < 0   # logged, never trained on
+    assert abs(results["plain"]["chosen_shift"][0]) < 1e-5
+
+
+def test_masked_end_is_not_pushed_down_but_chosen_nll_raises_it():
+    """Same pair trained with and without the end in the preference score: the rejected end is the difference."""
+    tokenizer = _FakeTokenizer()
+    ends = {}
+    for mask_end in (False, True):
+        model = _tiny_model()
+        pair = _pair(tokenizer, model, mask_end=mask_end)
+        model, _ = attach_lora(model, rank=4, alpha=8, dropout=0.0)
+        history = train_lora_dpo(model, tokenizer, [pair], steps=60, batch_size=1, learning_rate=1e-2, beta=2.0, log_every=1000)
+        ends[mask_end] = history["end_rejected"][-1] - history["end_rejected"][0]
+    assert ends[False] < ends[True] - 0.05, ends        # with the end scored, the rejected stop falls further
+
+
+def test_nll_term_raises_the_chosen_solution():
+    tokenizer = _FakeTokenizer()
+    shifts = {}
+    for nll_weight in (0.0, 5.0):
+        model = _tiny_model()
+        pair = _pair(tokenizer, model, mask_end=True)
+        model, _ = attach_lora(model, rank=4, alpha=8, dropout=0.0)
+        history = train_lora_dpo(model, tokenizer, [pair], steps=40, batch_size=1, learning_rate=5e-3, beta=2.0,
+                                 log_every=1000, nll_weight=nll_weight)
+        shifts[nll_weight] = history["chosen_shift"][-1]
+    assert shifts[5.0] > shifts[0.0], shifts
+
+
+def test_curriculum_adds_harder_questions_stage_by_stage():
+    pairs = [{"qid": "easy", "n": 0, "agreement": 0.75}, {"qid": "easy", "n": 1, "agreement": 0.75},
+             {"qid": "mid", "n": 0, "agreement": 0.625}, {"qid": "hard", "n": 0, "agreement": 0.5},
+             {"qid": "hard", "n": 1, "agreement": 0.5}]
+    schedule, sizes = curriculum_pairs(pairs, [0.75, 0.625, 0.5])
+    assert sizes == [1, 2, 3]
+    # A question starts at its first pair when it joins, then takes its next one.
+    assert [(p["qid"], p["n"]) for p in schedule] == [("easy", 0), ("easy", 1), ("mid", 0), ("easy", 0), ("mid", 0), ("hard", 0)]
+    try:
+        curriculum_pairs(pairs, [0.5, 0.75])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("rising thresholds were accepted")
+
+
+def test_training_meets_the_stages_in_order():
+    """Same seed, one pass: stage sizes 2 + 2 keep the first two pairs in the first two steps."""
+    tokenizer = _FakeTokenizer()
+    model = _tiny_model()
+    pairs = [_pair(tokenizer, model, mask_end=True) for _ in range(4)]
+    for index, pair in enumerate(pairs):
+        pair["ref_chosen"] += 0.0 if index < 2 else 1000.0        # stage 2 shows up as a huge margin
+    model, _ = attach_lora(model, rank=4, alpha=8, dropout=0.0)
+    history = train_lora_dpo(model, tokenizer, pairs, steps=4, batch_size=1, learning_rate=0.0, log_every=1000, stage_sizes=[2, 2])
+    assert all(abs(margin) < 1e-4 for margin in history["margins"][:2]), history["margins"]
+    assert all(margin < -500 for margin in history["margins"][2:]), history["margins"]
+    try:
+        train_lora_dpo(model, tokenizer, pairs, steps=1, batch_size=1, learning_rate=0.0, log_every=1000, stage_sizes=[1, 1])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("stage sizes that do not cover the pairs were accepted")
+
+
 if __name__ == "__main__":
     test_similar_length_pairs_the_closest_lengths()
     test_longest_shortest_is_the_length_confounded_ablation()
@@ -163,4 +309,14 @@ if __name__ == "__main__":
     test_mean_logps_match_a_token_by_token_loop()
     test_dpo_loss_is_log_two_at_equal_scores()
     test_single_pair_overfit()
+    test_several_distinct_pairs_per_question()
+    test_margin_and_tie_skipping()
+    test_rotation_gives_each_epoch_another_pair()
+    test_end_tokens_are_left_out_of_the_preference_labels_only()
+    test_chunked_scores_match_full_scores()
+    test_nll_term_weights_and_chunked_loss()
+    test_masked_end_is_not_pushed_down_but_chosen_nll_raises_it()
+    test_nll_term_raises_the_chosen_solution()
+    test_curriculum_adds_harder_questions_stage_by_stage()
+    test_training_meets_the_stages_in_order()
     print("All preference training tests passed!")
